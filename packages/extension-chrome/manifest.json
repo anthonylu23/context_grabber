@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Context Grabber",
+  "version": "0.1.0",
+  "description": "Capture active-tab context and send it to the native host.",
+  "permissions": ["activeTab", "scripting", "nativeMessaging"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "dist/index.js"
+  },
+  "action": {
+    "default_title": "Context Grabber"
+  }
+}

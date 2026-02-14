@@ -1,0 +1,19 @@
+{
+  "name": "context-grabber",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "bash scripts/check-workspace.sh typecheck",
+    "test": "bash scripts/check-workspace.sh test",
+    "check": "bash scripts/check-workspace.sh check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.6.3"
+  }
+}
