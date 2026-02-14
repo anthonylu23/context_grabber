@@ -8,6 +8,16 @@ private let defaultCaptureTimeoutMs = 1_200
 private let hotkeyKeyCodeC: UInt16 = 8
 private let hotkeyModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
 private let hotkeyDebounceWindowSeconds = 0.25
+let maxBrowserFullTextChars = 200_000
+let maxRawExcerptChars = 8_000
+private let safariBundleIdentifiers: Set<String> = [
+  "com.apple.Safari",
+  "com.apple.SafariTechnologyPreview",
+]
+private let chromeBundleIdentifiers: Set<String> = [
+  "com.google.Chrome",
+  "com.google.Chrome.canary",
+]
 
 struct BrowserContextPayload: Codable {
   let source: String
@@ -106,6 +116,105 @@ private struct CaptureResolution {
   let extractionMethod: String
   let transportStatus: String
   let warning: String?
+}
+
+enum BrowserTarget {
+  case safari
+  case chrome
+  case unsupported(appName: String?, bundleIdentifier: String?)
+
+  var browserLabel: String {
+    switch self {
+    case .safari:
+      return "safari"
+    case .chrome:
+      return "chrome"
+    case .unsupported(_, let bundleIdentifier):
+      if let bundleIdentifier, bundleIdentifier.contains("Chrome") {
+        return "chrome"
+      }
+      if let bundleIdentifier, bundleIdentifier.contains("Safari") {
+        return "safari"
+      }
+      return "unknown"
+    }
+  }
+
+  var transportStatusPrefix: String {
+    switch self {
+    case .safari:
+      return "safari_extension"
+    case .chrome:
+      return "chrome_extension"
+    case .unsupported:
+      return "desktop_capture"
+    }
+  }
+
+  var displayName: String {
+    switch self {
+    case .safari:
+      return "Safari"
+    case .chrome:
+      return "Chrome"
+    case .unsupported(let appName, _):
+      return appName ?? "Unknown App"
+    }
+  }
+}
+
+func detectBrowserTarget(
+  frontmostBundleIdentifier: String?,
+  frontmostAppName: String?,
+  overrideValue: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_BROWSER_TARGET"]
+) -> BrowserTarget {
+  if let overrideValue {
+    let normalized = overrideValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if normalized == "safari" {
+      return .safari
+    }
+    if normalized == "chrome" {
+      return .chrome
+    }
+  }
+
+  if let frontmostBundleIdentifier {
+    if safariBundleIdentifiers.contains(frontmostBundleIdentifier) {
+      return .safari
+    }
+    if chromeBundleIdentifiers.contains(frontmostBundleIdentifier) {
+      return .chrome
+    }
+  }
+
+  return .unsupported(appName: frontmostAppName, bundleIdentifier: frontmostBundleIdentifier)
+}
+
+func createMetadataOnlyBrowserPayload(
+  browser: String,
+  details: [String: String]?,
+  warning: String,
+  frontAppName: String?
+) -> BrowserContextPayload {
+  let title = details?["title"] ?? (frontAppName.map { "\($0) (metadata only)" } ?? "\(browser.capitalized) (metadata only)")
+  let url = details?["url"] ?? "about:blank"
+
+  return BrowserContextPayload(
+    source: "browser",
+    browser: browser,
+    url: url,
+    title: title,
+    fullText: "",
+    headings: [],
+    links: [],
+    metaDescription: nil,
+    siteName: details?["site_name"],
+    language: nil,
+    author: nil,
+    publishedTime: nil,
+    selectionText: nil,
+    extractionWarnings: [warning]
+  )
 }
 
 enum SafariNativeMessagingTransportError: LocalizedError {
@@ -362,6 +471,254 @@ final class SafariNativeMessagingTransport {
   }
 }
 
+enum ChromeNativeMessagingTransportError: LocalizedError {
+  case repoRootNotFound
+  case extensionPackageNotFound
+  case launchFailed(String)
+  case timedOut
+  case processFailed(exitCode: Int32, stderr: String)
+  case emptyOutput
+  case invalidJSON(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .repoRootNotFound:
+      return "Unable to locate repository root for Chrome extension bridge."
+    case .extensionPackageNotFound:
+      return "Chrome extension package was not found."
+    case .launchFailed(let reason):
+      return "Failed to launch Chrome extension bridge: \(reason)"
+    case .timedOut:
+      return "Timed out waiting for extension response."
+    case .processFailed(let exitCode, let stderr):
+      return "Chrome extension bridge failed with exit code \(exitCode): \(stderr)"
+    case .emptyOutput:
+      return "Chrome extension bridge returned no output."
+    case .invalidJSON(let reason):
+      return "Chrome extension bridge returned invalid JSON: \(reason)"
+    }
+  }
+}
+
+final class ChromeNativeMessagingTransport {
+  private let jsonEncoder = JSONEncoder()
+  private let jsonDecoder = JSONDecoder()
+  private let fileManager = FileManager.default
+
+  func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
+    let requestData = try jsonEncoder.encode(request)
+    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs)
+
+    if !processResult.stdout.isEmpty, let decodedMessage = try? decodeBridgeMessage(processResult.stdout) {
+      return decodedMessage
+    }
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw ChromeNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    return try decodeBridgeMessage(processResult.stdout)
+  }
+
+  func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
+    let processResult = try runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw ChromeNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    guard !processResult.stdout.isEmpty else {
+      throw ChromeNativeMessagingTransportError.emptyOutput
+    }
+
+    do {
+      return try jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
+    } catch {
+      throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+    }
+  }
+
+  private func decodeBridgeMessage(_ data: Data) throws -> ExtensionBridgeMessage {
+    guard !data.isEmpty else {
+      throw ChromeNativeMessagingTransportError.emptyOutput
+    }
+
+    let envelope: GenericEnvelope
+    do {
+      envelope = try jsonDecoder.decode(GenericEnvelope.self, from: data)
+    } catch {
+      throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+    }
+
+    switch envelope.type {
+    case "extension.capture.result":
+      do {
+        let capture = try jsonDecoder.decode(ExtensionCaptureResponseMessage.self, from: data)
+        return .captureResult(capture)
+      } catch {
+        throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+      }
+    case "extension.error":
+      do {
+        let errorMessage = try jsonDecoder.decode(ExtensionErrorMessage.self, from: data)
+        return .error(errorMessage)
+      } catch {
+        throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+      }
+    default:
+      throw ChromeNativeMessagingTransportError.invalidJSON("Unsupported message type: \(envelope.type)")
+    }
+  }
+
+  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int) throws -> ProcessExecutionResult {
+    let packagePath = try extensionPackagePath()
+    let bunExecutablePath = try resolveBunExecutablePath()
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: bunExecutablePath)
+    process.currentDirectoryURL = packagePath
+    let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
+    process.arguments = [cliPath.path] + arguments
+
+    let stdoutPipe = Pipe()
+    let stderrPipe = Pipe()
+    process.standardOutput = stdoutPipe
+    process.standardError = stderrPipe
+
+    let stdinPipe = Pipe()
+    process.standardInput = stdinPipe
+
+    do {
+      try process.run()
+    } catch {
+      throw ChromeNativeMessagingTransportError.launchFailed(error.localizedDescription)
+    }
+
+    if let stdinData {
+      stdinPipe.fileHandleForWriting.write(stdinData)
+    }
+    stdinPipe.fileHandleForWriting.closeFile()
+
+    let timeoutDate = Date().addingTimeInterval(Double(timeoutMs) / 1_000.0)
+    while process.isRunning && Date() < timeoutDate {
+      _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+    }
+
+    if process.isRunning {
+      process.terminate()
+      throw ChromeNativeMessagingTransportError.timedOut
+    }
+
+    process.waitUntilExit()
+    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+    return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
+  }
+
+  private func extensionPackagePath() throws -> URL {
+    let repoRoot = try resolveRepoRoot()
+    let packagePath = repoRoot.appendingPathComponent("packages/extension-chrome", isDirectory: true)
+    let packageManifest = packagePath.appendingPathComponent("package.json", isDirectory: false)
+
+    guard fileManager.fileExists(atPath: packageManifest.path) else {
+      throw ChromeNativeMessagingTransportError.extensionPackageNotFound
+    }
+
+    return packagePath
+  }
+
+  private func resolveRepoRoot() throws -> URL {
+    if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
+      let explicitRoot = URL(fileURLWithPath: envRoot, isDirectory: true)
+      if hasRepoMarker(at: explicitRoot) {
+        return explicitRoot
+      }
+    }
+
+    var candidates: [URL] = [
+      URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true),
+      URL(fileURLWithPath: #filePath, isDirectory: false).deletingLastPathComponent(),
+      Bundle.main.bundleURL,
+    ]
+    if let executableURL = Bundle.main.executableURL {
+      candidates.append(executableURL.deletingLastPathComponent())
+    }
+
+    var visited = Set<String>()
+    for candidate in candidates {
+      if visited.contains(candidate.path) {
+        continue
+      }
+      visited.insert(candidate.path)
+
+      if let resolvedRoot = findRepoRoot(startingAt: candidate, maxDepth: 12) {
+        return resolvedRoot
+      }
+    }
+
+    throw ChromeNativeMessagingTransportError.repoRootNotFound
+  }
+
+  private func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
+    var current = startURL
+    for _ in 0..<maxDepth {
+      if hasRepoMarker(at: current) {
+        return current
+      }
+
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path {
+        break
+      }
+
+      current = parent
+    }
+
+    return nil
+  }
+
+  private func hasRepoMarker(at rootURL: URL) -> Bool {
+    let marker = rootURL.appendingPathComponent("packages/extension-chrome/package.json", isDirectory: false)
+    return fileManager.fileExists(atPath: marker.path)
+  }
+
+  private func resolveBunExecutablePath() throws -> String {
+    if let explicitPath = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_BUN_BIN"], !explicitPath.isEmpty {
+      if fileManager.isExecutableFile(atPath: explicitPath) {
+        return explicitPath
+      }
+      throw ChromeNativeMessagingTransportError.launchFailed(
+        "CONTEXT_GRABBER_BUN_BIN is set but not executable: \(explicitPath)"
+      )
+    }
+
+    if let pathValue = ProcessInfo.processInfo.environment["PATH"], !pathValue.isEmpty {
+      for directory in pathValue.split(separator: ":").map(String.init) where !directory.isEmpty {
+        let candidate = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("bun", isDirectory: false)
+        if fileManager.isExecutableFile(atPath: candidate.path) {
+          return candidate.path
+        }
+      }
+    }
+
+    var fallbackPaths: [String] = ["/opt/homebrew/bin/bun", "/usr/local/bin/bun"]
+    let homeBunPath = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+      .appendingPathComponent(".bun/bin/bun", isDirectory: false).path
+    fallbackPaths.append(homeBunPath)
+
+    for candidate in fallbackPaths where fileManager.isExecutableFile(atPath: candidate) {
+      return candidate
+    }
+
+    throw ChromeNativeMessagingTransportError.launchFailed(
+      "Unable to locate bun executable. Set CONTEXT_GRABBER_BUN_BIN to the bun binary path."
+    )
+  }
+}
+
 final class HostLogger {
   private let logURL: URL
 
@@ -444,7 +801,8 @@ final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
 
   private let logger = HostLogger()
-  private let transport = SafariNativeMessagingTransport()
+  private let safariTransport = SafariNativeMessagingTransport()
+  private let chromeTransport = ChromeNativeMessagingTransport()
   private let notificationsEnabled: Bool
   private var hotkeyMonitorRegistration: HotkeyMonitorRegistration?
   private var lastHotkeyFireAt: Date = .distantPast
@@ -545,26 +903,25 @@ final class ContextGrabberModel: ObservableObject {
   func runDiagnostics() {
     let historyURL = Self.historyDirectoryURL()
     let writable = FileManager.default.isWritableFile(atPath: Self.appSupportBaseURL().path)
+    let frontmostApp = NSWorkspace.shared.frontmostApplication
+    let target = detectBrowserTarget(
+      frontmostBundleIdentifier: frontmostApp?.bundleIdentifier,
+      frontmostAppName: frontmostApp?.localizedName
+    )
 
-    var transportReachable = false
-    var protocolCompatible = false
+    let safariStatus = diagnosticsStatusForSafari()
+    let chromeStatus = diagnosticsStatusForChrome()
 
-    do {
-      let ping = try transport.ping(timeoutMs: 800)
-      transportReachable = ping.ok
-      protocolCompatible = ping.protocolVersion == protocolVersion
-      lastTransportStatus = transportReachable ? "safari_extension_ok" : "safari_extension_unreachable"
-    } catch {
-      lastTransportStatus = "safari_extension_unreachable"
-      logger.error("Diagnostics ping failed: \(error.localizedDescription)")
-    }
+    lastTransportStatus = target.transportStatusPrefix == "chrome_extension"
+      ? chromeStatus.transportStatus
+      : safariStatus.transportStatus
 
     let lastCaptureLabel = lastCaptureAt ?? "never"
     let lastErrorLabel = lastTransportErrorCode ?? "none"
     let latencyLabel = lastTransportLatencyMs.map { "\($0)ms" } ?? "n/a"
 
     let summary =
-      "Transport: \(transportReachable ? "reachable" : "unreachable") | Protocol: \(protocolCompatible ? "\(protocolVersion)" : "mismatch") | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
+      "Front app: \(target.displayName) | Safari: \(safariStatus.label) | Chrome: \(chromeStatus.label) | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
@@ -602,16 +959,54 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func resolveCapture(request: HostCaptureRequestMessage) throws -> CaptureResolution {
+    let frontmostApp = NSWorkspace.shared.frontmostApplication
+    let target = detectBrowserTarget(
+      frontmostBundleIdentifier: frontmostApp?.bundleIdentifier,
+      frontmostAppName: frontmostApp?.localizedName
+    )
+
+    if case .unsupported(let appName, let bundleIdentifier) = target {
+      let name = appName ?? "Unknown App"
+      let bundleLabel = bundleIdentifier ?? "unknown.bundle"
+      let message =
+        "Frontmost app is \(name) (\(bundleLabel)). Browser capture currently supports Safari and Chrome only."
+
+      return metadataFallback(
+        browser: target.browserLabel,
+        transportStatusPrefix: target.transportStatusPrefix,
+        code: "ERR_EXTENSION_UNAVAILABLE",
+        message: message,
+        details: nil
+      )
+    }
+
     do {
-      let bridgeMessage = try transport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
+      let bridgeMessage: ExtensionBridgeMessage
+      switch target {
+      case .safari:
+        bridgeMessage = try safariTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
+        lastTransportStatus = "safari_extension_ok"
+      case .chrome:
+        bridgeMessage = try chromeTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
+        lastTransportStatus = "chrome_extension_ok"
+      case .unsupported:
+        return metadataFallback(
+          browser: target.browserLabel,
+          transportStatusPrefix: target.transportStatusPrefix,
+          code: "ERR_EXTENSION_UNAVAILABLE",
+          message: "Unsupported frontmost app.",
+          details: nil
+        )
+      }
 
       switch bridgeMessage {
       case .captureResult(let captureResponse):
-        lastTransportStatus = "safari_extension_ok"
         lastTransportErrorCode = nil
 
         if captureResponse.payload.protocolVersion != protocolVersion {
           return metadataFallback(
+            browser: target.browserLabel,
+            transportStatusPrefix: target.transportStatusPrefix,
             code: "ERR_PROTOCOL_VERSION",
             message: "Protocol version mismatch. Expected \(protocolVersion).",
             details: nil
@@ -627,37 +1022,58 @@ final class ContextGrabberModel: ObservableObject {
 
       case .error(let errorMessage):
         return metadataFallback(
+          browser: target.browserLabel,
+          transportStatusPrefix: target.transportStatusPrefix,
           code: errorMessage.payload.code,
           message: errorMessage.payload.message,
           details: errorMessage.payload.details
         )
       }
-    } catch let transportError as SafariNativeMessagingTransportError {
-      switch transportError {
-      case .timedOut:
+    } catch {
+      if let safariTransportError = error as? SafariNativeMessagingTransportError,
+        case .timedOut = safariTransportError
+      {
         return metadataFallback(
+          browser: target.browserLabel,
+          transportStatusPrefix: target.transportStatusPrefix,
           code: "ERR_TIMEOUT",
           message: "Timed out waiting for extension response.",
           details: nil
         )
-      default:
+      }
+
+      if let chromeTransportError = error as? ChromeNativeMessagingTransportError,
+        case .timedOut = chromeTransportError
+      {
         return metadataFallback(
-          code: "ERR_EXTENSION_UNAVAILABLE",
-          message: transportError.localizedDescription,
+          browser: target.browserLabel,
+          transportStatusPrefix: target.transportStatusPrefix,
+          code: "ERR_TIMEOUT",
+          message: "Timed out waiting for extension response.",
           details: nil
         )
       }
+
+      return metadataFallback(
+        browser: target.browserLabel,
+        transportStatusPrefix: target.transportStatusPrefix,
+        code: "ERR_EXTENSION_UNAVAILABLE",
+        message: error.localizedDescription,
+        details: nil
+      )
     }
   }
 
   private func metadataFallback(
+    browser: String,
+    transportStatusPrefix: String,
     code: String,
     message: String,
     details: [String: String]?
   ) -> CaptureResolution {
     let warning = "\(code): \(message)"
-    let payload = createMetadataOnlyPayload(details: details, warning: warning)
-    lastTransportStatus = "safari_extension_error:\(code)"
+    let payload = createMetadataOnlyPayload(browser: browser, details: details, warning: warning)
+    lastTransportStatus = "\(transportStatusPrefix)_error:\(code)"
     lastTransportErrorCode = code
 
     return CaptureResolution(
@@ -668,27 +1084,50 @@ final class ContextGrabberModel: ObservableObject {
     )
   }
 
-  private func createMetadataOnlyPayload(details: [String: String]?, warning: String) -> BrowserContextPayload {
+  private func createMetadataOnlyPayload(
+    browser: String,
+    details: [String: String]?,
+    warning: String
+  ) -> BrowserContextPayload {
     let frontAppName = NSWorkspace.shared.frontmostApplication?.localizedName
-    let title = details?["title"] ?? (frontAppName.map { "\($0) (metadata only)" } ?? "Safari (metadata only)")
-    let url = details?["url"] ?? "about:blank"
-
-    return BrowserContextPayload(
-      source: "browser",
-      browser: "safari",
-      url: url,
-      title: title,
-      fullText: "",
-      headings: [],
-      links: [],
-      metaDescription: nil,
-      siteName: details?["site_name"],
-      language: nil,
-      author: nil,
-      publishedTime: nil,
-      selectionText: nil,
-      extractionWarnings: [warning]
+    return createMetadataOnlyBrowserPayload(
+      browser: browser,
+      details: details,
+      warning: warning,
+      frontAppName: frontAppName
     )
+  }
+
+  private func diagnosticsStatusForSafari() -> (label: String, transportStatus: String) {
+    do {
+      let ping = try safariTransport.ping(timeoutMs: 800)
+      if ping.ok && ping.protocolVersion == protocolVersion {
+        return ("reachable/protocol \(protocolVersion)", "safari_extension_ok")
+      }
+      if ping.ok {
+        return ("reachable/protocol mismatch", "safari_extension_protocol_mismatch")
+      }
+      return ("unreachable", "safari_extension_unreachable")
+    } catch {
+      logger.error("Safari diagnostics ping failed: \(error.localizedDescription)")
+      return ("unreachable", "safari_extension_unreachable")
+    }
+  }
+
+  private func diagnosticsStatusForChrome() -> (label: String, transportStatus: String) {
+    do {
+      let ping = try chromeTransport.ping(timeoutMs: 800)
+      if ping.ok && ping.protocolVersion == protocolVersion {
+        return ("reachable/protocol \(protocolVersion)", "chrome_extension_ok")
+      }
+      if ping.ok {
+        return ("reachable/protocol mismatch", "chrome_extension_protocol_mismatch")
+      }
+      return ("unreachable", "chrome_extension_unreachable")
+    } catch {
+      logger.error("Chrome diagnostics ping failed: \(error.localizedDescription)")
+      return ("unreachable", "chrome_extension_unreachable")
+    }
   }
 
   private func createCaptureOutput(
@@ -825,22 +1264,23 @@ private func isoTimestamp() -> String {
   return ISO8601DateFormatter().string(from: Date())
 }
 
-private func renderMarkdown(
+func renderMarkdown(
   requestID: String,
   capturedAt: String,
   extractionMethod: String,
   payload: BrowserContextPayload
 ) -> String {
   let normalizedText = payload.fullText.replacingOccurrences(of: "\r\n", with: "\n")
-  let trimmedText = String(normalizedText.prefix(200_000))
-  let truncated = normalizedText.count > 200_000
+  let trimmedText = String(normalizedText.prefix(maxBrowserFullTextChars))
+  let truncated = normalizedText.count > maxBrowserFullTextChars
 
   let summary = buildSummary(from: trimmedText)
   let keyPoints = buildKeyPoints(from: trimmedText)
   let chunks = buildChunks(from: trimmedText)
-  let rawExcerpt = String(trimmedText.prefix(8_000))
+  let rawExcerpt = String(trimmedText.prefix(maxRawExcerptChars))
 
-  let warnings = (payload.extractionWarnings ?? []) + (truncated ? ["Capture truncated at 200000 chars."] : [])
+  let warnings = (payload.extractionWarnings ?? [])
+    + (truncated ? ["Capture truncated at \(maxBrowserFullTextChars) chars."] : [])
   let tokenEstimate = max(1, Int(ceil(Double(trimmedText.count) / 4.0)))
 
   var lines: [String] = []
@@ -921,7 +1361,7 @@ private func renderMarkdown(
   return lines.joined(separator: "\n")
 }
 
-private func buildSummary(from text: String) -> String {
+func buildSummary(from text: String) -> String {
   let sentences = splitSentences(text)
   if sentences.isEmpty {
     return ""
@@ -930,12 +1370,12 @@ private func buildSummary(from text: String) -> String {
   return sentences.prefix(6).joined(separator: "\n")
 }
 
-private func buildKeyPoints(from text: String) -> [String] {
+func buildKeyPoints(from text: String) -> [String] {
   let sentences = splitSentences(text)
   return Array(sentences.prefix(8))
 }
 
-private func buildChunks(from text: String) -> [String] {
+func buildChunks(from text: String) -> [String] {
   let paragraphs = text
     .components(separatedBy: "\n\n")
     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -964,7 +1404,7 @@ private func buildChunks(from text: String) -> [String] {
   return chunks
 }
 
-private func splitSentences(_ text: String) -> [String] {
+func splitSentences(_ text: String) -> [String] {
   let parts = text.split(separator: ".")
   return parts
     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -972,7 +1412,7 @@ private func splitSentences(_ text: String) -> [String] {
     .map { "\($0)." }
 }
 
-private func hostFromURL(_ urlString: String) -> String? {
+func hostFromURL(_ urlString: String) -> String? {
   guard let url = URL(string: urlString) else {
     return nil
   }
@@ -980,7 +1420,7 @@ private func hostFromURL(_ urlString: String) -> String? {
   return url.host
 }
 
-private func yamlQuoted(_ value: String) -> String {
+func yamlQuoted(_ value: String) -> String {
   let escaped = value
     .replacingOccurrences(of: "\\", with: "\\\\")
     .replacingOccurrences(of: "\"", with: "\\\"")

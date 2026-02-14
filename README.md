@@ -20,6 +20,13 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Global hotkey capture is now wired to the same capture pipeline (`⌃⌥⌘C`).
 - Safari extraction now increases `spawnSync` max buffer to handle larger page payloads safely.
 - Swift host now resolves Bun via explicit env/path fallbacks for non-terminal launch environments.
+- Safari runtime now includes explicit Web Extension modules (`runtime/content`, `runtime/background`) for extension-side capture/request handling.
+- Chrome extension now has protocol-parity transport + native-messaging CLI scaffolding and tests.
+- Native host bridge tests now cover unavailable/invalid transport fallback and oversized-content truncation determinism.
+- Safari runtime now includes a native host port binder (`runtime/native-host`) for packaged Web Extension request/response wiring.
+- Safari CLI source resolution is now strict: `auto`/`live` require live extraction, and `fixture` is explicit opt-in for testing.
+- Swift host now routes capture transport by frontmost browser (Safari or Chrome) and diagnostics report both channels.
+- Swift host now has integration tests for truncation behavior, metadata-only fallback payload/markdown, and markdown determinism.
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -76,9 +83,10 @@ Current host capabilities:
 - local diagnostics (transport reachability + protocol compatibility) and host logging
 
 ## Next Steps
-- replace Safari AppleScript extraction path with full Safari Web Extension runtime extraction
-- add integration tests for timeout/unavailable/fallback and markdown determinism at host level
-- add Chrome transport parity after Safari path is stable
+- connect packaged Safari runtime binder to concrete Web Extension background/content script entrypoints.
+- wire Chrome active-tab live extraction path (currently runtime/fixture scaffolding only).
+- begin desktop AX->OCR capture path after browser channel routing is in place.
+- extend Swift integration coverage with transport timeout/unavailable simulation at resolver level.
 
 ## Documentation
 - Docs index: `docs/README.md`

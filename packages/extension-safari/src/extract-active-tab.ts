@@ -8,7 +8,7 @@ export interface SafariActiveTabExtractionOptions {
   maxBufferBytes?: number;
 }
 
-interface RawSafariPageSnapshot {
+export interface SafariPageSnapshot {
   url?: unknown;
   title?: unknown;
   fullText?: unknown;
@@ -118,7 +118,7 @@ export const toSafariExtractionInput = (
     throw new Error("Safari extraction snapshot is not an object.");
   }
 
-  const snapshot = rawSnapshot as RawSafariPageSnapshot;
+  const snapshot = rawSnapshot as SafariPageSnapshot;
   const url = asString(snapshot.url);
   const title = asString(snapshot.title);
 

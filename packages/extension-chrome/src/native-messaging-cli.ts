@@ -4,11 +4,7 @@ import { dirname, join } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shared-types";
-import {
-  extractActiveTabContextFromSafari,
-  toSafariExtractionInput,
-} from "./extract-active-tab.js";
-import type { SafariExtractionInput } from "./index.js";
+import type { ChromeExtractionInput } from "./index.js";
 import { type HostRequestHandlingOptions, handleHostCaptureRequest } from "./transport.js";
 
 interface PingResult {
@@ -16,7 +12,7 @@ interface PingResult {
   protocolVersion: string;
 }
 
-type SafariSourceMode = "auto" | "live" | "fixture";
+type ChromeSourceMode = "auto" | "runtime" | "fixture";
 
 const readStdinText = async (): Promise<string> => {
   const bunStdin = (globalThis as { Bun?: { stdin?: { text?: () => Promise<string> } } }).Bun
@@ -36,8 +32,8 @@ const readStdinText = async (): Promise<string> => {
   return buffer.trim();
 };
 
-const loadFixtureFromDisk = async (): Promise<unknown> => {
-  const envFixturePath = process.env.CONTEXT_GRABBER_SAFARI_FIXTURE_PATH;
+const loadFixtureFromDisk = async (): Promise<ChromeExtractionInput> => {
+  const envFixturePath = process.env.CONTEXT_GRABBER_CHROME_FIXTURE_PATH;
   const currentFilePath = fileURLToPath(import.meta.url);
   const currentDirPath = dirname(currentFilePath);
   const fixturePath =
@@ -50,50 +46,51 @@ const loadFixtureFromDisk = async (): Promise<unknown> => {
   }
 
   const raw = await readFile(fixturePath, "utf8");
-  return JSON.parse(raw) as unknown;
+  return JSON.parse(raw) as ChromeExtractionInput;
 };
 
-const resolveSourceMode = (): SafariSourceMode => {
-  const mode = process.env.CONTEXT_GRABBER_SAFARI_SOURCE;
-  if (mode === "live" || mode === "fixture" || mode === "auto") {
+const loadRuntimePayload = async (): Promise<ChromeExtractionInput> => {
+  const inlinePayload = process.env.CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD;
+  if (inlinePayload && inlinePayload.length > 0) {
+    return JSON.parse(inlinePayload) as ChromeExtractionInput;
+  }
+
+  const payloadPath = process.env.CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH;
+  if (payloadPath && payloadPath.length > 0) {
+    if (!existsSync(payloadPath)) {
+      throw new Error(`Runtime payload file not found at ${payloadPath}`);
+    }
+
+    const raw = await readFile(payloadPath, "utf8");
+    return JSON.parse(raw) as ChromeExtractionInput;
+  }
+
+  throw new Error(
+    "Runtime source requires CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD or CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH.",
+  );
+};
+
+const resolveSourceMode = (): ChromeSourceMode => {
+  const mode = process.env.CONTEXT_GRABBER_CHROME_SOURCE;
+  if (mode === "runtime" || mode === "fixture" || mode === "auto") {
     return mode;
   }
 
   if (typeof mode === "string" && mode.length > 0) {
-    throw new Error(`Unsupported CONTEXT_GRABBER_SAFARI_SOURCE mode: ${mode}`);
+    throw new Error(`Unsupported CONTEXT_GRABBER_CHROME_SOURCE mode: ${mode}`);
   }
 
   return "auto";
 };
 
-const resolveCaptureSource = async (
-  hostRequest: HostRequestMessage,
-): Promise<SafariExtractionInput> => {
+const resolveCaptureSource = async (): Promise<ChromeExtractionInput> => {
   const mode = resolveSourceMode();
-  const includeSelectionText = hostRequest.payload.includeSelectionText;
-
-  const fromLive = (): SafariExtractionInput => {
-    const osascriptBinary = process.env.CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN;
-    return extractActiveTabContextFromSafari({
-      includeSelectionText,
-      ...(osascriptBinary && osascriptBinary.length > 0 ? { osascriptBinary } : {}),
-    });
-  };
-
-  const fromFixture = async (): Promise<SafariExtractionInput> => {
-    const payload = await loadFixtureFromDisk();
-    return toSafariExtractionInput(payload, includeSelectionText);
-  };
-
-  if (mode === "live") {
-    return fromLive();
-  }
 
   if (mode === "fixture") {
-    return fromFixture();
+    return loadFixtureFromDisk();
   }
 
-  return fromLive();
+  return loadRuntimePayload();
 };
 
 const emit = (value: unknown): void => {
@@ -115,8 +112,8 @@ const runCapture = async (options: HostRequestHandlingOptions): Promise<void> =>
 
   const response = await handleHostCaptureRequest(
     request,
-    async (hostRequest: HostRequestMessage) => {
-      return resolveCaptureSource(hostRequest);
+    async (_hostRequest: HostRequestMessage) => {
+      return resolveCaptureSource();
     },
     options,
   );

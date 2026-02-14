@@ -15,9 +15,10 @@ const runCli = (args: string[] = [], stdinText = "", extraEnv: Record<string, st
     encoding: "utf8",
     env: {
       ...process.env,
-      CONTEXT_GRABBER_SAFARI_SOURCE: "",
-      CONTEXT_GRABBER_SAFARI_FIXTURE_PATH: "",
-      CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN: "",
+      CONTEXT_GRABBER_CHROME_SOURCE: "",
+      CONTEXT_GRABBER_CHROME_FIXTURE_PATH: "",
+      CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD: "",
+      CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH: "",
       ...extraEnv,
     },
   });
@@ -32,7 +33,7 @@ const parseLastJsonLine = (stdout: string): unknown => {
   return JSON.parse(lines[lines.length - 1] ?? "{}");
 };
 
-describe("native messaging cli", () => {
+describe("chrome native messaging cli", () => {
   it("returns ping response", () => {
     const result = runCli(["--ping"]);
     expect(result.status).toBe(0);
@@ -62,8 +63,8 @@ describe("native messaging cli", () => {
     };
 
     const result = runCli([], JSON.stringify(request), {
-      CONTEXT_GRABBER_SAFARI_SOURCE: "fixture",
-      CONTEXT_GRABBER_SAFARI_FIXTURE_PATH: fixturePath,
+      CONTEXT_GRABBER_CHROME_FIXTURE_PATH: fixturePath,
+      CONTEXT_GRABBER_CHROME_SOURCE: "fixture",
     });
     expect(result.status).toBe(0);
 
@@ -75,61 +76,29 @@ describe("native messaging cli", () => {
     expect((parsed as { type?: string }).type).toBe("extension.capture.result");
   });
 
-  it("returns protocol mismatch error for invalid request version", () => {
-    const invalidRequest = {
+  it("returns extension.error when runtime payload is unavailable in auto mode", () => {
+    const request: HostRequestMessage = {
       id: "req-cli-2",
       type: "host.capture.request",
       timestamp: "2026-02-14T00:00:00.000Z",
       payload: {
-        protocolVersion: "2",
+        protocolVersion: PROTOCOL_VERSION,
         requestId: "req-cli-2",
         mode: "manual_menu",
         requestedAt: "2026-02-14T00:00:00.000Z",
         timeoutMs: 1200,
-        includeSelectionText: false,
-      },
-    };
-
-    const result = runCli([], JSON.stringify(invalidRequest), {
-      CONTEXT_GRABBER_SAFARI_SOURCE: "fixture",
-      CONTEXT_GRABBER_SAFARI_FIXTURE_PATH: fixturePath,
-    });
-    expect(result.status).toBe(0);
-
-    const parsed = parseLastJsonLine(result.stdout);
-    if (typeof parsed !== "object" || parsed === null) {
-      throw new Error("Invalid error response.");
-    }
-
-    expect((parsed as { type?: string }).type).toBe("extension.error");
-    expect((parsed as { payload?: { code?: string } }).payload?.code).toBe("ERR_PROTOCOL_VERSION");
-  });
-
-  it("returns extension.error when auto mode live extraction fails", () => {
-    const request: HostRequestMessage = {
-      id: "req-cli-3",
-      type: "host.capture.request",
-      timestamp: "2026-02-14T00:00:00.000Z",
-      payload: {
-        protocolVersion: PROTOCOL_VERSION,
-        requestId: "req-cli-3",
-        mode: "manual_menu",
-        requestedAt: "2026-02-14T00:00:00.000Z",
-        timeoutMs: 1200,
-        includeSelectionText: false,
+        includeSelectionText: true,
       },
     };
 
     const result = runCli([], JSON.stringify(request), {
-      CONTEXT_GRABBER_SAFARI_SOURCE: "auto",
-      CONTEXT_GRABBER_SAFARI_FIXTURE_PATH: fixturePath,
-      CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN: "/path/that/does/not/exist/osascript",
+      CONTEXT_GRABBER_CHROME_SOURCE: "auto",
     });
     expect(result.status).toBe(0);
 
     const parsed = parseLastJsonLine(result.stdout);
     if (typeof parsed !== "object" || parsed === null) {
-      throw new Error("Invalid auto-mode failure response.");
+      throw new Error("Invalid auto-mode runtime failure response.");
     }
 
     expect((parsed as { type?: string }).type).toBe("extension.error");

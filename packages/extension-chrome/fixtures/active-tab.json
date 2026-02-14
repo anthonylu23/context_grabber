@@ -1,0 +1,18 @@
+{
+  "url": "https://developer.chrome.com/docs/extensions/mv3/nativeMessaging/",
+  "title": "Native messaging | Chrome Extensions",
+  "metaDescription": "Connect your extension to a native app.",
+  "siteName": "Chrome for Developers",
+  "language": "en",
+  "author": "Google Chrome",
+  "publishedTime": "2026-02-14T00:00:00.000Z",
+  "selectionText": "Native messaging enables extension-to-native communication.",
+  "fullText": "Chrome extensions can communicate with native applications using structured JSON messages. Host code should validate payloads and provide deterministic fallback behavior when transport is unavailable.",
+  "headings": [{ "level": 1, "text": "Native messaging" }, { "level": 2, "text": "Overview" }],
+  "links": [
+    {
+      "text": "Chrome native messaging docs",
+      "href": "https://developer.chrome.com/docs/extensions/mv3/nativeMessaging/"
+    }
+  ]
+}

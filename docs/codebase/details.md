@@ -30,11 +30,17 @@
 
 ## Testing Strategy
 - `packages/shared-types`: protocol contracts and validator coverage.
-- `packages/extension-safari`: transport handler + CLI integration tests.
-- `packages/native-host-bridge`: fallback logic and determinism tests.
+- `packages/extension-safari`: transport handler + runtime modules (`content`, `background`, `native-host`) + CLI integration tests.
+- `packages/extension-chrome`: protocol/transport/CLI parity tests.
+- `packages/native-host-bridge`: fallback logic, invalid payload handling, and determinism/truncation tests.
+- `apps/macos-host`: Swift integration tests for truncation, metadata-only fallback payload/markdown behavior, browser-target selection, and markdown determinism.
 - Root `bun run check` runs lint + typecheck + tests for all packages.
 
 ## Current Known Scaffold Constraints
-- Safari transport uses AppleScript-based live extraction by default (fixture source is optional via env override).
+- Safari transport source resolution is strict:
+  - `auto`/`live`: live AppleScript extraction only
+  - `fixture`: explicit fixture mode
+- Host channel routing now selects Safari vs Chrome transport using frontmost app bundle identifier.
+- Chrome transport source resolution is runtime-or-fixture scaffolding, but fixture usage is explicit (`CONTEXT_GRABBER_CHROME_SOURCE=fixture`).
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
 - Desktop AX/OCR capture paths are planned but not yet implemented.

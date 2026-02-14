@@ -365,11 +365,28 @@ interface NormalizedContext {
 20. Safari transport now uses live active-tab extraction by default (AppleScript + in-page JS) with fixture mode only for explicit override/testing.
 21. Host now supports global hotkey capture parity (`manual_hotkey`) using the same pipeline as menu-triggered capture.
 22. Diagnostics now surface last capture timestamp, last transport error code, and last transport latency.
+23. Safari Web Extension runtime scaffolding now includes:
+- `runtime/content` extraction helpers for document-based capture
+- `runtime/background` request handler integrating host request semantics
+- runtime native-host port binder (`runtime/native-host`) for packaged extension request/response wiring
+24. Safari bridge CLI source resolution is strict: `auto`/`live` require live extraction, and `fixture` is explicit test/dev mode.
+25. Chrome transport parity scaffolding now includes:
+- Chrome transport handler with protocol/error/size validation parity
+- Chrome native-messaging CLI with runtime/fixture source modes (`auto`/`runtime` require runtime payload input)
+- Chrome fixture and CLI/transport test coverage
+26. Native host bridge tests now include:
+- explicit unavailable transport fallback assertions
+- invalid extension payload fallback assertions
+- oversized normalization truncation determinism assertions
+27. Host runtime now selects Safari vs Chrome transport channel from focused browser context (with optional `CONTEXT_GRABBER_BROWSER_TARGET` override) and diagnostics report both channels.
+28. Host-level Swift integration tests now cover:
+- long content truncation warning behavior
+- metadata-only fallback payload + markdown behavior
+- byte-identical markdown determinism checks
+- browser target selection helpers
 
 ## Next Steps (Implementation Queue)
-1. Replace Safari AppleScript extraction path with full Safari Web Extension runtime extraction.
-2. Add capture integration tests using fixture variants for:
-- long content truncation
-- metadata-only fallback
-- byte-identical markdown determinism checks
-3. Implement Chrome transport path against the same protocol envelope and fallback rules.
+1. Connect Safari packaged runtime binder to concrete Web Extension background/content script entrypoints.
+2. Wire Chrome active-tab live extraction path (replace runtime/fixture-only scaffolding where possible).
+3. Begin desktop AX->OCR capture path integration after browser channel routing is complete.
+4. Extend Swift integration tests with resolver-level transport timeout/unavailable simulation.
