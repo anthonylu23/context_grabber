@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shared-types";
+import {
+  extractActiveTabContextFromChrome,
+  toChromeExtractionInput,
+} from "./extract-active-tab.js";
 import type { ChromeExtractionInput } from "./index.js";
 import { type HostRequestHandlingOptions, handleHostCaptureRequest } from "./transport.js";
 
@@ -12,7 +16,7 @@ interface PingResult {
   protocolVersion: string;
 }
 
-type ChromeSourceMode = "auto" | "runtime" | "fixture";
+type ChromeSourceMode = "auto" | "live" | "runtime" | "fixture";
 
 const readStdinText = async (): Promise<string> => {
   const bunStdin = (globalThis as { Bun?: { stdin?: { text?: () => Promise<string> } } }).Bun
@@ -32,7 +36,9 @@ const readStdinText = async (): Promise<string> => {
   return buffer.trim();
 };
 
-const loadFixtureFromDisk = async (): Promise<ChromeExtractionInput> => {
+const loadFixtureFromDisk = async (
+  includeSelectionText: boolean,
+): Promise<ChromeExtractionInput> => {
   const envFixturePath = process.env.CONTEXT_GRABBER_CHROME_FIXTURE_PATH;
   const currentFilePath = fileURLToPath(import.meta.url);
   const currentDirPath = dirname(currentFilePath);
@@ -46,13 +52,15 @@ const loadFixtureFromDisk = async (): Promise<ChromeExtractionInput> => {
   }
 
   const raw = await readFile(fixturePath, "utf8");
-  return JSON.parse(raw) as ChromeExtractionInput;
+  return toChromeExtractionInput(JSON.parse(raw) as unknown, includeSelectionText);
 };
 
-const loadRuntimePayload = async (): Promise<ChromeExtractionInput> => {
+const loadRuntimePayload = async (
+  includeSelectionText: boolean,
+): Promise<ChromeExtractionInput> => {
   const inlinePayload = process.env.CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD;
   if (inlinePayload && inlinePayload.length > 0) {
-    return JSON.parse(inlinePayload) as ChromeExtractionInput;
+    return toChromeExtractionInput(JSON.parse(inlinePayload) as unknown, includeSelectionText);
   }
 
   const payloadPath = process.env.CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH;
@@ -62,7 +70,7 @@ const loadRuntimePayload = async (): Promise<ChromeExtractionInput> => {
     }
 
     const raw = await readFile(payloadPath, "utf8");
-    return JSON.parse(raw) as ChromeExtractionInput;
+    return toChromeExtractionInput(JSON.parse(raw) as unknown, includeSelectionText);
   }
 
   throw new Error(
@@ -72,7 +80,7 @@ const loadRuntimePayload = async (): Promise<ChromeExtractionInput> => {
 
 const resolveSourceMode = (): ChromeSourceMode => {
   const mode = process.env.CONTEXT_GRABBER_CHROME_SOURCE;
-  if (mode === "runtime" || mode === "fixture" || mode === "auto") {
+  if (mode === "live" || mode === "runtime" || mode === "fixture" || mode === "auto") {
     return mode;
   }
 
@@ -83,14 +91,53 @@ const resolveSourceMode = (): ChromeSourceMode => {
   return "auto";
 };
 
-const resolveCaptureSource = async (): Promise<ChromeExtractionInput> => {
+const resolveCaptureSource = async (
+  hostRequest: HostRequestMessage,
+): Promise<ChromeExtractionInput> => {
   const mode = resolveSourceMode();
+  const includeSelectionText = hostRequest.payload.includeSelectionText;
 
-  if (mode === "fixture") {
-    return loadFixtureFromDisk();
+  const fromLive = (): ChromeExtractionInput => {
+    const osascriptBinary = process.env.CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN;
+    const options =
+      osascriptBinary && osascriptBinary.length > 0
+        ? { includeSelectionText, osascriptBinary }
+        : { includeSelectionText };
+
+    return extractActiveTabContextFromChrome(options);
+  };
+
+  const fromRuntime = async (): Promise<ChromeExtractionInput> => {
+    return loadRuntimePayload(includeSelectionText);
+  };
+
+  const fromFixture = async (): Promise<ChromeExtractionInput> => {
+    return loadFixtureFromDisk(includeSelectionText);
+  };
+
+  if (mode === "live") {
+    return fromLive();
   }
 
-  return loadRuntimePayload();
+  if (mode === "fixture") {
+    return fromFixture();
+  }
+
+  if (mode === "runtime") {
+    return fromRuntime();
+  }
+
+  try {
+    return fromLive();
+  } catch (liveError) {
+    try {
+      return await fromRuntime();
+    } catch (runtimeError) {
+      throw new Error(
+        `Auto source failed. Live error: ${liveError instanceof Error ? liveError.message : String(liveError)}. Runtime error: ${runtimeError instanceof Error ? runtimeError.message : String(runtimeError)}. Use CONTEXT_GRABBER_CHROME_SOURCE=fixture for deterministic fixture capture.`,
+      );
+    }
+  }
 };
 
 const emit = (value: unknown): void => {
@@ -112,8 +159,8 @@ const runCapture = async (options: HostRequestHandlingOptions): Promise<void> =>
 
   const response = await handleHostCaptureRequest(
     request,
-    async (_hostRequest: HostRequestMessage) => {
-      return resolveCaptureSource();
+    async (hostRequest: HostRequestMessage) => {
+      return resolveCaptureSource(hostRequest);
     },
     options,
   );
