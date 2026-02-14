@@ -40,7 +40,7 @@
 - Safari transport source resolution is strict:
   - `auto`/`live`: live AppleScript extraction only
   - `fixture`: explicit fixture mode
-- Host channel routing now selects Safari vs Chrome transport using frontmost app bundle identifier.
+- Host channel routing selects Safari vs Chrome using effective frontmost app context (prefers last known browser app when the menu bar host is active).
 - Chrome transport source resolution is runtime-or-fixture scaffolding, but fixture usage is explicit (`CONTEXT_GRABBER_CHROME_SOURCE=fixture`).
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
 - Desktop AX/OCR capture paths are planned but not yet implemented.

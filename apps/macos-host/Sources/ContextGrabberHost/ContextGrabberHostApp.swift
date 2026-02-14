@@ -190,6 +190,30 @@ func detectBrowserTarget(
   return .unsupported(appName: frontmostAppName, bundleIdentifier: frontmostBundleIdentifier)
 }
 
+struct FrontmostAppInfo {
+  let bundleIdentifier: String?
+  let appName: String?
+  let processIdentifier: pid_t?
+}
+
+func resolveEffectiveFrontmostApp(
+  current: FrontmostAppInfo,
+  lastNonHost: FrontmostAppInfo?,
+  lastKnownBrowser: FrontmostAppInfo?,
+  hostProcessIdentifier: pid_t
+) -> FrontmostAppInfo {
+  if current.processIdentifier == hostProcessIdentifier {
+    if let lastKnownBrowser {
+      return lastKnownBrowser
+    }
+    if let lastNonHost {
+      return lastNonHost
+    }
+  }
+
+  return current
+}
+
 func createMetadataOnlyBrowserPayload(
   browser: String,
   details: [String: String]?,
@@ -796,6 +820,27 @@ private final class HotkeyMonitorRegistration {
   }
 }
 
+private final class AppActivationObserverRegistration {
+  private let token: NSObjectProtocol
+
+  init(handler: @escaping @Sendable (NSRunningApplication) -> Void) {
+    token = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification,
+      object: nil,
+      queue: nil
+    ) { notification in
+      guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+        return
+      }
+      handler(app)
+    }
+  }
+
+  deinit {
+    NSWorkspace.shared.notificationCenter.removeObserver(token)
+  }
+}
+
 @MainActor
 final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
@@ -803,8 +848,12 @@ final class ContextGrabberModel: ObservableObject {
   private let logger = HostLogger()
   private let safariTransport = SafariNativeMessagingTransport()
   private let chromeTransport = ChromeNativeMessagingTransport()
+  private let hostProcessIdentifier = ProcessInfo.processInfo.processIdentifier
   private let notificationsEnabled: Bool
   private var hotkeyMonitorRegistration: HotkeyMonitorRegistration?
+  private var appActivationObserverRegistration: AppActivationObserverRegistration?
+  private var lastNonHostFrontmostApp: FrontmostAppInfo?
+  private var lastKnownBrowserFrontmostApp: FrontmostAppInfo?
   private var lastHotkeyFireAt: Date = .distantPast
   private var lastCaptureAt: String?
   private var lastTransportErrorCode: String?
@@ -821,6 +870,7 @@ final class ContextGrabberModel: ObservableObject {
     }
 
     registerHotkeyMonitors()
+    registerFrontmostAppObserver()
   }
 
   func captureNow() {
@@ -903,10 +953,10 @@ final class ContextGrabberModel: ObservableObject {
   func runDiagnostics() {
     let historyURL = Self.historyDirectoryURL()
     let writable = FileManager.default.isWritableFile(atPath: Self.appSupportBaseURL().path)
-    let frontmostApp = NSWorkspace.shared.frontmostApplication
+    let frontmostApp = effectiveFrontmostAppInfo()
     let target = detectBrowserTarget(
-      frontmostBundleIdentifier: frontmostApp?.bundleIdentifier,
-      frontmostAppName: frontmostApp?.localizedName
+      frontmostBundleIdentifier: frontmostApp.bundleIdentifier,
+      frontmostAppName: frontmostApp.appName
     )
 
     let safariStatus = diagnosticsStatusForSafari()
@@ -935,6 +985,57 @@ final class ContextGrabberModel: ObservableObject {
     }
   }
 
+  private func registerFrontmostAppObserver() {
+    appActivationObserverRegistration = AppActivationObserverRegistration { [weak self] app in
+      Task { @MainActor [weak self] in
+        self?.recordNonHostFrontmostApp(app)
+      }
+    }
+
+    recordNonHostFrontmostApp(NSWorkspace.shared.frontmostApplication)
+  }
+
+  private func recordNonHostFrontmostApp(_ app: NSRunningApplication?) {
+    guard let app else {
+      return
+    }
+    guard app.processIdentifier != hostProcessIdentifier else {
+      return
+    }
+
+    let frontmostApp = FrontmostAppInfo(
+      bundleIdentifier: app.bundleIdentifier,
+      appName: app.localizedName,
+      processIdentifier: app.processIdentifier
+    )
+    lastNonHostFrontmostApp = frontmostApp
+
+    let target = detectBrowserTarget(
+      frontmostBundleIdentifier: frontmostApp.bundleIdentifier,
+      frontmostAppName: frontmostApp.appName
+    )
+    if case .safari = target {
+      lastKnownBrowserFrontmostApp = frontmostApp
+    } else if case .chrome = target {
+      lastKnownBrowserFrontmostApp = frontmostApp
+    }
+  }
+
+  private func effectiveFrontmostAppInfo() -> (bundleIdentifier: String?, appName: String?) {
+    let current = NSWorkspace.shared.frontmostApplication
+    let effective = resolveEffectiveFrontmostApp(
+      current: FrontmostAppInfo(
+        bundleIdentifier: current?.bundleIdentifier,
+        appName: current?.localizedName,
+        processIdentifier: current?.processIdentifier
+      ),
+      lastNonHost: lastNonHostFrontmostApp,
+      lastKnownBrowser: lastKnownBrowserFrontmostApp,
+      hostProcessIdentifier: hostProcessIdentifier
+    )
+    return (effective.bundleIdentifier, effective.appName)
+  }
+
   private func handleHotkeyEvent(_ event: NSEvent) {
     guard isCaptureHotkey(event) else {
       return
@@ -959,10 +1060,10 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func resolveCapture(request: HostCaptureRequestMessage) throws -> CaptureResolution {
-    let frontmostApp = NSWorkspace.shared.frontmostApplication
+    let frontmostApp = effectiveFrontmostAppInfo()
     let target = detectBrowserTarget(
-      frontmostBundleIdentifier: frontmostApp?.bundleIdentifier,
-      frontmostAppName: frontmostApp?.localizedName
+      frontmostBundleIdentifier: frontmostApp.bundleIdentifier,
+      frontmostAppName: frontmostApp.appName
     )
 
     if case .unsupported(let appName, let bundleIdentifier) = target {
@@ -971,13 +1072,14 @@ final class ContextGrabberModel: ObservableObject {
       let message =
         "Frontmost app is \(name) (\(bundleLabel)). Browser capture currently supports Safari and Chrome only."
 
-      return metadataFallback(
-        browser: target.browserLabel,
-        transportStatusPrefix: target.transportStatusPrefix,
-        code: "ERR_EXTENSION_UNAVAILABLE",
-        message: message,
-        details: nil
-      )
+        return metadataFallback(
+          browser: target.browserLabel,
+          transportStatusPrefix: target.transportStatusPrefix,
+          code: "ERR_EXTENSION_UNAVAILABLE",
+          message: message,
+          details: nil,
+          frontAppName: frontmostApp.appName
+        )
     }
 
     do {
@@ -995,7 +1097,8 @@ final class ContextGrabberModel: ObservableObject {
           transportStatusPrefix: target.transportStatusPrefix,
           code: "ERR_EXTENSION_UNAVAILABLE",
           message: "Unsupported frontmost app.",
-          details: nil
+          details: nil,
+          frontAppName: frontmostApp.appName
         )
       }
 
@@ -1009,7 +1112,8 @@ final class ContextGrabberModel: ObservableObject {
             transportStatusPrefix: target.transportStatusPrefix,
             code: "ERR_PROTOCOL_VERSION",
             message: "Protocol version mismatch. Expected \(protocolVersion).",
-            details: nil
+            details: nil,
+            frontAppName: frontmostApp.appName
           )
         }
 
@@ -1026,7 +1130,8 @@ final class ContextGrabberModel: ObservableObject {
           transportStatusPrefix: target.transportStatusPrefix,
           code: errorMessage.payload.code,
           message: errorMessage.payload.message,
-          details: errorMessage.payload.details
+          details: errorMessage.payload.details,
+          frontAppName: frontmostApp.appName
         )
       }
     } catch {
@@ -1038,7 +1143,8 @@ final class ContextGrabberModel: ObservableObject {
           transportStatusPrefix: target.transportStatusPrefix,
           code: "ERR_TIMEOUT",
           message: "Timed out waiting for extension response.",
-          details: nil
+          details: nil,
+          frontAppName: frontmostApp.appName
         )
       }
 
@@ -1050,7 +1156,8 @@ final class ContextGrabberModel: ObservableObject {
           transportStatusPrefix: target.transportStatusPrefix,
           code: "ERR_TIMEOUT",
           message: "Timed out waiting for extension response.",
-          details: nil
+          details: nil,
+          frontAppName: frontmostApp.appName
         )
       }
 
@@ -1059,7 +1166,8 @@ final class ContextGrabberModel: ObservableObject {
         transportStatusPrefix: target.transportStatusPrefix,
         code: "ERR_EXTENSION_UNAVAILABLE",
         message: error.localizedDescription,
-        details: nil
+        details: nil,
+        frontAppName: frontmostApp.appName
       )
     }
   }
@@ -1069,10 +1177,16 @@ final class ContextGrabberModel: ObservableObject {
     transportStatusPrefix: String,
     code: String,
     message: String,
-    details: [String: String]?
+    details: [String: String]?,
+    frontAppName: String?
   ) -> CaptureResolution {
     let warning = "\(code): \(message)"
-    let payload = createMetadataOnlyPayload(browser: browser, details: details, warning: warning)
+    let payload = createMetadataOnlyPayload(
+      browser: browser,
+      details: details,
+      warning: warning,
+      frontAppName: frontAppName
+    )
     lastTransportStatus = "\(transportStatusPrefix)_error:\(code)"
     lastTransportErrorCode = code
 
@@ -1087,9 +1201,9 @@ final class ContextGrabberModel: ObservableObject {
   private func createMetadataOnlyPayload(
     browser: String,
     details: [String: String]?,
-    warning: String
+    warning: String,
+    frontAppName: String?
   ) -> BrowserContextPayload {
-    let frontAppName = NSWorkspace.shared.frontmostApplication?.localizedName
     return createMetadataOnlyBrowserPayload(
       browser: browser,
       details: details,

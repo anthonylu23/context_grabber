@@ -41,6 +41,80 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  func testResolveEffectiveFrontmostAppPrefersLastNonHostWhenHostIsFrontmost() {
+    let current = FrontmostAppInfo(
+      bundleIdentifier: "com.example.ContextGrabberHost",
+      appName: "Context Grabber",
+      processIdentifier: 4321
+    )
+    let lastNonHost = FrontmostAppInfo(
+      bundleIdentifier: "com.apple.Safari",
+      appName: "Safari",
+      processIdentifier: 9876
+    )
+
+    let resolved = resolveEffectiveFrontmostApp(
+      current: current,
+      lastNonHost: lastNonHost,
+      lastKnownBrowser: nil,
+      hostProcessIdentifier: 4321
+    )
+
+    XCTAssertEqual(resolved.bundleIdentifier, "com.apple.Safari")
+    XCTAssertEqual(resolved.appName, "Safari")
+  }
+
+  func testResolveEffectiveFrontmostAppKeepsCurrentWhenNotHost() {
+    let current = FrontmostAppInfo(
+      bundleIdentifier: "com.apple.Safari",
+      appName: "Safari",
+      processIdentifier: 1111
+    )
+    let lastNonHost = FrontmostAppInfo(
+      bundleIdentifier: "com.google.Chrome",
+      appName: "Google Chrome",
+      processIdentifier: 2222
+    )
+
+    let resolved = resolveEffectiveFrontmostApp(
+      current: current,
+      lastNonHost: lastNonHost,
+      lastKnownBrowser: nil,
+      hostProcessIdentifier: 9999
+    )
+
+    XCTAssertEqual(resolved.bundleIdentifier, "com.apple.Safari")
+    XCTAssertEqual(resolved.appName, "Safari")
+  }
+
+  func testResolveEffectiveFrontmostAppPrefersLastKnownBrowserWhenHostIsFrontmost() {
+    let current = FrontmostAppInfo(
+      bundleIdentifier: "com.example.ContextGrabberHost",
+      appName: "Context Grabber",
+      processIdentifier: 4321
+    )
+    let lastNonHost = FrontmostAppInfo(
+      bundleIdentifier: "com.apple.finder",
+      appName: "Finder",
+      processIdentifier: 1234
+    )
+    let lastKnownBrowser = FrontmostAppInfo(
+      bundleIdentifier: "com.apple.Safari",
+      appName: "Safari",
+      processIdentifier: 5678
+    )
+
+    let resolved = resolveEffectiveFrontmostApp(
+      current: current,
+      lastNonHost: lastNonHost,
+      lastKnownBrowser: lastKnownBrowser,
+      hostProcessIdentifier: 4321
+    )
+
+    XCTAssertEqual(resolved.bundleIdentifier, "com.apple.Safari")
+    XCTAssertEqual(resolved.appName, "Safari")
+  }
+
   func testRenderMarkdownTruncatesLongContentAndAddsWarning() {
     let payload = BrowserContextPayload(
       source: "browser",

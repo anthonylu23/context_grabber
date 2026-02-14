@@ -238,7 +238,7 @@ const buildAppleScriptProgram = (javascript: string): string[] => {
   return [
     'tell application "Safari"',
     'if (count of windows) = 0 then error "No Safari window is open."',
-    "set frontDoc to front document of front window",
+    "set frontDoc to current tab of front window",
     `set pageJSON to do JavaScript "${escapedScript}" in frontDoc`,
     "return pageJSON",
     "end tell",

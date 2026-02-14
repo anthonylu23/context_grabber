@@ -9,7 +9,8 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
   - `Run Diagnostics`
   - `Quit`
 - Sends a protocol-versioned host request to Safari native-messaging bridge (`@context-grabber/extension-safari`).
-- Selects Safari or Chrome native-messaging bridge based on the frontmost browser app (with optional env override).
+- Selects Safari or Chrome native-messaging bridge based on the effective frontmost browser app (with optional env override).
+- Menu-trigger capture prefers the last known browser app (Safari/Chrome) when the menu bar host is active.
 - Uses metadata-only fallback when bridge transport fails, times out, or returns invalid payloads.
 - Bridge path performs live Safari active-tab extraction by default.
 - Generates deterministic markdown and writes to:

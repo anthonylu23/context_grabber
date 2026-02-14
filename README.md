@@ -26,6 +26,7 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Safari runtime now includes a native host port binder (`runtime/native-host`) for packaged Web Extension request/response wiring.
 - Safari CLI source resolution is now strict: `auto`/`live` require live extraction, and `fixture` is explicit opt-in for testing.
 - Swift host now routes capture transport by frontmost browser (Safari or Chrome) and diagnostics report both channels.
+- Menu-triggered host captures now prefer the last known browser app when the menu bar app is active.
 - Swift host now has integration tests for truncation behavior, metadata-only fallback payload/markdown, and markdown determinism.
 
 ### Packages
