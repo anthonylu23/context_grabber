@@ -32,8 +32,15 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
   - `runtime/background-entrypoint` for native-host port handling and active-tab content-script requests
   - `runtime/content-entrypoint` for content-script capture message handling
 - Chrome now has live AppleScript active-tab extraction (`extract-active-tab`) and CLI source modes `live`, `runtime`, `fixture`, with `auto` fallback `live -> runtime` (fixture is explicit).
-- Host unsupported-app capture now routes to a desktop AX->OCR scaffold path (AX text override, OCR fallback placeholder, desktop markdown provenance).
-- Swift host integration tests now cover desktop scaffold extraction branches and desktop markdown metadata rendering.
+- Safari package now includes runtime bootstrap entry files (`runtime/background-main`, `runtime/content-main`) and a WebExtension `manifest.json` that references compiled runtime assets.
+- Host unsupported-app capture now uses a real desktop AX->OCR path:
+  - AX focused-element extraction first
+  - Vision OCR fallback second
+  - metadata-only desktop fallback when both fail
+- Host diagnostics now report desktop readiness (Accessibility + Screen Recording permission states).
+- Desktop OCR image capture now uses ScreenCaptureKit (window-first, display fallback), replacing deprecated `CGWindowListCreateImage`.
+- Host menu now includes one-click permission remediation actions for missing desktop permissions.
+- Swift host integration tests now cover desktop AX/OCR branches and resolver-level timeout/unavailable mapping.
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -83,20 +90,20 @@ swift run
 ```
 
 Current host capabilities:
-- menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Quit`)
+- menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
 - global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
-- deterministic markdown generation from browser and desktop-scaffold capture responses
+- deterministic markdown generation from browser and desktop (AX/OCR) capture responses
 - local markdown persistence + clipboard copy
 - local diagnostics (transport reachability + protocol compatibility) and host logging
 
-Safari live extraction requirement:
-- In Safari, enable `Settings -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `do JavaScript` capture to work.
+Browser live extraction requirements:
+- Safari: enable `Settings -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `do JavaScript` capture.
+- Chrome: enable `View -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `execute javascript`.
+- macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
 
 ## Next Steps
-- wire Safari packaged runtime entrypoint helpers into the actual Safari Web Extension project assets.
-- replace desktop scaffold placeholders with real AX extraction and Vision OCR fallback integration.
-- extend Swift integration coverage with resolver-level transport timeout/unavailable simulation.
-- add host-side diagnostics for desktop capture readiness (AX and Screen Recording permission visibility).
+- integrate runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local install workflows.
+- improve AX text quality heuristics (attribute expansion, focused-window traversal depth, threshold tuning).
 
 ## Documentation
 - Docs index: `docs/README.md`

@@ -41,6 +41,8 @@
   - `auto`/`live`: live AppleScript extraction only
   - `fixture`: explicit fixture mode
 - Safari live extraction depends on Safari Developer setting `Allow JavaScript from Apple Events`.
+- Chrome live extraction depends on Chrome Developer menu setting `Allow JavaScript from Apple Events`.
+- AppleScript capture requires macOS Automation permission for the calling app to control Safari/Chrome.
 - Safari runtime entrypoints (`runtime/background-entrypoint`, `runtime/content-entrypoint`) use a runtime-safe snapshot sanitizer module that avoids Node-only imports.
 - Host channel routing selects Safari vs Chrome using effective frontmost app context (prefers last known browser app when the menu bar host is active).
 - Chrome transport source resolution now supports:
@@ -52,6 +54,13 @@
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
 - Desktop capture now uses:
   - Accessibility focused-element text extraction (minimum text threshold `400` chars)
-  - Vision OCR fallback from frontmost window/screen image
+  - ScreenCaptureKit screenshots (`SCScreenshotManager`) for frontmost window or display
+  - Vision OCR fallback from the captured screenshot image
   - metadata-only desktop fallback when AX and OCR both fail
+- ScreenCaptureKit callback bridging is async (no main-thread semaphore waits in the host capture path).
+- ScreenCaptureKit display fallback capture now uses native `SCDisplay.width/height` pixel dimensions directly.
+- Desktop metadata fallback warnings now distinguish:
+  - AX unavailable + OCR unavailable, vs
+  - AX below-threshold + OCR unavailable.
 - Desktop diagnostics now include Accessibility + Screen Recording readiness checks.
+- Host menu includes direct remediation actions that deep-link to macOS privacy panes for Accessibility and Screen Recording.

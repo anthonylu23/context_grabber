@@ -393,10 +393,9 @@ interface NormalizedContext {
 - packaged WebExtension manifest (`packages/extension-safari/manifest.json`) targeting compiled runtime assets
 31. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `live -> runtime` fallback; fixture is explicit).
 32. Host unsupported-app capture now routes through a real desktop app resolver:
-- uses app-specific AppleScript extraction first when the front app exposes usable scripting APIs
 - falls back to Accessibility focused-element extraction (`minimumAccessibilityTextChars = 400`)
 - falls back to Vision OCR window/screen text extraction
-- falls back to deterministic desktop `metadata_only` when AppleScript, AX, and OCR all fail
+- falls back to deterministic desktop `metadata_only` when AX and OCR both fail
 - emits desktop provenance (`source_type: desktop_app`) and desktop metadata in markdown
 33. Host diagnostics now include desktop readiness checks:
 - Accessibility permission state
@@ -404,10 +403,9 @@ interface NormalizedContext {
 34. Host-level Swift integration tests now include:
 - resolver-level timeout/unavailable browser mapping assertions
 - desktop AX success / OCR fallback / metadata-only failure assertions
+35. Desktop OCR image capture now uses ScreenCaptureKit (`SCScreenshotManager`) with window-first targeting and display fallback; host menu now includes direct permission remediation actions for Accessibility and Screen Recording settings panes.
 
 ## Next Steps (Implementation Queue)
 1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
 2. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
-3. Migrate OCR image capture from deprecated `CGWindowListCreateImage` to ScreenCaptureKit.
-4. Add in-app remediation actions for missing desktop permissions.
-5. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+3. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.

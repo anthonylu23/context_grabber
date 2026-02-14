@@ -5,6 +5,8 @@
 - Xcode + Swift toolchain available.
 - macOS (for `apps/macos-host`).
 - Safari live extraction requires `Safari -> Settings -> Developer -> Allow JavaScript from Apple Events`.
+- Chrome live extraction requires `Chrome -> View -> Developer -> Allow JavaScript from Apple Events`.
+- Apple Events capture requires macOS Automation permission for the calling app in `System Settings -> Privacy & Security -> Automation`.
 
 ## Workspace Checks
 ```bash
@@ -24,6 +26,8 @@ swift run
 - `Capture Now (⌃⌥⌘C)`
 - `Open Recent Captures`
 - `Run Diagnostics`
+- `Open Accessibility Settings`
+- `Open Screen Recording Settings`
 - `Quit`
 
 ## Safari Bridge CLI
@@ -55,5 +59,5 @@ printf '%s\n' '{"id":"req-1","type":"host.capture.request","timestamp":"2026-02-
 - `CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD`: inline JSON payload used by Chrome runtime source mode.
 - `CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH`: file path to JSON payload used by Chrome runtime source mode.
 - Chrome runtime/fixture payloads are normalized with the same capture contract as live mode (`selectionText` is emitted only when `includeSelectionText: true`).
-- `CONTEXT_GRABBER_DESKTOP_AX_TEXT`: optional desktop scaffold AX text override (host-side).
-- `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`: optional desktop scaffold OCR text override (host-side).
+- `CONTEXT_GRABBER_DESKTOP_AX_TEXT`: optional host-side override for AX extracted text (testing/dev).
+- `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`: optional host-side override for OCR extracted text (testing/dev).
