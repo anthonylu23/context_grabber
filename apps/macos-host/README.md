@@ -11,7 +11,8 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
 - Sends a protocol-versioned host request to Safari native-messaging bridge (`@context-grabber/extension-safari`).
 - Selects Safari or Chrome native-messaging bridge based on the effective frontmost browser app (with optional env override).
 - Menu-trigger capture prefers the last known browser app (Safari/Chrome) when the menu bar host is active.
-- Uses metadata-only fallback when bridge transport fails, times out, or returns invalid payloads.
+- Uses metadata-only fallback when browser bridge transport fails, times out, or returns invalid payloads.
+- Uses desktop AX->OCR scaffold capture when the front app is not Safari/Chrome.
 - Bridge path performs live Safari active-tab extraction by default.
 - Generates deterministic markdown and writes to:
   - `~/Library/Application Support/ContextGrabber/history/`
@@ -37,11 +38,13 @@ swift run
 - Use `CONTEXT_GRABBER_SAFARI_SOURCE=fixture` to force fixture extraction or `CONTEXT_GRABBER_SAFARI_SOURCE=live` to force Safari extraction.
 - Use `CONTEXT_GRABBER_BROWSER_TARGET=safari` or `CONTEXT_GRABBER_BROWSER_TARGET=chrome` to override frontmost-app channel selection.
 - If Safari extraction fails, ensure Safari is running with at least one open window/tab.
+- For Safari live extraction, enable `Safari -> Settings -> Developer -> Allow JavaScript from Apple Events`.
+- Use `CONTEXT_GRABBER_DESKTOP_AX_TEXT` / `CONTEXT_GRABBER_DESKTOP_OCR_TEXT` to simulate desktop scaffold paths during testing.
 - `swift run` launches an unbundled binary; user notifications are auto-disabled in this mode to avoid runtime crashes.
 
 ## Notes
 - Safari native messaging currently uses AppleScript-driven active-tab extraction as transport scaffolding.
-- AX/OCR desktop capture is intentionally deferred.
+- Desktop AX/OCR currently uses scaffold placeholders; real AX and Vision OCR extraction are next.
 
 ## Related Docs
 - Project plan: `docs/plans/context-grabber-project-plan.md`

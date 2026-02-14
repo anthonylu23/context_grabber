@@ -170,6 +170,76 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertTrue(markdown.contains(warning))
   }
 
+  func testResolveDesktopCaptureScaffoldUsesAccessibilityTextWhenProvided() {
+    let resolution = resolveDesktopCaptureScaffold(
+      context: DesktopCaptureContext(appName: "Terminal", bundleIdentifier: "com.apple.Terminal"),
+      accessibilityText: "AX text",
+      ocrText: "OCR text"
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "accessibility")
+    XCTAssertEqual(resolution.transportStatus, "desktop_capture_accessibility")
+    XCTAssertEqual(resolution.payload.source, "desktop")
+    XCTAssertEqual(resolution.payload.fullText, "AX text")
+    XCTAssertNil(resolution.warning)
+  }
+
+  func testResolveDesktopCaptureScaffoldUsesOcrFallbackWhenAxUnavailable() {
+    let resolution = resolveDesktopCaptureScaffold(
+      context: DesktopCaptureContext(appName: "Preview", bundleIdentifier: "com.apple.Preview"),
+      accessibilityText: nil,
+      ocrText: "OCR text"
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "ocr")
+    XCTAssertEqual(resolution.transportStatus, "desktop_capture_ocr")
+    XCTAssertEqual(resolution.payload.fullText, "OCR text")
+    XCTAssertTrue((resolution.payload.extractionWarnings ?? []).contains("AX extraction unavailable; used OCR fallback text."))
+  }
+
+  func testResolveDesktopCaptureScaffoldUsesPlaceholderWhenNoAxOrOcrText() {
+    let resolution = resolveDesktopCaptureScaffold(
+      context: DesktopCaptureContext(appName: "Figma", bundleIdentifier: "com.figma.Desktop"),
+      accessibilityText: nil,
+      ocrText: nil
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "ocr")
+    XCTAssertEqual(resolution.transportStatus, "desktop_capture_ocr_placeholder")
+    XCTAssertTrue(resolution.payload.fullText.contains("OCR fallback has not been implemented yet"))
+    XCTAssertEqual(resolution.warning, "AX extraction unavailable; OCR implementation pending.")
+  }
+
+  func testRenderMarkdownUsesDesktopSourceTypeAndMetadataForDesktopPayload() {
+    let payload = BrowserContextPayload(
+      source: "desktop",
+      browser: "desktop",
+      url: "app://com.apple.Terminal",
+      title: "Terminal",
+      fullText: "Desktop capture text.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: "Terminal",
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: []
+    )
+
+    let markdown = renderMarkdown(
+      requestID: "req-desktop-1",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "ocr",
+      payload: payload
+    )
+
+    XCTAssertTrue(markdown.contains("source_type: \"desktop_app\""))
+    XCTAssertTrue(markdown.contains("- source: desktop"))
+    XCTAssertTrue(markdown.contains("- app_bundle_id: com.apple.Terminal"))
+  }
+
   func testRenderMarkdownIsDeterministicForSameInput() {
     let payload = BrowserContextPayload(
       source: "browser",

@@ -241,6 +241,113 @@ func createMetadataOnlyBrowserPayload(
   )
 }
 
+struct DesktopCaptureContext {
+  let appName: String?
+  let bundleIdentifier: String?
+}
+
+struct DesktopCaptureResolution {
+  let payload: BrowserContextPayload
+  let extractionMethod: String
+  let transportStatus: String
+  let warning: String?
+}
+
+func buildDesktopOriginURL(bundleIdentifier: String?) -> String {
+  return "app://\(bundleIdentifier ?? "unknown")"
+}
+
+func resolveDesktopCaptureScaffold(
+  context: DesktopCaptureContext,
+  accessibilityText: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_AX_TEXT"],
+  ocrText: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_OCR_TEXT"]
+) -> DesktopCaptureResolution {
+  let appName = context.appName ?? "Desktop App"
+  let originURL = buildDesktopOriginURL(bundleIdentifier: context.bundleIdentifier)
+  let nonEmptyAccessibilityText = accessibilityText?.trimmingCharacters(in: .whitespacesAndNewlines)
+  let nonEmptyOcrText = ocrText?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+  if let nonEmptyAccessibilityText, !nonEmptyAccessibilityText.isEmpty {
+    let payload = BrowserContextPayload(
+      source: "desktop",
+      browser: "desktop",
+      url: originURL,
+      title: appName,
+      fullText: nonEmptyAccessibilityText,
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: appName,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: nil
+    )
+
+    return DesktopCaptureResolution(
+      payload: payload,
+      extractionMethod: "accessibility",
+      transportStatus: "desktop_capture_accessibility",
+      warning: nil
+    )
+  }
+
+  let ocrWarning = "AX extraction unavailable; used OCR fallback text."
+  if let nonEmptyOcrText, !nonEmptyOcrText.isEmpty {
+    let payload = BrowserContextPayload(
+      source: "desktop",
+      browser: "desktop",
+      url: originURL,
+      title: appName,
+      fullText: nonEmptyOcrText,
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: appName,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: [ocrWarning]
+    )
+
+    return DesktopCaptureResolution(
+      payload: payload,
+      extractionMethod: "ocr",
+      transportStatus: "desktop_capture_ocr",
+      warning: ocrWarning
+    )
+  }
+
+  let placeholderWarning = "AX extraction unavailable; OCR implementation pending."
+  let placeholderText =
+    "Desktop capture scaffold: OCR fallback has not been implemented yet for \(appName)."
+  let payload = BrowserContextPayload(
+    source: "desktop",
+    browser: "desktop",
+    url: originURL,
+    title: appName,
+    fullText: placeholderText,
+    headings: [],
+    links: [],
+    metaDescription: nil,
+    siteName: appName,
+    language: nil,
+    author: nil,
+    publishedTime: nil,
+    selectionText: nil,
+    extractionWarnings: [placeholderWarning]
+  )
+
+  return DesktopCaptureResolution(
+    payload: payload,
+    extractionMethod: "ocr",
+    transportStatus: "desktop_capture_ocr_placeholder",
+    warning: placeholderWarning
+  )
+}
+
 enum SafariNativeMessagingTransportError: LocalizedError {
   case repoRootNotFound
   case extensionPackageNotFound
@@ -962,9 +1069,14 @@ final class ContextGrabberModel: ObservableObject {
     let safariStatus = diagnosticsStatusForSafari()
     let chromeStatus = diagnosticsStatusForChrome()
 
-    lastTransportStatus = target.transportStatusPrefix == "chrome_extension"
-      ? chromeStatus.transportStatus
-      : safariStatus.transportStatus
+    switch target {
+    case .chrome:
+      lastTransportStatus = chromeStatus.transportStatus
+    case .safari:
+      lastTransportStatus = safariStatus.transportStatus
+    case .unsupported:
+      lastTransportStatus = "desktop_capture_ready"
+    }
 
     let lastCaptureLabel = lastCaptureAt ?? "never"
     let lastErrorLabel = lastTransportErrorCode ?? "none"
@@ -1067,19 +1179,20 @@ final class ContextGrabberModel: ObservableObject {
     )
 
     if case .unsupported(let appName, let bundleIdentifier) = target {
-      let name = appName ?? "Unknown App"
-      let bundleLabel = bundleIdentifier ?? "unknown.bundle"
-      let message =
-        "Frontmost app is \(name) (\(bundleLabel)). Browser capture currently supports Safari and Chrome only."
-
-        return metadataFallback(
-          browser: target.browserLabel,
-          transportStatusPrefix: target.transportStatusPrefix,
-          code: "ERR_EXTENSION_UNAVAILABLE",
-          message: message,
-          details: nil,
-          frontAppName: frontmostApp.appName
+      let desktopResolution = resolveDesktopCaptureScaffold(
+        context: DesktopCaptureContext(
+          appName: appName,
+          bundleIdentifier: bundleIdentifier
         )
+      )
+      lastTransportStatus = desktopResolution.transportStatus
+      lastTransportErrorCode = nil
+      return CaptureResolution(
+        payload: desktopResolution.payload,
+        extractionMethod: desktopResolution.extractionMethod,
+        transportStatus: desktopResolution.transportStatus,
+        warning: desktopResolution.warning
+      )
     }
 
     do {
@@ -1384,6 +1497,7 @@ func renderMarkdown(
   extractionMethod: String,
   payload: BrowserContextPayload
 ) -> String {
+  let isDesktopSource = payload.source == "desktop"
   let normalizedText = payload.fullText.replacingOccurrences(of: "\r\n", with: "\n")
   let trimmedText = String(normalizedText.prefix(maxBrowserFullTextChars))
   let truncated = normalizedText.count > maxBrowserFullTextChars
@@ -1401,10 +1515,12 @@ func renderMarkdown(
   lines.append("---")
   lines.append("id: \(yamlQuoted(requestID))")
   lines.append("captured_at: \(yamlQuoted(capturedAt))")
-  lines.append("source_type: \(yamlQuoted("webpage"))")
+  lines.append("source_type: \(yamlQuoted(isDesktopSource ? "desktop_app" : "webpage"))")
   lines.append("origin: \(yamlQuoted(payload.url))")
   lines.append("title: \(yamlQuoted(payload.title))")
-  lines.append("app_or_site: \(yamlQuoted(payload.siteName ?? hostFromURL(payload.url) ?? payload.browser))")
+  lines.append(
+    "app_or_site: \(yamlQuoted(isDesktopSource ? (payload.siteName ?? payload.title) : (payload.siteName ?? hostFromURL(payload.url) ?? payload.browser)))"
+  )
   lines.append("extraction_method: \(yamlQuoted(extractionMethod))")
   lines.append("confidence: 0.92")
   lines.append("truncated: \(truncated ? "true" : "false")")
@@ -1462,13 +1578,19 @@ func renderMarkdown(
 
   lines.append("")
   lines.append("### Metadata")
-  lines.append("- browser: \(payload.browser)")
-  lines.append("- url: \(payload.url)")
-  if let language = payload.language {
-    lines.append("- language: \(language)")
-  }
-  if let author = payload.author {
-    lines.append("- author: \(author)")
+  if isDesktopSource {
+    lines.append("- source: desktop")
+    lines.append("- app_name: \(payload.title)")
+    lines.append("- app_bundle_id: \(desktopBundleIdentifierFromOrigin(payload.url) ?? "unknown")")
+  } else {
+    lines.append("- browser: \(payload.browser)")
+    lines.append("- url: \(payload.url)")
+    if let language = payload.language {
+      lines.append("- language: \(language)")
+    }
+    if let author = payload.author {
+      lines.append("- author: \(author)")
+    }
   }
 
   lines.append("")
@@ -1528,6 +1650,18 @@ func splitSentences(_ text: String) -> [String] {
 
 func hostFromURL(_ urlString: String) -> String? {
   guard let url = URL(string: urlString) else {
+    return nil
+  }
+
+  return url.host
+}
+
+func desktopBundleIdentifierFromOrigin(_ origin: String) -> String? {
+  guard let url = URL(string: origin) else {
+    return nil
+  }
+
+  guard url.scheme == "app" else {
     return nil
   }
 
