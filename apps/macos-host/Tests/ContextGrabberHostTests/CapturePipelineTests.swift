@@ -41,6 +41,40 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  func testDesktopPermissionSettingsURLUsesExpectedPrivacyAnchors() {
+    XCTAssertEqual(
+      desktopPermissionSettingsURL(for: .accessibility)?.absoluteString,
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    )
+    XCTAssertEqual(
+      desktopPermissionSettingsURL(for: .screenRecording)?.absoluteString,
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+    )
+  }
+
+  func testFrontmostWindowIDFromWindowListPrefersFrontmostAppLayerZeroWindow() {
+    let windowList: [[String: Any]] = [
+      [
+        kCGWindowNumber as String: UInt32(44),
+        kCGWindowOwnerPID as String: 999,
+        kCGWindowLayer as String: 0,
+      ],
+      [
+        kCGWindowNumber as String: UInt32(81),
+        kCGWindowOwnerPID as String: 1234,
+        kCGWindowLayer as String: 0,
+      ],
+      [
+        kCGWindowNumber as String: UInt32(82),
+        kCGWindowOwnerPID as String: 1234,
+        kCGWindowLayer as String: 1,
+      ],
+    ]
+
+    let selected = frontmostWindowIDFromWindowList(windowList, frontmostProcessIdentifier: 1234)
+    XCTAssertEqual(selected, UInt32(81))
+  }
+
   func testResolveEffectiveFrontmostAppPrefersLastNonHostWhenHostIsFrontmost() {
     let current = FrontmostAppInfo(
       bundleIdentifier: "com.example.ContextGrabberHost",
@@ -170,44 +204,150 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertTrue(markdown.contains(warning))
   }
 
-  func testResolveDesktopCaptureScaffoldUsesAccessibilityTextWhenProvided() {
-    let resolution = resolveDesktopCaptureScaffold(
+  func testResolveDesktopCaptureUsesAccessibilityTextWhenProvided() async {
+    let accessibilityText = String(repeating: "a", count: minimumAccessibilityTextChars + 8)
+    let resolution = await resolveDesktopCapture(
       context: DesktopCaptureContext(appName: "Terminal", bundleIdentifier: "com.apple.Terminal"),
-      accessibilityText: "AX text",
-      ocrText: "OCR text"
+      accessibilityTextOverride: accessibilityText,
+      ocrTextOverride: "OCR text",
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
     )
 
     XCTAssertEqual(resolution.extractionMethod, "accessibility")
     XCTAssertEqual(resolution.transportStatus, "desktop_capture_accessibility")
     XCTAssertEqual(resolution.payload.source, "desktop")
-    XCTAssertEqual(resolution.payload.fullText, "AX text")
+    XCTAssertEqual(resolution.payload.fullText, accessibilityText)
     XCTAssertNil(resolution.warning)
+    XCTAssertNil(resolution.errorCode)
   }
 
-  func testResolveDesktopCaptureScaffoldUsesOcrFallbackWhenAxUnavailable() {
-    let resolution = resolveDesktopCaptureScaffold(
+  func testResolveDesktopCaptureUsesOcrFallbackWhenAxUnavailable() async {
+    let resolution = await resolveDesktopCapture(
       context: DesktopCaptureContext(appName: "Preview", bundleIdentifier: "com.apple.Preview"),
-      accessibilityText: nil,
-      ocrText: "OCR text"
+      accessibilityTextOverride: nil,
+      ocrTextOverride: "OCR text",
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
     )
 
     XCTAssertEqual(resolution.extractionMethod, "ocr")
     XCTAssertEqual(resolution.transportStatus, "desktop_capture_ocr")
     XCTAssertEqual(resolution.payload.fullText, "OCR text")
     XCTAssertTrue((resolution.payload.extractionWarnings ?? []).contains("AX extraction unavailable; used OCR fallback text."))
+    XCTAssertNil(resolution.errorCode)
   }
 
-  func testResolveDesktopCaptureScaffoldUsesPlaceholderWhenNoAxOrOcrText() {
-    let resolution = resolveDesktopCaptureScaffold(
+  func testResolveDesktopCaptureReturnsMetadataOnlyWhenAxAndOcrUnavailable() async {
+    let resolution = await resolveDesktopCapture(
       context: DesktopCaptureContext(appName: "Figma", bundleIdentifier: "com.figma.Desktop"),
-      accessibilityText: nil,
-      ocrText: nil
+      accessibilityTextOverride: nil,
+      ocrTextOverride: nil,
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
     )
 
-    XCTAssertEqual(resolution.extractionMethod, "ocr")
-    XCTAssertEqual(resolution.transportStatus, "desktop_capture_ocr_placeholder")
-    XCTAssertTrue(resolution.payload.fullText.contains("OCR fallback has not been implemented yet"))
-    XCTAssertEqual(resolution.warning, "AX extraction unavailable; OCR implementation pending.")
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(resolution.transportStatus, "desktop_capture_metadata_only")
+    XCTAssertEqual(resolution.warning, "AX and OCR extraction unavailable.")
+    XCTAssertEqual(resolution.errorCode, "ERR_EXTENSION_UNAVAILABLE")
+  }
+
+  func testResolveDesktopCaptureMetadataWarningWhenAxBelowThresholdAndOcrUnavailable() async {
+    let accessibilityText = String(repeating: "a", count: minimumAccessibilityTextChars - 1)
+    let resolution = await resolveDesktopCapture(
+      context: DesktopCaptureContext(appName: "Notes", bundleIdentifier: "com.apple.Notes"),
+      accessibilityTextOverride: accessibilityText,
+      ocrTextOverride: nil,
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(
+      resolution.warning,
+      "AX extraction below threshold (\(minimumAccessibilityTextChars - 1) chars) and OCR extraction unavailable."
+    )
+    XCTAssertEqual(
+      resolution.payload.extractionWarnings,
+      [
+        "AX extraction below threshold (\(minimumAccessibilityTextChars - 1) chars); used OCR fallback text.",
+        "OCR extraction unavailable.",
+      ]
+    )
+    XCTAssertEqual(resolution.payload.fullText, accessibilityText)
+  }
+
+  func testDesktopPermissionReadinessUsesInjectedProviders() {
+    let readiness = desktopPermissionReadiness(
+      isAccessibilityTrusted: { false },
+      screenRecordingGranted: { true }
+    )
+
+    XCTAssertEqual(readiness.accessibilityTrusted, false)
+    XCTAssertEqual(readiness.screenRecordingGranted, true)
+  }
+
+  func testResolveBrowserCaptureMapsTimeoutToMetadataFallback() {
+    let resolution = resolveBrowserCapture(
+      target: .safari,
+      bridgeResult: .failure(SafariNativeMessagingTransportError.timedOut),
+      frontAppName: "Safari"
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(resolution.errorCode, "ERR_TIMEOUT")
+    XCTAssertEqual(resolution.transportStatus, "safari_extension_error:ERR_TIMEOUT")
+    XCTAssertTrue((resolution.warning ?? "").contains("ERR_TIMEOUT"))
+  }
+
+  func testResolveBrowserCaptureMapsUnavailableToMetadataFallback() {
+    let resolution = resolveBrowserCapture(
+      target: .chrome,
+      bridgeResult: .failure(ChromeNativeMessagingTransportError.emptyOutput),
+      frontAppName: "Google Chrome"
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(resolution.errorCode, "ERR_EXTENSION_UNAVAILABLE")
+    XCTAssertEqual(resolution.transportStatus, "chrome_extension_error:ERR_EXTENSION_UNAVAILABLE")
+  }
+
+  func testResolveBrowserCaptureHandlesProtocolMismatchResult() {
+    let message = ExtensionCaptureResponseMessage(
+      id: "req-1",
+      type: "extension.capture.result",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: ExtensionCaptureResponsePayload(
+        protocolVersion: "2",
+        capture: BrowserContextPayload(
+          source: "browser",
+          browser: "safari",
+          url: "https://example.com",
+          title: "Example",
+          fullText: "Text",
+          headings: [],
+          links: [],
+          metaDescription: nil,
+          siteName: nil,
+          language: nil,
+          author: nil,
+          publishedTime: nil,
+          selectionText: nil,
+          extractionWarnings: nil
+        )
+      )
+    )
+
+    let resolution = resolveBrowserCapture(
+      target: .safari,
+      bridgeResult: .success(.captureResult(message)),
+      frontAppName: "Safari"
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(resolution.errorCode, "ERR_PROTOCOL_VERSION")
+    XCTAssertEqual(resolution.transportStatus, "safari_extension_error:ERR_PROTOCOL_VERSION")
   }
 
   func testRenderMarkdownUsesDesktopSourceTypeAndMetadataForDesktopPayload() {

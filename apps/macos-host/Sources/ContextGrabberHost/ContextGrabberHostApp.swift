@@ -1,7 +1,11 @@
 import AppKit
+import ApplicationServices
+import CoreGraphics
 import Foundation
+@preconcurrency import ScreenCaptureKit
 import SwiftUI
 import UserNotifications
+import Vision
 
 private let protocolVersion = "1"
 private let defaultCaptureTimeoutMs = 1_200
@@ -10,6 +14,7 @@ private let hotkeyModifiers: NSEvent.ModifierFlags = [.command, .option, .contro
 private let hotkeyDebounceWindowSeconds = 0.25
 let maxBrowserFullTextChars = 200_000
 let maxRawExcerptChars = 8_000
+let minimumAccessibilityTextChars = 400
 private let safariBundleIdentifiers: Set<String> = [
   "com.apple.Safari",
   "com.apple.SafariTechnologyPreview",
@@ -111,11 +116,12 @@ struct MarkdownCaptureOutput {
   let fileURL: URL
 }
 
-private struct CaptureResolution {
+struct CaptureResolution {
   let payload: BrowserContextPayload
   let extractionMethod: String
   let transportStatus: String
   let warning: String?
+  let errorCode: String?
 }
 
 enum BrowserTarget {
@@ -251,29 +257,426 @@ struct DesktopCaptureResolution {
   let extractionMethod: String
   let transportStatus: String
   let warning: String?
+  let errorCode: String?
+}
+
+struct OCRCaptureResult {
+  let text: String
+  let confidence: Double?
+}
+
+struct DesktopPermissionReadiness {
+  let accessibilityTrusted: Bool
+  let screenRecordingGranted: Bool?
+}
+
+final class SynchronousResultBox<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Value?
+
+  func set(_ newValue: Value?) {
+    lock.lock()
+    value = newValue
+    lock.unlock()
+  }
+
+  func get() -> Value? {
+    lock.lock()
+    defer { lock.unlock() }
+    return value
+  }
+}
+
+enum DesktopPermissionPane {
+  case accessibility
+  case screenRecording
+
+  var privacyAnchor: String {
+    switch self {
+    case .accessibility:
+      return "Privacy_Accessibility"
+    case .screenRecording:
+      return "Privacy_ScreenCapture"
+    }
+  }
+
+  var displayName: String {
+    switch self {
+    case .accessibility:
+      return "Accessibility"
+    case .screenRecording:
+      return "Screen Recording"
+    }
+  }
+}
+
+func desktopPermissionSettingsURL(for pane: DesktopPermissionPane) -> URL? {
+  return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.privacyAnchor)")
 }
 
 func buildDesktopOriginURL(bundleIdentifier: String?) -> String {
   return "app://\(bundleIdentifier ?? "unknown")"
 }
 
-func resolveDesktopCaptureScaffold(
+func normalizeDesktopText(_ value: String?) -> String {
+  guard let value else {
+    return ""
+  }
+
+  return value
+    .replacingOccurrences(of: "\r\n", with: "\n")
+    .replacingOccurrences(of: "\r", with: "\n")
+    .replacingOccurrences(of: "[ \t]+\n", with: "\n", options: .regularExpression)
+    .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func copyAXStringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+  var value: CFTypeRef?
+  let result = AXUIElementCopyAttributeValue(element, attribute, &value)
+  guard result == .success, let value else {
+    return nil
+  }
+
+  if let stringValue = value as? String {
+    return stringValue
+  }
+  if let attributedValue = value as? NSAttributedString {
+    return attributedValue.string
+  }
+
+  return nil
+}
+
+func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
+  guard let value else {
+    return nil
+  }
+
+  let expectedType = AXUIElementGetTypeID()
+  guard CFGetTypeID(value) == expectedType else {
+    return nil
+  }
+
+  return unsafeDowncast(value as AnyObject, to: AXUIElement.self)
+}
+
+func collectAccessibilityTextFromElement(_ element: AXUIElement) -> String? {
+  let attributes: [CFString] = [
+    kAXSelectedTextAttribute as CFString,
+    kAXValueAttribute as CFString,
+    kAXDescriptionAttribute as CFString,
+    kAXTitleAttribute as CFString,
+    kAXHelpAttribute as CFString,
+  ]
+
+  var segments: [String] = []
+  var seen = Set<String>()
+  for attribute in attributes {
+    guard let value = copyAXStringAttribute(element, attribute) else {
+      continue
+    }
+
+    let normalized = normalizeDesktopText(value)
+    guard !normalized.isEmpty else {
+      continue
+    }
+    if seen.contains(normalized) {
+      continue
+    }
+
+    seen.insert(normalized)
+    segments.append(normalized)
+  }
+
+  if segments.isEmpty {
+    return nil
+  }
+
+  return segments.joined(separator: "\n\n")
+}
+
+func extractAccessibilityTextFromFocusedElement(
+  frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
+) -> String? {
+  guard AXIsProcessTrusted() else {
+    return nil
+  }
+
+  var segments: [String] = []
+  var seen = Set<String>()
+
+  let appendUnique = { (text: String?) in
+    guard let text else {
+      return
+    }
+    let normalized = normalizeDesktopText(text)
+    guard !normalized.isEmpty else {
+      return
+    }
+    if seen.contains(normalized) {
+      return
+    }
+
+    seen.insert(normalized)
+    segments.append(normalized)
+  }
+
+  let systemWide = AXUIElementCreateSystemWide()
+  var focusedValue: CFTypeRef?
+  if AXUIElementCopyAttributeValue(
+    systemWide,
+    kAXFocusedUIElementAttribute as CFString,
+    &focusedValue
+  ) == .success,
+    let focusedElement = asAXUIElement(focusedValue)
+  {
+    appendUnique(collectAccessibilityTextFromElement(focusedElement))
+  }
+
+  if let frontmostProcessIdentifier {
+    let appElement = AXUIElementCreateApplication(frontmostProcessIdentifier)
+
+    var appFocusedValue: CFTypeRef?
+    if AXUIElementCopyAttributeValue(
+      appElement,
+      kAXFocusedUIElementAttribute as CFString,
+      &appFocusedValue
+    ) == .success,
+      let appFocusedElement = asAXUIElement(appFocusedValue)
+    {
+      appendUnique(collectAccessibilityTextFromElement(appFocusedElement))
+    }
+
+    var focusedWindowValue: CFTypeRef?
+    if AXUIElementCopyAttributeValue(
+      appElement,
+      kAXFocusedWindowAttribute as CFString,
+      &focusedWindowValue
+    ) == .success,
+      let focusedWindowElement = asAXUIElement(focusedWindowValue)
+    {
+      appendUnique(collectAccessibilityTextFromElement(focusedWindowElement))
+    }
+  }
+
+  if segments.isEmpty {
+    return nil
+  }
+
+  return segments.joined(separator: "\n\n")
+}
+
+func frontmostWindowIDFromWindowList(
+  _ windowList: [[String: Any]],
+  frontmostProcessIdentifier: pid_t?
+) -> CGWindowID? {
+  for window in windowList {
+    if let frontmostProcessIdentifier,
+      let ownerPid = window[kCGWindowOwnerPID as String] as? Int,
+      pid_t(ownerPid) != frontmostProcessIdentifier
+    {
+      continue
+    }
+
+    let layer = (window[kCGWindowLayer as String] as? Int) ?? 0
+    if layer != 0 {
+      continue
+    }
+
+    if let windowID = window[kCGWindowNumber as String] as? UInt32 {
+      return windowID
+    }
+    if let windowID = window[kCGWindowNumber as String] as? Int, windowID >= 0 {
+      return UInt32(windowID)
+    }
+  }
+
+  return nil
+}
+
+func shareableDesktopContent(
+  excludeDesktopWindows: Bool = true,
+  onScreenWindowsOnly: Bool = true
+) async -> SCShareableContent? {
+  let resultBox = SynchronousResultBox<SCShareableContent>()
+  await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+    SCShareableContent.getExcludingDesktopWindows(
+      excludeDesktopWindows,
+      onScreenWindowsOnly: onScreenWindowsOnly
+    ) { shareableContent, _ in
+      resultBox.set(shareableContent)
+      continuation.resume()
+    }
+  }
+  return resultBox.get()
+}
+
+func captureImageWithScreenCaptureKit(
+  contentFilter: SCContentFilter,
+  pixelWidth: Int,
+  pixelHeight: Int
+) async -> CGImage? {
+  let configuration = SCStreamConfiguration()
+  configuration.width = max(1, pixelWidth)
+  configuration.height = max(1, pixelHeight)
+  configuration.showsCursor = false
+
+  let resultBox = SynchronousResultBox<CGImage>()
+  await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+    SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: configuration) { image, _ in
+      resultBox.set(image)
+      continuation.resume()
+    }
+  }
+  return resultBox.get()
+}
+
+func captureFrontmostWindowImage(
+  frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
+) async -> CGImage? {
+  let windowList = CGWindowListCopyWindowInfo(
+    [.optionOnScreenOnly, .excludeDesktopElements],
+    kCGNullWindowID
+  ) as? [[String: Any]]
+  let frontmostWindowID = windowList.flatMap {
+    frontmostWindowIDFromWindowList($0, frontmostProcessIdentifier: frontmostProcessIdentifier)
+  }
+
+  guard let shareableContent = await shareableDesktopContent(
+    excludeDesktopWindows: true,
+    onScreenWindowsOnly: true
+  ) else {
+    return nil
+  }
+
+  if let targetWindow = shareableContent.windows.first(where: { window in
+    if let frontmostWindowID, window.windowID == frontmostWindowID {
+      return true
+    }
+    if let frontmostProcessIdentifier,
+      window.owningApplication?.processID == frontmostProcessIdentifier,
+      window.windowLayer == 0
+    {
+      return true
+    }
+    return false
+  }) {
+    let filter = SCContentFilter(desktopIndependentWindow: targetWindow)
+    let pointScale = max(1.0, Double(filter.pointPixelScale))
+    let pixelWidth = Int((targetWindow.frame.width * pointScale).rounded(.up))
+    let pixelHeight = Int((targetWindow.frame.height * pointScale).rounded(.up))
+
+    if let image = await captureImageWithScreenCaptureKit(
+      contentFilter: filter,
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight
+    ) {
+      return image
+    }
+  }
+
+  if let display = shareableContent.displays.first {
+    let filter = SCContentFilter(display: display, excludingWindows: [])
+    let pixelWidth = max(1, Int(display.width))
+    let pixelHeight = max(1, Int(display.height))
+
+    if let image = await captureImageWithScreenCaptureKit(
+      contentFilter: filter,
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight
+    ) {
+      return image
+    }
+  }
+
+  return nil
+}
+
+func extractOCRTextFromFrontmostWindow(
+  frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
+) async -> OCRCaptureResult? {
+  guard let image = await captureFrontmostWindowImage(frontmostProcessIdentifier: frontmostProcessIdentifier)
+  else {
+    return nil
+  }
+
+  let request = VNRecognizeTextRequest()
+  request.recognitionLevel = .accurate
+  request.usesLanguageCorrection = true
+
+  let handler = VNImageRequestHandler(cgImage: image, options: [:])
+  do {
+    try handler.perform([request])
+  } catch {
+    return nil
+  }
+
+  guard let observations = request.results, !observations.isEmpty else {
+    return nil
+  }
+
+  var textSegments: [String] = []
+  var confidenceSum: Double = 0
+  var confidenceCount = 0
+
+  for observation in observations {
+    guard let candidate = observation.topCandidates(1).first else {
+      continue
+    }
+
+    let normalized = normalizeDesktopText(candidate.string)
+    guard !normalized.isEmpty else {
+      continue
+    }
+
+    textSegments.append(normalized)
+    confidenceSum += Double(candidate.confidence)
+    confidenceCount += 1
+  }
+
+  let text = normalizeDesktopText(textSegments.joined(separator: "\n"))
+  guard !text.isEmpty else {
+    return nil
+  }
+
+  let averageConfidence = confidenceCount > 0 ? (confidenceSum / Double(confidenceCount)) : nil
+  return OCRCaptureResult(text: text, confidence: averageConfidence)
+}
+
+func desktopPermissionReadiness(
+  isAccessibilityTrusted: () -> Bool = { AXIsProcessTrusted() },
+  screenRecordingGranted: () -> Bool? = {
+    if #available(macOS 10.15, *) {
+      return CGPreflightScreenCaptureAccess()
+    }
+    return nil
+  }
+) -> DesktopPermissionReadiness {
+  return DesktopPermissionReadiness(
+    accessibilityTrusted: isAccessibilityTrusted(),
+    screenRecordingGranted: screenRecordingGranted()
+  )
+}
+
+func resolveDesktopCapture(
   context: DesktopCaptureContext,
-  accessibilityText: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_AX_TEXT"],
-  ocrText: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_OCR_TEXT"]
-) -> DesktopCaptureResolution {
+  accessibilityTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_AX_TEXT"],
+  ocrTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_OCR_TEXT"],
+  accessibilityExtractor: () -> String? = { extractAccessibilityTextFromFocusedElement() },
+  ocrExtractor: () async -> OCRCaptureResult? = { await extractOCRTextFromFrontmostWindow() }
+) async -> DesktopCaptureResolution {
   let appName = context.appName ?? "Desktop App"
   let originURL = buildDesktopOriginURL(bundleIdentifier: context.bundleIdentifier)
-  let nonEmptyAccessibilityText = accessibilityText?.trimmingCharacters(in: .whitespacesAndNewlines)
-  let nonEmptyOcrText = ocrText?.trimmingCharacters(in: .whitespacesAndNewlines)
+  let accessibilityText = normalizeDesktopText(accessibilityTextOverride ?? accessibilityExtractor())
 
-  if let nonEmptyAccessibilityText, !nonEmptyAccessibilityText.isEmpty {
+  if accessibilityText.count >= minimumAccessibilityTextChars {
     let payload = BrowserContextPayload(
       source: "desktop",
       browser: "desktop",
       url: originURL,
       title: appName,
-      fullText: nonEmptyAccessibilityText,
+      fullText: accessibilityText,
       headings: [],
       links: [],
       metaDescription: nil,
@@ -289,18 +692,26 @@ func resolveDesktopCaptureScaffold(
       payload: payload,
       extractionMethod: "accessibility",
       transportStatus: "desktop_capture_accessibility",
-      warning: nil
+      warning: nil,
+      errorCode: nil
     )
   }
 
-  let ocrWarning = "AX extraction unavailable; used OCR fallback text."
-  if let nonEmptyOcrText, !nonEmptyOcrText.isEmpty {
+  let axFallbackWarning: String = if accessibilityText.isEmpty {
+    "AX extraction unavailable; used OCR fallback text."
+  } else {
+    "AX extraction below threshold (\(accessibilityText.count) chars); used OCR fallback text."
+  }
+
+  let extractedOcr = await ocrExtractor()
+  let ocrText = normalizeDesktopText(ocrTextOverride ?? extractedOcr?.text)
+  if !ocrText.isEmpty {
     let payload = BrowserContextPayload(
       source: "desktop",
       browser: "desktop",
       url: originURL,
       title: appName,
-      fullText: nonEmptyOcrText,
+      fullText: ocrText,
       headings: [],
       links: [],
       metaDescription: nil,
@@ -309,26 +720,34 @@ func resolveDesktopCaptureScaffold(
       author: nil,
       publishedTime: nil,
       selectionText: nil,
-      extractionWarnings: [ocrWarning]
+      extractionWarnings: [axFallbackWarning]
     )
 
     return DesktopCaptureResolution(
       payload: payload,
       extractionMethod: "ocr",
       transportStatus: "desktop_capture_ocr",
-      warning: ocrWarning
+      warning: axFallbackWarning,
+      errorCode: nil
     )
   }
 
-  let placeholderWarning = "AX extraction unavailable; OCR implementation pending."
-  let placeholderText =
-    "Desktop capture scaffold: OCR fallback has not been implemented yet for \(appName)."
+  let fallbackWarning: String = if accessibilityText.isEmpty {
+    "AX and OCR extraction unavailable."
+  } else {
+    "AX extraction below threshold (\(accessibilityText.count) chars) and OCR extraction unavailable."
+  }
+  let fallbackWarnings: [String] = if accessibilityText.isEmpty {
+    [fallbackWarning]
+  } else {
+    [axFallbackWarning, "OCR extraction unavailable."]
+  }
   let payload = BrowserContextPayload(
     source: "desktop",
     browser: "desktop",
     url: originURL,
     title: appName,
-    fullText: placeholderText,
+    fullText: accessibilityText,
     headings: [],
     links: [],
     metaDescription: nil,
@@ -337,15 +756,110 @@ func resolveDesktopCaptureScaffold(
     author: nil,
     publishedTime: nil,
     selectionText: nil,
-    extractionWarnings: [placeholderWarning]
+    extractionWarnings: fallbackWarnings
   )
 
   return DesktopCaptureResolution(
     payload: payload,
-    extractionMethod: "ocr",
-    transportStatus: "desktop_capture_ocr_placeholder",
-    warning: placeholderWarning
+    extractionMethod: "metadata_only",
+    transportStatus: "desktop_capture_metadata_only",
+    warning: fallbackWarning,
+    errorCode: "ERR_EXTENSION_UNAVAILABLE"
   )
+}
+
+func createBrowserMetadataFallbackResolution(
+  target: BrowserTarget,
+  code: String,
+  message: String,
+  details: [String: String]?,
+  frontAppName: String?
+) -> CaptureResolution {
+  let warning = "\(code): \(message)"
+  return CaptureResolution(
+    payload: createMetadataOnlyBrowserPayload(
+      browser: target.browserLabel,
+      details: details,
+      warning: warning,
+      frontAppName: frontAppName
+    ),
+    extractionMethod: "metadata_only",
+    transportStatus: "\(target.transportStatusPrefix)_error:\(code)",
+    warning: warning,
+    errorCode: code
+  )
+}
+
+func resolveBrowserCapture(
+  target: BrowserTarget,
+  bridgeResult: Result<ExtensionBridgeMessage, Error>,
+  frontAppName: String?
+) -> CaptureResolution {
+  switch bridgeResult {
+  case .success(let bridgeMessage):
+    switch bridgeMessage {
+    case .captureResult(let captureResponse):
+      if captureResponse.payload.protocolVersion != protocolVersion {
+        return createBrowserMetadataFallbackResolution(
+          target: target,
+          code: "ERR_PROTOCOL_VERSION",
+          message: "Protocol version mismatch. Expected \(protocolVersion).",
+          details: nil,
+          frontAppName: frontAppName
+        )
+      }
+
+      return CaptureResolution(
+        payload: captureResponse.payload.capture,
+        extractionMethod: "browser_extension",
+        transportStatus: "\(target.transportStatusPrefix)_ok",
+        warning: nil,
+        errorCode: nil
+      )
+
+    case .error(let errorMessage):
+      return createBrowserMetadataFallbackResolution(
+        target: target,
+        code: errorMessage.payload.code,
+        message: errorMessage.payload.message,
+        details: errorMessage.payload.details,
+        frontAppName: frontAppName
+      )
+    }
+
+  case .failure(let error):
+    if let safariTransportError = error as? SafariNativeMessagingTransportError,
+      case .timedOut = safariTransportError
+    {
+      return createBrowserMetadataFallbackResolution(
+        target: target,
+        code: "ERR_TIMEOUT",
+        message: "Timed out waiting for extension response.",
+        details: nil,
+        frontAppName: frontAppName
+      )
+    }
+
+    if let chromeTransportError = error as? ChromeNativeMessagingTransportError,
+      case .timedOut = chromeTransportError
+    {
+      return createBrowserMetadataFallbackResolution(
+        target: target,
+        code: "ERR_TIMEOUT",
+        message: "Timed out waiting for extension response.",
+        details: nil,
+        frontAppName: frontAppName
+      )
+    }
+
+    return createBrowserMetadataFallbackResolution(
+      target: target,
+      code: "ERR_EXTENSION_UNAVAILABLE",
+      message: error.localizedDescription,
+      details: nil,
+      frontAppName: frontAppName
+    )
+  }
 }
 
 enum SafariNativeMessagingTransportError: LocalizedError {
@@ -991,6 +1505,13 @@ final class ContextGrabberModel: ObservableObject {
     }
 
     captureInFlight = true
+    statusLine = "Capture in progress..."
+    Task { @MainActor [weak self] in
+      await self?.performCapture(mode: mode)
+    }
+  }
+
+  private func performCapture(mode: String) async {
     defer { captureInFlight = false }
 
     do {
@@ -1012,7 +1533,7 @@ final class ContextGrabberModel: ObservableObject {
       )
 
       let transportStart = Date()
-      let resolution = try resolveCapture(request: request)
+      let resolution = try await resolveCapture(request: request)
       lastTransportLatencyMs = Int(Date().timeIntervalSince(transportStart) * 1000.0)
       lastCaptureAt = timestamp
 
@@ -1057,6 +1578,14 @@ final class ContextGrabberModel: ObservableObject {
     }
   }
 
+  func openAccessibilitySettings() {
+    openDesktopPermissionSettings(.accessibility)
+  }
+
+  func openScreenRecordingSettings() {
+    openDesktopPermissionSettings(.screenRecording)
+  }
+
   func runDiagnostics() {
     let historyURL = Self.historyDirectoryURL()
     let writable = FileManager.default.isWritableFile(atPath: Self.appSupportBaseURL().path)
@@ -1068,6 +1597,9 @@ final class ContextGrabberModel: ObservableObject {
 
     let safariStatus = diagnosticsStatusForSafari()
     let chromeStatus = diagnosticsStatusForChrome()
+    let desktopReadiness = desktopPermissionReadiness()
+    let accessibilityLabel = desktopReadiness.accessibilityTrusted ? "granted" : "missing"
+    let screenLabel = desktopReadiness.screenRecordingGranted.map { $0 ? "granted" : "missing" } ?? "unknown"
 
     switch target {
     case .chrome:
@@ -1083,10 +1615,18 @@ final class ContextGrabberModel: ObservableObject {
     let latencyLabel = lastTransportLatencyMs.map { "\($0)ms" } ?? "n/a"
 
     let summary =
-      "Front app: \(target.displayName) | Safari: \(safariStatus.label) | Chrome: \(chromeStatus.label) | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
+      "Front app: \(target.displayName) | Safari: \(safariStatus.label) | Chrome: \(chromeStatus.label) | Desktop AX: \(accessibilityLabel) | Screen: \(screenLabel) | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
+    if !desktopReadiness.accessibilityTrusted {
+      logger.error("Accessibility permission is missing. Enable System Settings -> Privacy & Security -> Accessibility for ContextGrabberHost.")
+      logger.info("Use menu action: Open Accessibility Settings")
+    }
+    if let screenGranted = desktopReadiness.screenRecordingGranted, !screenGranted {
+      logger.error("Screen Recording permission is missing. Enable System Settings -> Privacy & Security -> Screen Recording for ContextGrabberHost.")
+      logger.info("Use menu action: Open Screen Recording Settings")
+    }
   }
 
   private func registerHotkeyMonitors() {
@@ -1171,7 +1711,7 @@ final class ContextGrabberModel: ObservableObject {
     return activeModifiers == hotkeyModifiers
   }
 
-  private func resolveCapture(request: HostCaptureRequestMessage) throws -> CaptureResolution {
+  private func resolveCapture(request: HostCaptureRequestMessage) async throws -> CaptureResolution {
     let frontmostApp = effectiveFrontmostAppInfo()
     let target = detectBrowserTarget(
       frontmostBundleIdentifier: frontmostApp.bundleIdentifier,
@@ -1179,150 +1719,46 @@ final class ContextGrabberModel: ObservableObject {
     )
 
     if case .unsupported(let appName, let bundleIdentifier) = target {
-      let desktopResolution = resolveDesktopCaptureScaffold(
+      let desktopResolution = await resolveDesktopCapture(
         context: DesktopCaptureContext(
           appName: appName,
           bundleIdentifier: bundleIdentifier
         )
       )
       lastTransportStatus = desktopResolution.transportStatus
-      lastTransportErrorCode = nil
+      lastTransportErrorCode = desktopResolution.errorCode
       return CaptureResolution(
         payload: desktopResolution.payload,
         extractionMethod: desktopResolution.extractionMethod,
         transportStatus: desktopResolution.transportStatus,
-        warning: desktopResolution.warning
+        warning: desktopResolution.warning,
+        errorCode: desktopResolution.errorCode
       )
     }
 
-    do {
-      let bridgeMessage: ExtensionBridgeMessage
+    let bridgeResult: Result<ExtensionBridgeMessage, Error> = Result {
       switch target {
       case .safari:
-        bridgeMessage = try safariTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
-        lastTransportStatus = "safari_extension_ok"
+        return try safariTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
       case .chrome:
-        bridgeMessage = try chromeTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
-        lastTransportStatus = "chrome_extension_ok"
+        return try chromeTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
       case .unsupported:
-        return metadataFallback(
-          browser: target.browserLabel,
-          transportStatusPrefix: target.transportStatusPrefix,
-          code: "ERR_EXTENSION_UNAVAILABLE",
-          message: "Unsupported frontmost app.",
-          details: nil,
-          frontAppName: frontmostApp.appName
+        throw NSError(
+          domain: "ContextGrabberHost",
+          code: 1003,
+          userInfo: [NSLocalizedDescriptionKey: "Unsupported browser target."]
         )
       }
-
-      switch bridgeMessage {
-      case .captureResult(let captureResponse):
-        lastTransportErrorCode = nil
-
-        if captureResponse.payload.protocolVersion != protocolVersion {
-          return metadataFallback(
-            browser: target.browserLabel,
-            transportStatusPrefix: target.transportStatusPrefix,
-            code: "ERR_PROTOCOL_VERSION",
-            message: "Protocol version mismatch. Expected \(protocolVersion).",
-            details: nil,
-            frontAppName: frontmostApp.appName
-          )
-        }
-
-        return CaptureResolution(
-          payload: captureResponse.payload.capture,
-          extractionMethod: "browser_extension",
-          transportStatus: lastTransportStatus,
-          warning: nil
-        )
-
-      case .error(let errorMessage):
-        return metadataFallback(
-          browser: target.browserLabel,
-          transportStatusPrefix: target.transportStatusPrefix,
-          code: errorMessage.payload.code,
-          message: errorMessage.payload.message,
-          details: errorMessage.payload.details,
-          frontAppName: frontmostApp.appName
-        )
-      }
-    } catch {
-      if let safariTransportError = error as? SafariNativeMessagingTransportError,
-        case .timedOut = safariTransportError
-      {
-        return metadataFallback(
-          browser: target.browserLabel,
-          transportStatusPrefix: target.transportStatusPrefix,
-          code: "ERR_TIMEOUT",
-          message: "Timed out waiting for extension response.",
-          details: nil,
-          frontAppName: frontmostApp.appName
-        )
-      }
-
-      if let chromeTransportError = error as? ChromeNativeMessagingTransportError,
-        case .timedOut = chromeTransportError
-      {
-        return metadataFallback(
-          browser: target.browserLabel,
-          transportStatusPrefix: target.transportStatusPrefix,
-          code: "ERR_TIMEOUT",
-          message: "Timed out waiting for extension response.",
-          details: nil,
-          frontAppName: frontmostApp.appName
-        )
-      }
-
-      return metadataFallback(
-        browser: target.browserLabel,
-        transportStatusPrefix: target.transportStatusPrefix,
-        code: "ERR_EXTENSION_UNAVAILABLE",
-        message: error.localizedDescription,
-        details: nil,
-        frontAppName: frontmostApp.appName
-      )
     }
-  }
 
-  private func metadataFallback(
-    browser: String,
-    transportStatusPrefix: String,
-    code: String,
-    message: String,
-    details: [String: String]?,
-    frontAppName: String?
-  ) -> CaptureResolution {
-    let warning = "\(code): \(message)"
-    let payload = createMetadataOnlyPayload(
-      browser: browser,
-      details: details,
-      warning: warning,
-      frontAppName: frontAppName
+    let resolution = resolveBrowserCapture(
+      target: target,
+      bridgeResult: bridgeResult,
+      frontAppName: frontmostApp.appName
     )
-    lastTransportStatus = "\(transportStatusPrefix)_error:\(code)"
-    lastTransportErrorCode = code
-
-    return CaptureResolution(
-      payload: payload,
-      extractionMethod: "metadata_only",
-      transportStatus: lastTransportStatus,
-      warning: warning
-    )
-  }
-
-  private func createMetadataOnlyPayload(
-    browser: String,
-    details: [String: String]?,
-    warning: String,
-    frontAppName: String?
-  ) -> BrowserContextPayload {
-    return createMetadataOnlyBrowserPayload(
-      browser: browser,
-      details: details,
-      warning: warning,
-      frontAppName: frontAppName
-    )
+    lastTransportStatus = resolution.transportStatus
+    lastTransportErrorCode = resolution.errorCode
+    return resolution
   }
 
   private func diagnosticsStatusForSafari() -> (label: String, transportStatus: String) {
@@ -1354,6 +1790,22 @@ final class ContextGrabberModel: ObservableObject {
     } catch {
       logger.error("Chrome diagnostics ping failed: \(error.localizedDescription)")
       return ("unreachable", "chrome_extension_unreachable")
+    }
+  }
+
+  private func openDesktopPermissionSettings(_ pane: DesktopPermissionPane) {
+    guard let url = desktopPermissionSettingsURL(for: pane) else {
+      statusLine = "Invalid \(pane.displayName) settings URL"
+      logger.error("Invalid settings URL for pane: \(pane.displayName)")
+      return
+    }
+
+    if NSWorkspace.shared.open(url) {
+      statusLine = "Opened \(pane.displayName) settings"
+      logger.info("Opened settings pane: \(pane.displayName)")
+    } else {
+      statusLine = "Unable to open \(pane.displayName) settings"
+      logger.error("Failed to open settings pane: \(pane.displayName)")
     }
   }
 
@@ -1470,6 +1922,14 @@ struct ContextGrabberHostApp: App {
 
       Button("Run Diagnostics") {
         model.runDiagnostics()
+      }
+
+      Button("Open Accessibility Settings") {
+        model.openAccessibilitySettings()
+      }
+
+      Button("Open Screen Recording Settings") {
+        model.openScreenRecordingSettings()
       }
 
       Divider()
