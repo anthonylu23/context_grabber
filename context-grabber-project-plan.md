@@ -1,55 +1,69 @@
-# Context-Grabber v1 Plan (macOS Menu Bar, Local-First, Web-First)
+# Context-Grabber Project Plan (macOS Menu Bar, Local-First, Web-First)
 
-## Summary
-Build a native macOS menu bar app (Swift/SwiftUI + AppKit) that captures current screen context and outputs structured markdown for LLM workflows.  
-v1 priorities are:
-1. Full-page capture for focused browser tabs (Chrome + Safari) via browser extensions + native host.
-2. Non-browser desktop capture via Accessibility text extraction with Vision OCR fallback.
-3. Manual global hotkey trigger, clipboard copy, and local markdown history files.
-4. Local-only processing with no cloud dependency.
+## Goal
+Build a native macOS menu bar app (Swift/SwiftUI + AppKit) that captures the user's current context and outputs structured markdown for LLM workflows.
 
-## Scope
-In scope:
-1. Menu bar app with status menu, capture action, and recent captures list.
-2. Browser-aware full-page context capture with metadata.
-3. Desktop app context capture fallback path.
-4. Markdown normalization pipeline with chunking and section summaries.
-5. Clipboard output + saved `.md` artifacts.
-6. Permissions onboarding and diagnostics.
+## Product Constraints
+1. Local-only processing and storage in capture pipeline.
+2. Manual trigger only (global hotkey + menu action).
+3. Web-first quality bar for Chrome and Safari focused tabs.
+4. Desktop fallback via Accessibility first, OCR second.
+5. Markdown output must be deterministic and paste-ready.
 
-Out of scope (v1):
-1. Auto-capture on focus change.
-2. Cloud enrichment/summarization.
-3. Auto-typing into destination apps.
-4. Arc/Firefox support.
-5. Tool-specific output presets (ChatGPT/Claude/Codex custom formats).
+## Stack Decisions
+1. Native app: Swift 5.10+, SwiftUI + AppKit, built in Xcode.
+2. Browser code: TypeScript only (no plain JavaScript files for app logic).
+3. JavaScript runtime/tooling: Bun (`bun install`, `bun run`) for extension builds, tests, and local scripts.
+4. Extension targets: Safari Web Extension + Chrome Manifest V3.
+5. Shared contracts: one TypeScript shared types package/folder consumed by both extensions and validated against native host JSON contracts.
+
+## In Scope
+1. Menu bar app with status menu and capture action.
+2. Global hotkey trigger.
+3. Safari and Chrome extension capture via native messaging.
+4. Desktop capture path (AX extraction + OCR fallback).
+5. Markdown normalization and chunking pipeline.
+6. Clipboard copy and local history files.
+7. Diagnostics for permissions, extension connectivity, and failures.
+
+## Out of Scope (for now)
+1. Automatic capture on app or tab change.
+2. Cloud summarization or remote processing.
+3. Arc/Firefox support.
+4. Destination-specific output templates.
+5. Auto-paste or auto-typing into target applications.
 
 ## Architecture
-1. `ContextGrabberApp` (macOS native host)
-- Menu bar UI, hotkey registration, permission checks, pipeline orchestration.
-- IPC endpoint for browser extension payloads.
-2. `Browser Capture Layer`
-- Safari Web Extension + Chrome extension.
-- Content script extracts full DOM text + semantic metadata.
-- Native messaging bridge sends capture payload to macOS app.
-3. `Desktop Capture Layer`
-- Accessibility extractor for focused app selected/visible text.
-- OCR fallback from focused window screenshot using Vision.
-4. `Normalization + Markdown Engine`
-- Cleans text, deduplicates boilerplate, chunks large docs, builds summary sections.
-- Emits stable markdown schema + frontmatter.
-5. `Storage + Clipboard`
-- Writes timestamped markdown files to app data directory.
-- Copies final markdown to system clipboard.
-6. `Diagnostics`
-- Permission state checks, extension connectivity checks, capture failure reasons.
+1. `ContextGrabberApp` (native host)
+- Menu bar UI, global hotkey, permission orchestration, capture pipeline orchestration.
+- Native messaging endpoints for browser extensions.
 
-## Public Interfaces / Types
-1. Native capture request contract
+2. Browser Capture Layer
+- Safari Web Extension + Chrome Extension.
+- Content scripts extract readable page text + metadata.
+- Native messaging sends payload to macOS app.
+
+3. Desktop Capture Layer
+- Accessibility extractor reads focused element/window text when available.
+- OCR fallback runs Vision on focused window screenshot.
+
+4. Normalization + Markdown Engine
+- Boilerplate cleanup, deduplication, chunking, key-point extraction.
+- Deterministic markdown schema generation.
+
+5. Storage + Clipboard
+- Timestamped markdown history in local app directory.
+- Clipboard copy of final markdown content.
+
+6. Diagnostics
+- Permission checks and actionable remediation hints.
+- Extension link health and capture path/fidelity reporting.
+
+## Concrete Data Contracts
+1. Capture trigger
 
 ```ts
-type CaptureSource = "browser" | "desktop";
-type CaptureMode = "manual_hotkey";
+type CaptureMode = "manual_hotkey" | "manual_menu";
 
 interface CaptureRequest {
   requestId: string;
@@ -58,7 +72,7 @@ interface CaptureRequest {
 }
 ```
 
-2. Browser extension payload
+2. Browser payload
 
 ```ts
 interface BrowserContextPayload {
@@ -75,6 +89,7 @@ interface BrowserContextPayload {
   fullText: string;
   headings: Array<{ level: number; text: string }>;
   links: Array<{ text: string; href: string }>;
+  extractionWarnings?: string[];
 }
 ```
 
@@ -89,19 +104,29 @@ interface DesktopContextPayload {
   accessibilityText?: string;
   ocrText?: string;
   usedOcr: boolean;
+  ocrConfidence?: number; // 0-1
+  extractionWarnings?: string[];
 }
 ```
 
-4. Unified normalized context
+4. Normalized capture
 
 ```ts
+type ExtractionMethod = "browser_extension" | "accessibility" | "ocr" | "metadata_only";
+
 interface NormalizedContext {
   id: string;
   capturedAt: string;
   sourceType: "webpage" | "desktop_app";
   title: string;
   origin: string; // URL or app/window identifier
+  appOrSite: string;
+  extractionMethod: ExtractionMethod;
+  confidence: number; // 0-1
+  truncated: boolean;
+  tokenEstimate: number;
   metadata: Record<string, string>;
+  captureWarnings: string[];
   summary: string;
   keyPoints: string[];
   chunks: Array<{ chunkId: string; tokenEstimate: number; text: string }>;
@@ -109,91 +134,193 @@ interface NormalizedContext {
 }
 ```
 
-5. Markdown output schema (stable)
-1. YAML frontmatter: `id`, `captured_at`, `source_type`, `origin`, `title`, `app_or_site`, `language`, `token_estimate`.
-2. Sections:
+## Markdown Output Schema
+1. YAML frontmatter fields:
+- `id`
+- `captured_at`
+- `source_type`
+- `origin`
+- `title`
+- `app_or_site`
+- `extraction_method`
+- `confidence`
+- `truncated`
+- `token_estimate`
+- `warnings`
+
+2. Body sections (always emitted, even if empty):
 - `## Summary`
 - `## Key Points`
 - `## Content Chunks`
-- `## Raw Excerpts`
+- `## Raw Excerpt`
 - `## Links & Metadata`
 
-## Data Flow
-1. User presses global hotkey.
-2. App inspects focused app.
-3. If focused app is Chrome/Safari:
-- Request active tab capture from extension.
-- Receive full-page payload over native messaging.
-4. Else:
-- Attempt Accessibility extraction.
-- If insufficient text, capture screenshot and run OCR.
-5. Normalize and chunk content.
-6. Generate markdown using stable schema.
-7. Save `.md` file and copy same content to clipboard.
-8. Show menu bar notification with result + source.
+## Capture Decision Tree
+1. Trigger received.
+2. Read focused app bundle id.
+3. If focused app is Safari or Chrome:
+- Request active tab capture from extension (timeout: 1200ms).
+- If payload received with non-empty `fullText`: continue as browser capture.
+- If extension timeout/error: create `metadata_only` capture using browser title + URL when available, with warning.
+4. If not browser capture (or browser capture has insufficient text under threshold):
+- Attempt Accessibility extraction from focused UI element/window.
+- If extracted text length >= `MIN_TEXT_LEN` (default `400` chars): use AX path.
+- Else run OCR on focused window image and use OCR path.
+5. Normalize, chunk, summarize, generate markdown.
+6. Persist file, copy clipboard, notify user with capture method + warnings.
 
-## Permissions and Security
-1. macOS permissions required:
-- Accessibility (AX APIs).
-- Screen Recording (for OCR screenshot fallback).
-2. Browser extension permissions:
-- Active tab access, scripting/content extraction, native messaging.
+## Local Summarization and Chunking Rules
+1. No cloud calls in summarization.
+2. Summary strategy:
+- Extractive, heuristic-based only.
+- Sentence tokenize normalized text.
+- Score sentences by heading proximity, term frequency, and novelty.
+- Choose top sentences up to max 6 lines.
+
+3. Key points strategy:
+- Pick 5 to 8 bullets from highest-scoring distinct sentences.
+- Deduplicate by token overlap threshold.
+
+4. Chunking strategy:
+- Target chunk size: 1200 to 1800 estimated tokens.
+- Hard cap: 2000 estimated tokens.
+- Split at heading or paragraph boundaries when possible.
+- Deterministic chunk IDs: `chunk-001`, `chunk-002`, etc.
+
+5. Truncation strategy:
+- If total text exceeds max raw size (default `200k` chars), truncate tail.
+- Set `truncated: true` and append warning.
+
+## Performance and Reliability Targets
+1. Test hardware baseline: Apple Silicon laptop, local build.
+2. Browser capture latency:
+- Median <= 2.5s
+- p95 <= 5.0s
+
+3. Desktop capture latency:
+- Median <= 3.5s
+- p95 <= 6.0s
+
+4. Stability target:
+- 300 consecutive captures without crash.
+- Failed captures must emit explicit reason and no hangs.
+
+5. Output integrity target:
+- Clipboard content must byte-match saved markdown file.
+
+## Security and Privacy
+1. Required macOS permissions:
+- Accessibility
+- Screen Recording (for OCR fallback)
+
+2. Required browser permissions:
+- Active tab access
+- Scripting/content extraction
+- Native messaging
+
 3. Privacy guarantees:
-- Local-only processing/storage by default.
-- No network calls in capture pipeline.
-4. Data retention:
-- Local history directory with configurable max files/age.
+- No outbound network calls in capture path.
+- Data written only to local app directory.
 
-## Failure Modes and Handling
+4. Retention:
+- Configurable max file count and max file age.
+- Optional one-click history purge.
+
+## Failure Handling
 1. Missing permissions:
-- Block capture path and show exact permission remediation step.
-2. Extension unavailable or disconnected:
-- Fallback to URL/title only for browser, mark reduced fidelity.
-3. Very large pages:
-- Deterministic chunking and capped per-chunk size; preserve raw chunk references.
-4. OCR low confidence:
-- Flag confidence warning in markdown metadata.
-5. Clipboard write failure:
-- File still saved; user notified with file path.
+- Block affected path and present direct remediation steps.
 
-## Implementation Phases
-1. Phase 1: Native shell + hotkey + storage/clipboard + markdown engine scaffold.
-2. Phase 2: Safari extension + native messaging + end-to-end webpage capture.
-3. Phase 3: Chrome extension parity.
-4. Phase 4: Desktop AX extraction + OCR fallback.
-5. Phase 5: Chunk/summarize heuristics, diagnostics panel, and hardening.
-6. Phase 6: Packaging, signing, and installer/distribution prep.
+2. Browser extension unavailable:
+- Fallback to metadata-only capture with warning.
 
-## Test Cases and Scenarios
-1. Browser full-page capture
-- Long article page, SPA page, authenticated docs page, heavy-nav marketing page.
-2. Metadata extraction
-- Confirm title/url/description/author/date availability and graceful missing-field behavior.
-3. Desktop capture
-- Text editor (AX success), design tool (AX limited -> OCR fallback), terminal window.
-4. Permission states
-- Fresh install with no permissions, partial permissions, revoked permissions.
-5. Large-context handling
-- 100k+ character content chunking consistency and markdown determinism.
-6. Output integrity
-- Clipboard content equals saved file content for each capture.
-7. Reliability
-- 100 repeated hotkey captures without crash or stuck state.
-8. Performance targets
-- Browser capture to clipboard under 2.5s median; desktop under 3.5s median on Apple Silicon baseline.
+3. OCR low confidence:
+- Emit warning when confidence < `0.55`.
 
-## Acceptance Criteria
-1. Manual hotkey capture works from menu bar in all supported paths.
-2. Chrome and Safari focused-tab captures include full text + metadata.
-3. Non-browser capture succeeds via AX or OCR fallback with explicit source marker.
-4. Generated markdown follows schema and is directly paste-ready for LLM tools.
-5. Every capture is copied to clipboard and saved as timestamped `.md`.
-6. All processing remains local with no outbound network dependency.
+4. Clipboard failure:
+- File write still succeeds, user gets saved file path.
 
-## Assumptions and Defaults
-1. Primary users are individual macOS users on modern Apple Silicon devices.
-2. v1 supports only Chrome + Safari for full webpage extraction.
-3. Trigger model is manual hotkey only.
-4. Output format is universal markdown (no per-LLM presets in v1).
-5. Local history is enabled by default (clipboard + files).
-6. Desktop capture prioritizes Accessibility text, then OCR fallback.
+5. Oversized or malformed content:
+- Continue with truncation and warnings instead of failing capture.
+
+## Implementation Roadmap
+1. Milestone A: Skeleton + Packaging Viability
+- Deliverables:
+  - Menu bar app shell with manual capture action.
+  - Global hotkey registration.
+  - Draft entitlements/signing settings validated on local machine.
+  - Markdown file write + clipboard copy.
+- Exit criteria:
+  - Manual trigger creates deterministic markdown file and clipboard output.
+  - Signing and extension-host communication approach confirmed.
+
+2. Milestone B: Safari End-to-End Capture
+- Deliverables:
+  - Safari extension + native messaging handshake.
+  - Full text + metadata capture for active tab.
+  - Browser timeout and metadata-only fallback behavior.
+- Exit criteria:
+  - Works across at least 10 varied Safari pages (article, docs, SPA, auth page).
+
+3. Milestone C: Chrome Parity
+- Deliverables:
+  - Chrome extension and native messaging integration.
+  - Payload parity with Safari.
+  - Same fallback behavior and diagnostics surface.
+- Exit criteria:
+  - Chrome passes same capture scenario suite as Safari.
+
+4. Milestone D: Desktop Capture (AX then OCR)
+- Deliverables:
+  - Focused-app detection and AX text extraction.
+  - OCR fallback with confidence scoring.
+  - Extraction method and warnings surfaced in output.
+- Exit criteria:
+  - AX success on text-centric apps.
+  - OCR fallback works on low-AX apps without hangs.
+
+5. Milestone E: Normalization Hardening
+- Deliverables:
+  - Deterministic summarization + chunking heuristics.
+  - Large-content truncation and warning paths.
+  - Diagnostics panel for permission and capture path health.
+- Exit criteria:
+  - Deterministic outputs on repeated runs for same input.
+  - Performance and reliability targets reached.
+
+6. Milestone F: Quality of Life
+- Deliverables:
+  - Recent captures list in menu.
+  - Configurable retention settings.
+  - Improved notifications and failure visibility.
+- Exit criteria:
+  - Daily personal-use loop is smooth with no blocking manual fixes.
+
+## Test Matrix
+1. Browser full-page capture:
+- Long article, docs site, SPA route changes, authenticated pages, heavy-nav marketing pages.
+
+2. Metadata completeness:
+- Missing optional fields must not break output shape.
+
+3. Desktop capture:
+- Editor (AX success), terminal, design app (AX weak -> OCR fallback).
+
+4. Permission states:
+- Fresh install, partial permissions, revoked permissions mid-session.
+
+5. Large content:
+- 100k+ character deterministic chunking and stable warning behavior.
+
+6. Reliability:
+- Repeated hotkey stress run with no deadlock/crash.
+
+7. Determinism:
+- Same input payload yields byte-identical markdown output.
+
+## Done Criteria
+1. Manual capture works reliably from menu and hotkey.
+2. Safari and Chrome produce full-text captures when extension path is healthy.
+3. Desktop capture reliably falls back from AX to OCR as needed.
+4. Markdown schema is stable and includes provenance/fidelity fields.
+5. Each capture is saved locally and copied to clipboard.
+6. Capture path remains local-only and network-independent.
