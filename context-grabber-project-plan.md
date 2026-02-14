@@ -350,18 +350,24 @@ interface NormalizedContext {
 12. Safari/Chrome extension packages now emit protocol-versioned extension response envelopes.
 13. macOS host scaffold is now present under `apps/macos-host`:
 - SwiftUI/AppKit menu bar shell
-- mock fixture-based capture path
+- transport-backed capture path via Safari native-messaging bridge CLI
 - deterministic markdown write to local history
 - clipboard copy and local diagnostics/logging
 14. macOS host capture now fails explicitly when markdown persistence or clipboard write fails.
 15. macOS host frontmatter rendering now escapes YAML-quoted values for safer output.
+16. Safari extension runtime now includes:
+- host request transport handler with protocol/version/size guard enforcement
+- bridge CLI entrypoint (`native-messaging`) for host request-response flow
+- transport fixture source (`fixtures/active-tab.json`) and tests for protocol/error paths
+17. Diagnostics now check Safari transport reachability and protocol compatibility against pinned version `1`.
+18. Safari native-messaging CLI now reads stdin via Bun stream API and has integration test coverage for host request stdin->response flow.
+19. Host transport now attempts to decode structured bridge JSON responses before treating non-zero exits as hard transport failures.
 
 ## Next Steps (Implementation Queue)
-1. Replace fixture-based host capture with Safari native messaging transport (host request + extension response handshake).
-2. Add host-side protocol mapping from extension errors to user-facing diagnostics and notification text.
-3. Integrate hotkey registration and trigger parity between menu action and hotkey action.
-4. Add capture integration tests using fixture variants for:
+1. Replace fixture-backed extension source with real Safari active-tab extraction runtime.
+2. Integrate hotkey registration and trigger parity between menu action and hotkey action.
+3. Add capture integration tests using fixture variants for:
 - long content truncation
 - metadata-only fallback
 - byte-identical markdown determinism checks
-5. Implement Chrome transport path against the same protocol envelope and fallback rules.
+4. Implement Chrome transport path against the same protocol envelope and fallback rules.

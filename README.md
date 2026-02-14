@@ -12,6 +12,10 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - `@context-grabber/shared-types` now exports Bun-first source for dev and `dist` output for default runtime consumers.
 - Swift host capture now treats markdown write and clipboard write failures as capture failures.
 - Swift host frontmatter values now use YAML-safe quoting/escaping.
+- Swift host capture now uses a Safari native-messaging transport request instead of direct fixture reads.
+- Safari extension package now includes a native-messaging CLI bridge and transport request handler.
+- Safari CLI stdin handling is now validated via integration tests (real stdin -> JSON response path).
+- Swift host now accepts structured bridge responses even if the bridge exits non-zero.
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -59,14 +63,14 @@ swift run
 
 Current host capabilities:
 - menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Quit`)
-- deterministic markdown generation from a bundled mock browser fixture
+- deterministic markdown generation from Safari transport responses
 - local markdown persistence + clipboard copy
-- local diagnostics and host logging
+- local diagnostics (transport reachability + protocol compatibility) and host logging
 
 ## Next Steps
-- replace fixture capture with Safari native messaging handshake
-- enforce `1200ms` extension timeout with metadata-only fallback wiring
-- connect host runtime to shared protocol validators end-to-end
+- wire Safari Web Extension runtime extraction to the bridge (replace fixture-backed extension source)
+- add global hotkey capture parity with menu capture
+- add integration tests for timeout/unavailable/fallback and markdown determinism
 - add Chrome transport parity after Safari path is stable
 
 ## Product Plan

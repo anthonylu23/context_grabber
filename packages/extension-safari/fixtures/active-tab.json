@@ -1,0 +1,21 @@
+{
+  "url": "https://developer.apple.com/documentation/safariservices/messaging-a-web-extension-s-native-app",
+  "title": "Messaging a web extension's native app | Apple Developer Documentation",
+  "metaDescription": "Learn how a Safari web extension communicates with a native app.",
+  "siteName": "Apple Developer",
+  "language": "en-US",
+  "author": "Apple",
+  "publishedTime": "2026-02-14T00:00:00.000Z",
+  "selectionText": "Safari web extensions can communicate with a native app using messages.",
+  "fullText": "Safari web extensions can communicate with native apps through a structured message protocol. The host app should validate protocol versions and payload shape, then produce deterministic local markdown output for capture workflows.",
+  "headings": [
+    { "level": 1, "text": "Messaging a web extension's native app" },
+    { "level": 2, "text": "Overview" }
+  ],
+  "links": [
+    {
+      "text": "Apple Docs",
+      "href": "https://developer.apple.com/documentation/safariservices/messaging-a-web-extension-s-native-app"
+    }
+  ]
+}

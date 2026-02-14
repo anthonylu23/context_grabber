@@ -3,6 +3,9 @@ import Foundation
 import SwiftUI
 import UserNotifications
 
+private let protocolVersion = "1"
+private let defaultCaptureTimeoutMs = 1_200
+
 struct BrowserContextPayload: Codable {
   let source: String
   let browser: String
@@ -30,10 +33,262 @@ struct BrowserContextPayload: Codable {
   }
 }
 
+struct HostCaptureRequestPayload: Codable {
+  let protocolVersion: String
+  let requestId: String
+  let mode: String
+  let requestedAt: String
+  let timeoutMs: Int
+  let includeSelectionText: Bool
+}
+
+struct HostCaptureRequestMessage: Codable {
+  let id: String
+  let type: String
+  let timestamp: String
+  let payload: HostCaptureRequestPayload
+}
+
+struct ExtensionCaptureResponsePayload: Codable {
+  let protocolVersion: String
+  let capture: BrowserContextPayload
+}
+
+struct ExtensionCaptureResponseMessage: Codable {
+  let id: String
+  let type: String
+  let timestamp: String
+  let payload: ExtensionCaptureResponsePayload
+}
+
+struct ExtensionErrorPayload: Codable {
+  let protocolVersion: String
+  let code: String
+  let message: String
+  let recoverable: Bool
+  let details: [String: String]?
+}
+
+struct ExtensionErrorMessage: Codable {
+  let id: String
+  let type: String
+  let timestamp: String
+  let payload: ExtensionErrorPayload
+}
+
+private struct GenericEnvelope: Codable {
+  let id: String
+  let type: String
+  let timestamp: String
+}
+
+enum ExtensionBridgeMessage {
+  case captureResult(ExtensionCaptureResponseMessage)
+  case error(ExtensionErrorMessage)
+}
+
+struct NativeMessagingPingResponse: Codable {
+  let ok: Bool
+  let protocolVersion: String
+}
+
 struct MarkdownCaptureOutput {
   let requestID: String
   let markdown: String
   let fileURL: URL
+}
+
+private struct CaptureResolution {
+  let payload: BrowserContextPayload
+  let extractionMethod: String
+  let transportStatus: String
+  let warning: String?
+}
+
+enum SafariNativeMessagingTransportError: LocalizedError {
+  case repoRootNotFound
+  case extensionPackageNotFound
+  case launchFailed(String)
+  case timedOut
+  case processFailed(exitCode: Int32, stderr: String)
+  case emptyOutput
+  case invalidJSON(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .repoRootNotFound:
+      return "Unable to locate repository root for Safari extension bridge."
+    case .extensionPackageNotFound:
+      return "Safari extension package was not found."
+    case .launchFailed(let reason):
+      return "Failed to launch Safari extension bridge: \(reason)"
+    case .timedOut:
+      return "Timed out waiting for extension response."
+    case .processFailed(let exitCode, let stderr):
+      return "Extension bridge failed with exit code \(exitCode): \(stderr)"
+    case .emptyOutput:
+      return "Extension bridge returned no output."
+    case .invalidJSON(let reason):
+      return "Extension bridge returned invalid JSON: \(reason)"
+    }
+  }
+}
+
+private struct ProcessExecutionResult {
+  let stdout: Data
+  let stderr: Data
+  let exitCode: Int32
+}
+
+final class SafariNativeMessagingTransport {
+  private let jsonEncoder = JSONEncoder()
+  private let jsonDecoder = JSONDecoder()
+
+  func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
+    let requestData = try jsonEncoder.encode(request)
+    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs)
+
+    if !processResult.stdout.isEmpty, let decodedMessage = try? decodeBridgeMessage(processResult.stdout) {
+      return decodedMessage
+    }
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw SafariNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    return try decodeBridgeMessage(processResult.stdout)
+  }
+
+  func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
+    let processResult = try runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw SafariNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    guard !processResult.stdout.isEmpty else {
+      throw SafariNativeMessagingTransportError.emptyOutput
+    }
+
+    do {
+      return try jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
+    } catch {
+      throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+    }
+  }
+
+  private func decodeBridgeMessage(_ data: Data) throws -> ExtensionBridgeMessage {
+    guard !data.isEmpty else {
+      throw SafariNativeMessagingTransportError.emptyOutput
+    }
+
+    let envelope: GenericEnvelope
+    do {
+      envelope = try jsonDecoder.decode(GenericEnvelope.self, from: data)
+    } catch {
+      throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+    }
+
+    switch envelope.type {
+    case "extension.capture.result":
+      do {
+        let capture = try jsonDecoder.decode(ExtensionCaptureResponseMessage.self, from: data)
+        return .captureResult(capture)
+      } catch {
+        throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+      }
+    case "extension.error":
+      do {
+        let errorMessage = try jsonDecoder.decode(ExtensionErrorMessage.self, from: data)
+        return .error(errorMessage)
+      } catch {
+        throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+      }
+    default:
+      throw SafariNativeMessagingTransportError.invalidJSON("Unsupported message type: \(envelope.type)")
+    }
+  }
+
+  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int) throws -> ProcessExecutionResult {
+    let packagePath = try extensionPackagePath()
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
+    process.arguments = ["bun", cliPath.path] + arguments
+
+    let stdoutPipe = Pipe()
+    let stderrPipe = Pipe()
+    process.standardOutput = stdoutPipe
+    process.standardError = stderrPipe
+
+    let stdinPipe = Pipe()
+    process.standardInput = stdinPipe
+
+    do {
+      try process.run()
+    } catch {
+      throw SafariNativeMessagingTransportError.launchFailed(error.localizedDescription)
+    }
+
+    if let stdinData {
+      stdinPipe.fileHandleForWriting.write(stdinData)
+    }
+    stdinPipe.fileHandleForWriting.closeFile()
+
+    let timeoutDate = Date().addingTimeInterval(Double(timeoutMs) / 1_000.0)
+    while process.isRunning && Date() < timeoutDate {
+      _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+    }
+
+    if process.isRunning {
+      process.terminate()
+      throw SafariNativeMessagingTransportError.timedOut
+    }
+
+    process.waitUntilExit()
+    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+    return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
+  }
+
+  private func extensionPackagePath() throws -> URL {
+    let repoRoot = try resolveRepoRoot()
+    let packagePath = repoRoot.appendingPathComponent("packages/extension-safari", isDirectory: true)
+    let packageManifest = packagePath.appendingPathComponent("package.json", isDirectory: false)
+
+    guard FileManager.default.fileExists(atPath: packageManifest.path) else {
+      throw SafariNativeMessagingTransportError.extensionPackageNotFound
+    }
+
+    return packagePath
+  }
+
+  private func resolveRepoRoot() throws -> URL {
+    if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
+      return URL(fileURLWithPath: envRoot, isDirectory: true)
+    }
+
+    var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    for _ in 0..<8 {
+      let marker = current.appendingPathComponent("packages/extension-safari/package.json", isDirectory: false)
+      if FileManager.default.fileExists(atPath: marker.path) {
+        return current
+      }
+
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path {
+        break
+      }
+
+      current = parent
+    }
+
+    throw SafariNativeMessagingTransportError.repoRootNotFound
+  }
 }
 
 final class HostLogger {
@@ -93,6 +348,8 @@ final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
 
   private let logger = HostLogger()
+  private let transport = SafariNativeMessagingTransport()
+  private var lastTransportStatus: String = "unknown"
 
   init() {
     requestNotificationAuthorization()
@@ -100,14 +357,40 @@ final class ContextGrabberModel: ObservableObject {
 
   func captureNow() {
     do {
-      let payload = try loadFixturePayload()
-      let output = try createCaptureOutput(from: payload)
+      let requestID = UUID().uuidString.lowercased()
+      let timestamp = isoTimestamp()
+
+      let request = HostCaptureRequestMessage(
+        id: requestID,
+        type: "host.capture.request",
+        timestamp: timestamp,
+        payload: HostCaptureRequestPayload(
+          protocolVersion: protocolVersion,
+          requestId: requestID,
+          mode: "manual_menu",
+          requestedAt: timestamp,
+          timeoutMs: defaultCaptureTimeoutMs,
+          includeSelectionText: true
+        )
+      )
+
+      let resolution = try resolveCapture(request: request)
+      let output = try createCaptureOutput(
+        from: resolution.payload,
+        extractionMethod: resolution.extractionMethod,
+        requestID: requestID,
+        capturedAt: timestamp
+      )
       try writeMarkdown(output)
       try copyToClipboard(output.markdown)
 
-      statusLine = "Captured via mock fixture (\(output.requestID))"
-      logger.info("Capture complete: \(output.fileURL.path)")
-      postUserNotification(title: "Context Captured", subtitle: output.fileURL.lastPathComponent)
+      statusLine = "Captured via \(resolution.extractionMethod) (\(output.requestID.prefix(8))) | \(resolution.transportStatus)"
+      logger.info("Capture complete: \(output.fileURL.path) | transport=\(resolution.transportStatus)")
+
+      let subtitle = resolution.warning == nil
+        ? output.fileURL.lastPathComponent
+        : "\(output.fileURL.lastPathComponent) | \(resolution.warning ?? "")"
+      postUserNotification(title: "Context Captured", subtitle: subtitle)
     } catch {
       statusLine = "Capture failed"
       logger.error("Capture failed: \(error.localizedDescription)")
@@ -130,32 +413,126 @@ final class ContextGrabberModel: ObservableObject {
 
   func runDiagnostics() {
     let historyURL = Self.historyDirectoryURL()
-    let fixtureFound = Bundle.module.url(forResource: "sample-browser-capture", withExtension: "json") != nil
     let writable = FileManager.default.isWritableFile(atPath: Self.appSupportBaseURL().path)
 
-    let summary = "Fixture: \(fixtureFound ? "ok" : "missing") | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
+    var transportReachable = false
+    var protocolCompatible = false
+
+    do {
+      let ping = try transport.ping(timeoutMs: 800)
+      transportReachable = ping.ok
+      protocolCompatible = ping.protocolVersion == protocolVersion
+      lastTransportStatus = transportReachable ? "safari_extension_ok" : "safari_extension_unreachable"
+    } catch {
+      lastTransportStatus = "safari_extension_unreachable"
+      logger.error("Diagnostics ping failed: \(error.localizedDescription)")
+    }
+
+    let summary =
+      "Transport: \(transportReachable ? "reachable" : "unreachable") | Protocol: \(protocolCompatible ? "\(protocolVersion)" : "mismatch") | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
   }
 
-  private func loadFixturePayload() throws -> BrowserContextPayload {
-    guard let fixtureURL = Bundle.module.url(forResource: "sample-browser-capture", withExtension: "json") else {
-      throw NSError(domain: "ContextGrabberHost", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Fixture file not found."])
-    }
+  private func resolveCapture(request: HostCaptureRequestMessage) throws -> CaptureResolution {
+    do {
+      let bridgeMessage = try transport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
 
-    let data = try Data(contentsOf: fixtureURL)
-    return try JSONDecoder().decode(BrowserContextPayload.self, from: data)
+      switch bridgeMessage {
+      case .captureResult(let captureResponse):
+        lastTransportStatus = "safari_extension_ok"
+
+        if captureResponse.payload.protocolVersion != protocolVersion {
+          return metadataFallback(
+            code: "ERR_PROTOCOL_VERSION",
+            message: "Protocol version mismatch. Expected \(protocolVersion).",
+            details: nil
+          )
+        }
+
+        return CaptureResolution(
+          payload: captureResponse.payload.capture,
+          extractionMethod: "browser_extension",
+          transportStatus: lastTransportStatus,
+          warning: nil
+        )
+
+      case .error(let errorMessage):
+        return metadataFallback(
+          code: errorMessage.payload.code,
+          message: errorMessage.payload.message,
+          details: errorMessage.payload.details
+        )
+      }
+    } catch let transportError as SafariNativeMessagingTransportError {
+      switch transportError {
+      case .timedOut:
+        return metadataFallback(
+          code: "ERR_TIMEOUT",
+          message: "Timed out waiting for extension response.",
+          details: nil
+        )
+      default:
+        return metadataFallback(
+          code: "ERR_EXTENSION_UNAVAILABLE",
+          message: transportError.localizedDescription,
+          details: nil
+        )
+      }
+    }
   }
 
-  private func createCaptureOutput(from payload: BrowserContextPayload) throws -> MarkdownCaptureOutput {
-    let requestID = UUID().uuidString.lowercased()
-    let timestamp = isoTimestamp()
+  private func metadataFallback(
+    code: String,
+    message: String,
+    details: [String: String]?
+  ) -> CaptureResolution {
+    let warning = "\(code): \(message)"
+    let payload = createMetadataOnlyPayload(details: details, warning: warning)
+    lastTransportStatus = "safari_extension_error:\(code)"
 
+    return CaptureResolution(
+      payload: payload,
+      extractionMethod: "metadata_only",
+      transportStatus: lastTransportStatus,
+      warning: warning
+    )
+  }
+
+  private func createMetadataOnlyPayload(details: [String: String]?, warning: String) -> BrowserContextPayload {
+    let frontAppName = NSWorkspace.shared.frontmostApplication?.localizedName
+    let title = details?["title"] ?? (frontAppName.map { "\($0) (metadata only)" } ?? "Safari (metadata only)")
+    let url = details?["url"] ?? "about:blank"
+
+    return BrowserContextPayload(
+      source: "browser",
+      browser: "safari",
+      url: url,
+      title: title,
+      fullText: "",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: details?["site_name"],
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: [warning]
+    )
+  }
+
+  private func createCaptureOutput(
+    from payload: BrowserContextPayload,
+    extractionMethod: String,
+    requestID: String,
+    capturedAt: String
+  ) throws -> MarkdownCaptureOutput {
     let markdown = renderMarkdown(
       requestID: requestID,
-      capturedAt: timestamp,
-      extractionMethod: "browser_extension",
+      capturedAt: capturedAt,
+      extractionMethod: extractionMethod,
       payload: payload
     )
 
