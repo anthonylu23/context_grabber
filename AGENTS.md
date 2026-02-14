@@ -1,6 +1,6 @@
 Build test as you deem necessary.
 
-Update docs as we go (with your best judgement) as necessary. Document both tasks and codebase changes.
+Update docs as we go (with your best judgement) as necessary. Document both tasks and codebase changes. Document both task status and docs for the codebase (architecture, implementation details, usage, etc.)
 
 If you are an agent working in parallel with another, be aware of the work the other agents will/are doing
 
