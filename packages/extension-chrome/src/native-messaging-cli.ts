@@ -99,10 +99,11 @@ const resolveCaptureSource = async (
 
   const fromLive = (): ChromeExtractionInput => {
     const osascriptBinary = process.env.CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN;
+    const timeoutMs = hostRequest.payload.timeoutMs;
     const options =
       osascriptBinary && osascriptBinary.length > 0
-        ? { includeSelectionText, osascriptBinary }
-        : { includeSelectionText };
+        ? { includeSelectionText, osascriptBinary, timeoutMs }
+        : { includeSelectionText, timeoutMs };
 
     return extractActiveTabContextFromChrome(options);
   };

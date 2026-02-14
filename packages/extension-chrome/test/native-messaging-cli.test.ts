@@ -23,6 +23,19 @@ const createFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string
   return binaryPath;
 };
 
+const createSlowFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-chrome-osa-slow-"));
+  const binaryPath = join(dir, "slow-fake-osascript.sh");
+
+  await writeFile(
+    binaryPath,
+    ["#!/bin/sh", "sleep 1", `cat "${stdoutFilePath}"`, "exit 0", ""].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
+
 const runCli = (args: string[] = [], stdinText = "", extraEnv: Record<string, string> = {}) => {
   return spawnSync("bun", [cliPath, ...args], {
     cwd: packageDir,
@@ -212,6 +225,63 @@ describe("chrome native messaging cli", () => {
       }
 
       expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+    } finally {
+      await rm(fixtureOutputPath, { force: true });
+      if (fakeOsaBinary) {
+        await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("uses host timeoutMs for live extraction", async () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-5",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-5",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 25,
+        includeSelectionText: false,
+      },
+    };
+
+    const fixtureOutputPath = join(
+      tmpdir(),
+      `context-grabber-chrome-cli-timeout-${Date.now()}.json`,
+    );
+    let fakeOsaBinary: string | undefined;
+    try {
+      await writeFile(
+        fixtureOutputPath,
+        JSON.stringify({
+          url: "https://example.com/live-timeout",
+          title: "Live Timeout",
+          fullText: "This should not be returned due to timeout.",
+          headings: [],
+          links: [],
+        }),
+        "utf8",
+      );
+      fakeOsaBinary = await createSlowFakeOsaScriptBinary(fixtureOutputPath);
+
+      const result = runCli([], JSON.stringify(request), {
+        CONTEXT_GRABBER_CHROME_SOURCE: "live",
+        CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN: fakeOsaBinary,
+      });
+      expect(result.status).toBe(0);
+
+      const parsed = parseLastJsonLine(result.stdout);
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Invalid live-timeout response.");
+      }
+
+      expect((parsed as { type?: string }).type).toBe("extension.error");
+      expect((parsed as { payload?: { code?: string } }).payload?.code).toBe(
+        "ERR_EXTENSION_UNAVAILABLE",
+      );
     } finally {
       await rm(fixtureOutputPath, { force: true });
       if (fakeOsaBinary) {

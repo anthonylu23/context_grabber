@@ -30,10 +30,10 @@
 
 ## Testing Strategy
 - `packages/shared-types`: protocol contracts and validator coverage.
-- `packages/extension-safari`: transport handler + runtime modules (`content`, `background`, `native-host`, packaged entrypoint helpers) + CLI integration tests.
+- `packages/extension-safari`: transport handler + runtime modules (`content`, `background`, `native-host`, packaged entrypoint + bootstrap helpers) + CLI integration tests.
 - `packages/extension-chrome`: protocol/transport/CLI + live extraction helper tests.
 - `packages/native-host-bridge`: fallback logic, invalid payload handling, and determinism/truncation tests.
-- `apps/macos-host`: Swift integration tests for truncation, metadata-only fallback payload/markdown behavior, browser-target selection, desktop scaffold branches, and markdown determinism.
+- `apps/macos-host`: Swift integration tests for truncation, metadata-only fallback payload/markdown behavior, browser-target selection, desktop AX/OCR branches, resolver timeout/unavailable mapping, and markdown determinism.
 - Root `bun run check` runs lint + typecheck + tests for all packages.
 
 ## Current Known Scaffold Constraints
@@ -41,14 +41,17 @@
   - `auto`/`live`: live AppleScript extraction only
   - `fixture`: explicit fixture mode
 - Safari live extraction depends on Safari Developer setting `Allow JavaScript from Apple Events`.
+- Safari runtime entrypoints (`runtime/background-entrypoint`, `runtime/content-entrypoint`) use a runtime-safe snapshot sanitizer module that avoids Node-only imports.
 - Host channel routing selects Safari vs Chrome using effective frontmost app context (prefers last known browser app when the menu bar host is active).
 - Chrome transport source resolution now supports:
   - `live` via AppleScript Google Chrome active-tab extraction
   - `runtime` via env-provided payload/path
   - `fixture` via fixture JSON
   - `auto` fallback order: `live -> runtime` (`fixture` requires explicit mode)
+  - `live` extraction now respects host-request `timeoutMs` rather than using a fixed timeout.
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
-- Desktop capture currently uses a scaffold resolver:
-  - AX text override via `CONTEXT_GRABBER_DESKTOP_AX_TEXT`
-  - OCR fallback text override via `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`
-  - OCR placeholder warning when both are absent
+- Desktop capture now uses:
+  - Accessibility focused-element text extraction (minimum text threshold `400` chars)
+  - Vision OCR fallback from frontmost window/screen image
+  - metadata-only desktop fallback when AX and OCR both fail
+- Desktop diagnostics now include Accessibility + Screen Recording readiness checks.
