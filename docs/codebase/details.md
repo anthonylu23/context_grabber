@@ -30,17 +30,25 @@
 
 ## Testing Strategy
 - `packages/shared-types`: protocol contracts and validator coverage.
-- `packages/extension-safari`: transport handler + runtime modules (`content`, `background`, `native-host`) + CLI integration tests.
-- `packages/extension-chrome`: protocol/transport/CLI parity tests.
+- `packages/extension-safari`: transport handler + runtime modules (`content`, `background`, `native-host`, packaged entrypoint helpers) + CLI integration tests.
+- `packages/extension-chrome`: protocol/transport/CLI + live extraction helper tests.
 - `packages/native-host-bridge`: fallback logic, invalid payload handling, and determinism/truncation tests.
-- `apps/macos-host`: Swift integration tests for truncation, metadata-only fallback payload/markdown behavior, browser-target selection, and markdown determinism.
+- `apps/macos-host`: Swift integration tests for truncation, metadata-only fallback payload/markdown behavior, browser-target selection, desktop scaffold branches, and markdown determinism.
 - Root `bun run check` runs lint + typecheck + tests for all packages.
 
 ## Current Known Scaffold Constraints
 - Safari transport source resolution is strict:
   - `auto`/`live`: live AppleScript extraction only
   - `fixture`: explicit fixture mode
+- Safari live extraction depends on Safari Developer setting `Allow JavaScript from Apple Events`.
 - Host channel routing selects Safari vs Chrome using effective frontmost app context (prefers last known browser app when the menu bar host is active).
-- Chrome transport source resolution is runtime-or-fixture scaffolding, but fixture usage is explicit (`CONTEXT_GRABBER_CHROME_SOURCE=fixture`).
+- Chrome transport source resolution now supports:
+  - `live` via AppleScript Google Chrome active-tab extraction
+  - `runtime` via env-provided payload/path
+  - `fixture` via fixture JSON
+  - `auto` fallback order: `live -> runtime` (`fixture` requires explicit mode)
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
-- Desktop AX/OCR capture paths are planned but not yet implemented.
+- Desktop capture currently uses a scaffold resolver:
+  - AX text override via `CONTEXT_GRABBER_DESKTOP_AX_TEXT`
+  - OCR fallback text override via `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`
+  - OCR placeholder warning when both are absent

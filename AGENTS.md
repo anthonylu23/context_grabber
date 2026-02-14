@@ -22,6 +22,8 @@ Approvals is not needed for **web search**, feel free to use web search when nec
 
 **If deemed necessary suggest refactors, and I will verify whether or not to make the changes.**
 
+When checking for errors, see if its due to a feature not being implemented yet.
+
 ### Commiting practices:
 
 When commiting to git, avoid bulk commiting. Commit files together or seperately so commit logs are more detailed.

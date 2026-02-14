@@ -4,6 +4,7 @@
 - Bun installed.
 - Xcode + Swift toolchain available.
 - macOS (for `apps/macos-host`).
+- Safari live extraction requires `Safari -> Settings -> Developer -> Allow JavaScript from Apple Events`.
 
 ## Workspace Checks
 ```bash
@@ -48,7 +49,11 @@ printf '%s\n' '{"id":"req-1","type":"host.capture.request","timestamp":"2026-02-
 - `CONTEXT_GRABBER_SAFARI_SOURCE`: set `fixture` to force fixture extraction; `auto`/`live` require Safari live extraction.
 - `CONTEXT_GRABBER_SAFARI_FIXTURE_PATH`: override fixture path used by Safari bridge CLI.
 - `CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN`: optional absolute `osascript` path override for Safari live extraction.
-- `CONTEXT_GRABBER_CHROME_SOURCE`: set `runtime`, `fixture`, or `auto`; `runtime`/`auto` require runtime payload env input.
+- `CONTEXT_GRABBER_CHROME_SOURCE`: set `live`, `runtime`, `fixture`, or `auto` (`auto` falls back `live -> runtime`; fixture is explicit opt-in).
+- `CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN`: optional absolute `osascript` path override for Chrome live extraction.
 - `CONTEXT_GRABBER_CHROME_FIXTURE_PATH`: override fixture path used by Chrome bridge CLI.
 - `CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD`: inline JSON payload used by Chrome runtime source mode.
 - `CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD_PATH`: file path to JSON payload used by Chrome runtime source mode.
+- Chrome runtime/fixture payloads are normalized with the same capture contract as live mode (`selectionText` is emitted only when `includeSelectionText: true`).
+- `CONTEXT_GRABBER_DESKTOP_AX_TEXT`: optional desktop scaffold AX text override (host-side).
+- `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`: optional desktop scaffold OCR text override (host-side).

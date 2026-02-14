@@ -6,8 +6,8 @@ Context Grabber is a local-first macOS menu bar tool that captures active contex
 ## Core Components
 - `apps/macos-host`: SwiftUI/AppKit menu bar host app, local file output, clipboard integration, transport diagnostics.
 - `packages/shared-types`: protocol contracts, message envelopes, validators, error codes.
-- `packages/extension-safari`: Safari transport handler + native-messaging CLI + runtime modules (`content`, `background`, `native-host`) for extension-side capture and native-port handling.
-- `packages/extension-chrome`: Chrome transport handler + native-messaging CLI parity scaffolding.
+- `packages/extension-safari`: Safari transport handler + native-messaging CLI + runtime modules (`content`, `background`, `native-host`, `background-entrypoint`, `content-entrypoint`) for extension-side capture and native-port handling.
+- `packages/extension-chrome`: Chrome transport handler + native-messaging CLI + live active-tab extraction helper.
 - `packages/native-host-bridge`: capture orchestration, normalization, deterministic markdown rendering (TypeScript side).
 
 ## Request/Response Flow
@@ -19,7 +19,8 @@ Context Grabber is a local-first macOS menu bar tool that captures active contex
 - `extension.error` with protocol error code.
 5. Host resolves capture:
 - Uses browser payload on success.
-- Falls back to metadata-only payload on timeout/transport/protocol errors, or when the front app is not Safari/Chrome.
+- Falls back to metadata-only payload on timeout/transport/protocol errors.
+- For non-browser front apps, uses desktop AX->OCR scaffold resolver (AX override -> OCR override -> placeholder).
 6. Host renders markdown, writes local file, copies clipboard, updates diagnostics state.
 
 ## Reliability Guards

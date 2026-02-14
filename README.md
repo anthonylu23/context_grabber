@@ -28,6 +28,12 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Swift host now routes capture transport by frontmost browser (Safari or Chrome) and diagnostics report both channels.
 - Menu-triggered host captures now prefer the last known browser app when the menu bar app is active.
 - Swift host now has integration tests for truncation behavior, metadata-only fallback payload/markdown, and markdown determinism.
+- Safari runtime now includes concrete packaged entrypoint helpers:
+  - `runtime/background-entrypoint` for native-host port handling and active-tab content-script requests
+  - `runtime/content-entrypoint` for content-script capture message handling
+- Chrome now has live AppleScript active-tab extraction (`extract-active-tab`) and CLI source modes `live`, `runtime`, `fixture`, with `auto` fallback `live -> runtime` (fixture is explicit).
+- Host unsupported-app capture now routes to a desktop AX->OCR scaffold path (AX text override, OCR fallback placeholder, desktop markdown provenance).
+- Swift host integration tests now cover desktop scaffold extraction branches and desktop markdown metadata rendering.
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -79,15 +85,18 @@ swift run
 Current host capabilities:
 - menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Quit`)
 - global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
-- deterministic markdown generation from Safari transport responses
+- deterministic markdown generation from browser and desktop-scaffold capture responses
 - local markdown persistence + clipboard copy
 - local diagnostics (transport reachability + protocol compatibility) and host logging
 
+Safari live extraction requirement:
+- In Safari, enable `Settings -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `do JavaScript` capture to work.
+
 ## Next Steps
-- connect packaged Safari runtime binder to concrete Web Extension background/content script entrypoints.
-- wire Chrome active-tab live extraction path (currently runtime/fixture scaffolding only).
-- begin desktop AX->OCR capture path after browser channel routing is in place.
-- extend Swift integration coverage with transport timeout/unavailable simulation at resolver level.
+- wire Safari packaged runtime entrypoint helpers into the actual Safari Web Extension project assets.
+- replace desktop scaffold placeholders with real AX extraction and Vision OCR fallback integration.
+- extend Swift integration coverage with resolver-level transport timeout/unavailable simulation.
+- add host-side diagnostics for desktop capture readiness (AX and Screen Recording permission visibility).
 
 ## Documentation
 - Docs index: `docs/README.md`

@@ -384,9 +384,18 @@ interface NormalizedContext {
 - metadata-only fallback payload + markdown behavior
 - byte-identical markdown determinism checks
 - browser target selection helpers
+29. Safari packaged runtime wiring now includes concrete entrypoint helpers:
+- `runtime/background-entrypoint` for native-host port bridge + active-tab content messaging
+- `runtime/content-entrypoint` for content-side capture request handling
+- shared runtime message contract constants/guards in `runtime/messages`
+30. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `live -> runtime` fallback; fixture is explicit).
+31. Host unsupported-app capture now routes through a desktop AX->OCR scaffold resolver:
+- uses desktop provenance (`source_type: desktop_app`)
+- chooses accessibility text, OCR override text, or deterministic OCR placeholder warning
+- includes Swift integration test coverage for all scaffold branches
 
 ## Next Steps (Implementation Queue)
-1. Connect Safari packaged runtime binder to concrete Web Extension background/content script entrypoints.
-2. Wire Chrome active-tab live extraction path (replace runtime/fixture-only scaffolding where possible).
-3. Begin desktop AX->OCR capture path integration after browser channel routing is complete.
-4. Extend Swift integration tests with resolver-level transport timeout/unavailable simulation.
+1. Wire Safari runtime entrypoint helpers into concrete Safari Web Extension project assets/manifest lifecycle.
+2. Replace desktop scaffold placeholders with real Accessibility extraction and Vision OCR fallback integration.
+3. Extend Swift integration tests with resolver-level transport timeout/unavailable simulation.
+4. Add host diagnostics for desktop capture readiness (AX + Screen Recording permission state visibility).
