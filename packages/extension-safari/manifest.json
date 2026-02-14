@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Context Grabber Safari",
+  "version": "0.1.0",
+  "description": "Capture active-tab context and exchange messages with the native host.",
+  "permissions": ["activeTab", "nativeMessaging"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "dist/runtime/background-main.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/runtime/content-main.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Context Grabber"
+  }
+}
