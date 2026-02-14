@@ -388,14 +388,26 @@ interface NormalizedContext {
 - `runtime/background-entrypoint` for native-host port bridge + active-tab content messaging
 - `runtime/content-entrypoint` for content-side capture request handling
 - shared runtime message contract constants/guards in `runtime/messages`
-30. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `live -> runtime` fallback; fixture is explicit).
-31. Host unsupported-app capture now routes through a desktop AX->OCR scaffold resolver:
-- uses desktop provenance (`source_type: desktop_app`)
-- chooses accessibility text, OCR override text, or deterministic OCR placeholder warning
-- includes Swift integration test coverage for all scaffold branches
+30. Safari packaged runtime now also includes:
+- runtime bootstrap files (`runtime/background-main`, `runtime/content-main`)
+- packaged WebExtension manifest (`packages/extension-safari/manifest.json`) targeting compiled runtime assets
+31. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `live -> runtime` fallback; fixture is explicit).
+32. Host unsupported-app capture now routes through a real desktop app resolver:
+- uses app-specific AppleScript extraction first when the front app exposes usable scripting APIs
+- falls back to Accessibility focused-element extraction (`minimumAccessibilityTextChars = 400`)
+- falls back to Vision OCR window/screen text extraction
+- falls back to deterministic desktop `metadata_only` when AppleScript, AX, and OCR all fail
+- emits desktop provenance (`source_type: desktop_app`) and desktop metadata in markdown
+33. Host diagnostics now include desktop readiness checks:
+- Accessibility permission state
+- Screen Recording permission state
+34. Host-level Swift integration tests now include:
+- resolver-level timeout/unavailable browser mapping assertions
+- desktop AX success / OCR fallback / metadata-only failure assertions
 
 ## Next Steps (Implementation Queue)
-1. Wire Safari runtime entrypoint helpers into concrete Safari Web Extension project assets/manifest lifecycle.
-2. Replace desktop scaffold placeholders with real Accessibility extraction and Vision OCR fallback integration.
-3. Extend Swift integration tests with resolver-level transport timeout/unavailable simulation.
-4. Add host diagnostics for desktop capture readiness (AX + Screen Recording permission state visibility).
+1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
+2. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
+3. Migrate OCR image capture from deprecated `CGWindowListCreateImage` to ScreenCaptureKit.
+4. Add in-app remediation actions for missing desktop permissions.
+5. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
