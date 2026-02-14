@@ -123,6 +123,7 @@ describe("chrome native messaging cli", () => {
     const result = runCli([], JSON.stringify(request), {
       CONTEXT_GRABBER_CHROME_SOURCE: "auto",
       CONTEXT_GRABBER_CHROME_FIXTURE_PATH: fixturePath,
+      CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN: "/path/that/does/not/exist/osascript",
     });
     expect(result.status).toBe(0);
 
