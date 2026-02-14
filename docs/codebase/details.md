@@ -17,6 +17,7 @@
 - Browser full-text cap: `200,000` chars.
 - Envelope size cap: `250,000` serialized chars.
 - Markdown raw excerpt cap: `8,000` chars.
+- Safari AppleScript extraction max stdout/stderr buffer: `8MiB`.
 
 ## Deterministic Markdown Contract
 - Frontmatter includes source/provenance/fidelity fields (`extraction_method`, `confidence`, `truncated`, warnings).
@@ -34,6 +35,6 @@
 - Root `bun run check` runs lint + typecheck + tests for all packages.
 
 ## Current Known Scaffold Constraints
-- Safari transport currently uses fixture-backed extraction source (`packages/extension-safari/fixtures/active-tab.json`).
+- Safari transport uses AppleScript-based live extraction by default (fixture source is optional via env override).
 - `swift run` host mode is unbundled; user notifications are intentionally disabled in this mode.
 - Desktop AX/OCR capture paths are planned but not yet implemented.

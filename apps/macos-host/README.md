@@ -28,7 +28,9 @@ swift run
 ## Troubleshooting
 - If capture falls back to metadata-only, run `Run Diagnostics` from the menu and check transport reachability.
 - Ensure Bun is installed and `packages/extension-safari` exists in the repo root.
+- If the host cannot find Bun when launched outside a terminal, set `CONTEXT_GRABBER_BUN_BIN` to an absolute Bun binary path.
 - You can override the Safari bridge fixture using `CONTEXT_GRABBER_SAFARI_FIXTURE_PATH`.
+- Use `CONTEXT_GRABBER_SAFARI_SOURCE=fixture` to force fixture extraction or `CONTEXT_GRABBER_SAFARI_SOURCE=live` to force Safari extraction.
 - If Safari extraction fails, ensure Safari is running with at least one open window/tab.
 - `swift run` launches an unbundled binary; user notifications are auto-disabled in this mode to avoid runtime crashes.
 

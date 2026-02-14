@@ -12,7 +12,7 @@ Context Grabber is a local-first macOS menu bar tool that captures active contex
 
 ## Request/Response Flow
 1. Host creates `host.capture.request` with protocol version and timeout.
-2. Safari bridge handles request, validates shape/version, loads extraction payload (fixture-backed currently), validates payload size.
+2. Safari bridge handles request, validates shape/version, performs live active-tab extraction by default (fixture override supported), validates payload size.
 3. Safari bridge returns:
 - `extension.capture.result` on success, or
 - `extension.error` with protocol error code.

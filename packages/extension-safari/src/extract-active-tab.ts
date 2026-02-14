@@ -5,6 +5,7 @@ export interface SafariActiveTabExtractionOptions {
   includeSelectionText: boolean;
   timeoutMs?: number;
   osascriptBinary?: string;
+  maxBufferBytes?: number;
 }
 
 interface RawSafariPageSnapshot {
@@ -22,6 +23,7 @@ interface RawSafariPageSnapshot {
 }
 
 const MAX_LINKS = 200;
+const DEFAULT_OSASCRIPT_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
 const asString = (value: unknown): string | undefined => {
   if (typeof value !== "string") {
@@ -255,6 +257,7 @@ export const extractActiveTabContextFromSafari = (
     {
       encoding: "utf8",
       timeout: options.timeoutMs ?? 1_000,
+      maxBuffer: options.maxBufferBytes ?? DEFAULT_OSASCRIPT_MAX_BUFFER_BYTES,
     },
   );
 

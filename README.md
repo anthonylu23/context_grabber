@@ -18,6 +18,8 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Swift host now accepts structured bridge responses even if the bridge exits non-zero.
 - Safari native-messaging CLI now performs live active-tab extraction from Safari by default.
 - Global hotkey capture is now wired to the same capture pipeline (`⌃⌥⌘C`).
+- Safari extraction now increases `spawnSync` max buffer to handle larger page payloads safely.
+- Swift host now resolves Bun via explicit env/path fallbacks for non-terminal launch environments.
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.

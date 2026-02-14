@@ -146,6 +146,7 @@ private struct ProcessExecutionResult {
 final class SafariNativeMessagingTransport {
   private let jsonEncoder = JSONEncoder()
   private let jsonDecoder = JSONDecoder()
+  private let fileManager = FileManager.default
 
   func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
     let requestData = try jsonEncoder.encode(request)
@@ -216,11 +217,13 @@ final class SafariNativeMessagingTransport {
 
   private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int) throws -> ProcessExecutionResult {
     let packagePath = try extensionPackagePath()
+    let bunExecutablePath = try resolveBunExecutablePath()
 
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.executableURL = URL(fileURLWithPath: bunExecutablePath)
+    process.currentDirectoryURL = packagePath
     let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
-    process.arguments = ["bun", cliPath.path] + arguments
+    process.arguments = [cliPath.path] + arguments
 
     let stdoutPipe = Pipe()
     let stderrPipe = Pipe()
@@ -263,7 +266,7 @@ final class SafariNativeMessagingTransport {
     let packagePath = repoRoot.appendingPathComponent("packages/extension-safari", isDirectory: true)
     let packageManifest = packagePath.appendingPathComponent("package.json", isDirectory: false)
 
-    guard FileManager.default.fileExists(atPath: packageManifest.path) else {
+    guard fileManager.fileExists(atPath: packageManifest.path) else {
       throw SafariNativeMessagingTransportError.extensionPackageNotFound
     }
 
@@ -272,13 +275,40 @@ final class SafariNativeMessagingTransport {
 
   private func resolveRepoRoot() throws -> URL {
     if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
-      return URL(fileURLWithPath: envRoot, isDirectory: true)
+      let explicitRoot = URL(fileURLWithPath: envRoot, isDirectory: true)
+      if hasRepoMarker(at: explicitRoot) {
+        return explicitRoot
+      }
     }
 
-    var current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-    for _ in 0..<8 {
-      let marker = current.appendingPathComponent("packages/extension-safari/package.json", isDirectory: false)
-      if FileManager.default.fileExists(atPath: marker.path) {
+    var candidates: [URL] = [
+      URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true),
+      URL(fileURLWithPath: #filePath, isDirectory: false).deletingLastPathComponent(),
+      Bundle.main.bundleURL,
+    ]
+    if let executableURL = Bundle.main.executableURL {
+      candidates.append(executableURL.deletingLastPathComponent())
+    }
+
+    var visited = Set<String>()
+    for candidate in candidates {
+      if visited.contains(candidate.path) {
+        continue
+      }
+      visited.insert(candidate.path)
+
+      if let resolvedRoot = findRepoRoot(startingAt: candidate, maxDepth: 12) {
+        return resolvedRoot
+      }
+    }
+
+    throw SafariNativeMessagingTransportError.repoRootNotFound
+  }
+
+  private func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
+    var current = startURL
+    for _ in 0..<maxDepth {
+      if hasRepoMarker(at: current) {
         return current
       }
 
@@ -290,7 +320,45 @@ final class SafariNativeMessagingTransport {
       current = parent
     }
 
-    throw SafariNativeMessagingTransportError.repoRootNotFound
+    return nil
+  }
+
+  private func hasRepoMarker(at rootURL: URL) -> Bool {
+    let marker = rootURL.appendingPathComponent("packages/extension-safari/package.json", isDirectory: false)
+    return fileManager.fileExists(atPath: marker.path)
+  }
+
+  private func resolveBunExecutablePath() throws -> String {
+    if let explicitPath = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_BUN_BIN"], !explicitPath.isEmpty {
+      if fileManager.isExecutableFile(atPath: explicitPath) {
+        return explicitPath
+      }
+      throw SafariNativeMessagingTransportError.launchFailed(
+        "CONTEXT_GRABBER_BUN_BIN is set but not executable: \(explicitPath)"
+      )
+    }
+
+    if let pathValue = ProcessInfo.processInfo.environment["PATH"], !pathValue.isEmpty {
+      for directory in pathValue.split(separator: ":").map(String.init) where !directory.isEmpty {
+        let candidate = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("bun", isDirectory: false)
+        if fileManager.isExecutableFile(atPath: candidate.path) {
+          return candidate.path
+        }
+      }
+    }
+
+    var fallbackPaths: [String] = ["/opt/homebrew/bin/bun", "/usr/local/bin/bun"]
+    let homeBunPath = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+      .appendingPathComponent(".bun/bin/bun", isDirectory: false).path
+    fallbackPaths.append(homeBunPath)
+
+    for candidate in fallbackPaths where fileManager.isExecutableFile(atPath: candidate) {
+      return candidate
+    }
+
+    throw SafariNativeMessagingTransportError.launchFailed(
+      "Unable to locate bun executable. Set CONTEXT_GRABBER_BUN_BIN to the bun binary path."
+    )
   }
 }
 
@@ -346,6 +414,31 @@ final class HostLogger {
   }
 }
 
+private final class HotkeyMonitorRegistration {
+  private let globalMonitor: Any?
+  private let localMonitor: Any?
+
+  init(handler: @escaping (NSEvent) -> Void) {
+    globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+      handler(event)
+    }
+
+    localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      handler(event)
+      return event
+    }
+  }
+
+  deinit {
+    if let globalMonitor {
+      NSEvent.removeMonitor(globalMonitor)
+    }
+    if let localMonitor {
+      NSEvent.removeMonitor(localMonitor)
+    }
+  }
+}
+
 @MainActor
 final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
@@ -353,8 +446,7 @@ final class ContextGrabberModel: ObservableObject {
   private let logger = HostLogger()
   private let transport = SafariNativeMessagingTransport()
   private let notificationsEnabled: Bool
-  private var globalHotkeyMonitor: Any?
-  private var localHotkeyMonitor: Any?
+  private var hotkeyMonitorRegistration: HotkeyMonitorRegistration?
   private var lastHotkeyFireAt: Date = .distantPast
   private var lastCaptureAt: String?
   private var lastTransportErrorCode: String?
@@ -375,15 +467,6 @@ final class ContextGrabberModel: ObservableObject {
 
   func captureNow() {
     triggerCapture(mode: "manual_menu")
-  }
-
-  deinit {
-    if let globalHotkeyMonitor {
-      NSEvent.removeMonitor(globalHotkeyMonitor)
-    }
-    if let localHotkeyMonitor {
-      NSEvent.removeMonitor(localHotkeyMonitor)
-    }
   }
 
   private func triggerCapture(mode: String) {
@@ -488,15 +571,10 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func registerHotkeyMonitors() {
-    globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-      DispatchQueue.main.async { [weak self] in
+    hotkeyMonitorRegistration = HotkeyMonitorRegistration { [weak self] event in
+      Task { @MainActor [weak self] in
         self?.handleHotkeyEvent(event)
       }
-    }
-
-    localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-      self?.handleHotkeyEvent(event)
-      return event
     }
   }
 

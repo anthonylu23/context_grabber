@@ -43,4 +43,6 @@ printf '%s\n' '{"id":"req-1","type":"host.capture.request","timestamp":"2026-02-
 
 ## Useful Environment Variables
 - `CONTEXT_GRABBER_REPO_ROOT`: repo root used by host to resolve Safari bridge package.
+- `CONTEXT_GRABBER_BUN_BIN`: absolute path to Bun binary for host bridge launches (recommended for app-launch environments with limited `PATH`).
+- `CONTEXT_GRABBER_SAFARI_SOURCE`: set `fixture` to force fixture extraction; set `live` to force Safari active-tab extraction.
 - `CONTEXT_GRABBER_SAFARI_FIXTURE_PATH`: override fixture path used by Safari bridge CLI.
