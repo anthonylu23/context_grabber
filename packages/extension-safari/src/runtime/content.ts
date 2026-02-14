@@ -1,5 +1,5 @@
-import { toSafariExtractionInput } from "../extract-active-tab.js";
 import type { SafariExtractionInput } from "../index.js";
+import { toSafariExtractionInput } from "../sanitize-snapshot.js";
 
 const normalizeText = (value: string): string => {
   return value

@@ -4,11 +4,9 @@ import { dirname, join } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shared-types";
-import {
-  extractActiveTabContextFromSafari,
-  toSafariExtractionInput,
-} from "./extract-active-tab.js";
+import { extractActiveTabContextFromSafari } from "./extract-active-tab.js";
 import type { SafariExtractionInput } from "./index.js";
+import { toSafariExtractionInput } from "./sanitize-snapshot.js";
 import { type HostRequestHandlingOptions, handleHostCaptureRequest } from "./transport.js";
 
 interface PingResult {
