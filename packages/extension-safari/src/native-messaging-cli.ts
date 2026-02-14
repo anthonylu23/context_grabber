@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shared-types";
+import { extractActiveTabContextFromSafari } from "./extract-active-tab.js";
 import type { SafariExtractionInput } from "./index.js";
 import { type HostRequestHandlingOptions, handleHostCaptureRequest } from "./transport.js";
 
@@ -47,6 +48,20 @@ const loadFixtureFromDisk = async (): Promise<SafariExtractionInput> => {
   return JSON.parse(raw) as SafariExtractionInput;
 };
 
+const shouldUseFixtureSource = (): boolean => {
+  const mode = process.env.CONTEXT_GRABBER_SAFARI_SOURCE;
+  if (mode === "fixture") {
+    return true;
+  }
+
+  if (mode === "live") {
+    return false;
+  }
+
+  const envFixturePath = process.env.CONTEXT_GRABBER_SAFARI_FIXTURE_PATH;
+  return typeof envFixturePath === "string" && envFixturePath.length > 0;
+};
+
 const emit = (value: unknown): void => {
   output.write(`${JSON.stringify(value)}\n`);
 };
@@ -66,8 +81,14 @@ const runCapture = async (options: HostRequestHandlingOptions): Promise<void> =>
 
   const response = await handleHostCaptureRequest(
     request,
-    async (_hostRequest: HostRequestMessage) => {
-      return await loadFixtureFromDisk();
+    async (hostRequest: HostRequestMessage) => {
+      if (shouldUseFixtureSource()) {
+        return await loadFixtureFromDisk();
+      }
+
+      return extractActiveTabContextFromSafari({
+        includeSelectionText: hostRequest.payload.includeSelectionText,
+      });
     },
     options,
   );

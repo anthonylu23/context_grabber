@@ -5,6 +5,9 @@ import UserNotifications
 
 private let protocolVersion = "1"
 private let defaultCaptureTimeoutMs = 1_200
+private let hotkeyKeyCodeC: UInt16 = 8
+private let hotkeyModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
+private let hotkeyDebounceWindowSeconds = 0.25
 
 struct BrowserContextPayload: Codable {
   let source: String
@@ -349,13 +352,49 @@ final class ContextGrabberModel: ObservableObject {
 
   private let logger = HostLogger()
   private let transport = SafariNativeMessagingTransport()
+  private let notificationsEnabled: Bool
+  private var globalHotkeyMonitor: Any?
+  private var localHotkeyMonitor: Any?
+  private var lastHotkeyFireAt: Date = .distantPast
+  private var lastCaptureAt: String?
+  private var lastTransportErrorCode: String?
+  private var lastTransportLatencyMs: Int?
   private var lastTransportStatus: String = "unknown"
+  private var captureInFlight = false
 
   init() {
-    requestNotificationAuthorization()
+    notificationsEnabled = Self.canUseUserNotifications()
+    if notificationsEnabled {
+      requestNotificationAuthorization()
+    } else {
+      logger.info("User notifications disabled for unbundled runtime (swift run).")
+    }
+
+    registerHotkeyMonitors()
   }
 
   func captureNow() {
+    triggerCapture(mode: "manual_menu")
+  }
+
+  deinit {
+    if let globalHotkeyMonitor {
+      NSEvent.removeMonitor(globalHotkeyMonitor)
+    }
+    if let localHotkeyMonitor {
+      NSEvent.removeMonitor(localHotkeyMonitor)
+    }
+  }
+
+  private func triggerCapture(mode: String) {
+    if captureInFlight {
+      statusLine = "Capture already in progress"
+      return
+    }
+
+    captureInFlight = true
+    defer { captureInFlight = false }
+
     do {
       let requestID = UUID().uuidString.lowercased()
       let timestamp = isoTimestamp()
@@ -367,14 +406,18 @@ final class ContextGrabberModel: ObservableObject {
         payload: HostCaptureRequestPayload(
           protocolVersion: protocolVersion,
           requestId: requestID,
-          mode: "manual_menu",
+          mode: mode,
           requestedAt: timestamp,
           timeoutMs: defaultCaptureTimeoutMs,
           includeSelectionText: true
         )
       )
 
+      let transportStart = Date()
       let resolution = try resolveCapture(request: request)
+      lastTransportLatencyMs = Int(Date().timeIntervalSince(transportStart) * 1000.0)
+      lastCaptureAt = timestamp
+
       let output = try createCaptureOutput(
         from: resolution.payload,
         extractionMethod: resolution.extractionMethod,
@@ -384,8 +427,13 @@ final class ContextGrabberModel: ObservableObject {
       try writeMarkdown(output)
       try copyToClipboard(output.markdown)
 
-      statusLine = "Captured via \(resolution.extractionMethod) (\(output.requestID.prefix(8))) | \(resolution.transportStatus)"
-      logger.info("Capture complete: \(output.fileURL.path) | transport=\(resolution.transportStatus)")
+      let triggerLabel = mode == "manual_hotkey" ? "hotkey" : "menu"
+      let warningCount = resolution.payload.extractionWarnings?.count ?? 0
+      statusLine =
+        "Captured \(triggerLabel) via \(resolution.extractionMethod) (\(output.requestID.prefix(8))) | \(resolution.transportStatus) | warnings: \(warningCount)"
+      logger.info(
+        "Capture complete: \(output.fileURL.path) | mode=\(mode) | transport=\(resolution.transportStatus) | latency_ms=\(lastTransportLatencyMs ?? -1)"
+      )
 
       let subtitle = resolution.warning == nil
         ? output.fileURL.lastPathComponent
@@ -428,11 +476,51 @@ final class ContextGrabberModel: ObservableObject {
       logger.error("Diagnostics ping failed: \(error.localizedDescription)")
     }
 
+    let lastCaptureLabel = lastCaptureAt ?? "never"
+    let lastErrorLabel = lastTransportErrorCode ?? "none"
+    let latencyLabel = lastTransportLatencyMs.map { "\($0)ms" } ?? "n/a"
+
     let summary =
-      "Transport: \(transportReachable ? "reachable" : "unreachable") | Protocol: \(protocolCompatible ? "\(protocolVersion)" : "mismatch") | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
+      "Transport: \(transportReachable ? "reachable" : "unreachable") | Protocol: \(protocolCompatible ? "\(protocolVersion)" : "mismatch") | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
+  }
+
+  private func registerHotkeyMonitors() {
+    globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      DispatchQueue.main.async { [weak self] in
+        self?.handleHotkeyEvent(event)
+      }
+    }
+
+    localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      self?.handleHotkeyEvent(event)
+      return event
+    }
+  }
+
+  private func handleHotkeyEvent(_ event: NSEvent) {
+    guard isCaptureHotkey(event) else {
+      return
+    }
+
+    let now = Date()
+    guard now.timeIntervalSince(lastHotkeyFireAt) > hotkeyDebounceWindowSeconds else {
+      return
+    }
+    lastHotkeyFireAt = now
+
+    triggerCapture(mode: "manual_hotkey")
+  }
+
+  private func isCaptureHotkey(_ event: NSEvent) -> Bool {
+    guard event.keyCode == hotkeyKeyCodeC else {
+      return false
+    }
+
+    let activeModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+    return activeModifiers == hotkeyModifiers
   }
 
   private func resolveCapture(request: HostCaptureRequestMessage) throws -> CaptureResolution {
@@ -442,6 +530,7 @@ final class ContextGrabberModel: ObservableObject {
       switch bridgeMessage {
       case .captureResult(let captureResponse):
         lastTransportStatus = "safari_extension_ok"
+        lastTransportErrorCode = nil
 
         if captureResponse.payload.protocolVersion != protocolVersion {
           return metadataFallback(
@@ -491,6 +580,7 @@ final class ContextGrabberModel: ObservableObject {
     let warning = "\(code): \(message)"
     let payload = createMetadataOnlyPayload(details: details, warning: warning)
     lastTransportStatus = "safari_extension_error:\(code)"
+    lastTransportErrorCode = code
 
     return CaptureResolution(
       payload: payload,
@@ -567,6 +657,10 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func postUserNotification(title: String, subtitle: String) {
+    guard notificationsEnabled else {
+      return
+    }
+
     let content = UNMutableNotificationContent()
     content.title = title
     content.body = subtitle
@@ -585,11 +679,24 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func requestNotificationAuthorization() {
+    guard notificationsEnabled else {
+      return
+    }
+
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
       if let error {
         fputs("ContextGrabberHost notification authorization error: \(error.localizedDescription)\n", stderr)
       }
     }
+  }
+
+  private static func canUseUserNotifications() -> Bool {
+    if Bundle.main.bundleIdentifier == nil {
+      return false
+    }
+
+    let bundlePath = Bundle.main.bundleURL.path
+    return !bundlePath.contains("/.build/")
   }
 
   private static func appSupportBaseURL() -> URL {
@@ -609,7 +716,7 @@ struct ContextGrabberHostApp: App {
 
   var body: some Scene {
     MenuBarExtra("Context Grabber", systemImage: "text.viewfinder") {
-      Button("Capture Now") {
+      Button("Capture Now (⌃⌥⌘C)") {
         model.captureNow()
       }
 

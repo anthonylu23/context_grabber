@@ -16,6 +16,8 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Safari extension package now includes a native-messaging CLI bridge and transport request handler.
 - Safari CLI stdin handling is now validated via integration tests (real stdin -> JSON response path).
 - Swift host now accepts structured bridge responses even if the bridge exits non-zero.
+- Safari native-messaging CLI now performs live active-tab extraction from Safari by default.
+- Global hotkey capture is now wired to the same capture pipeline (`⌃⌥⌘C`).
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -42,6 +44,9 @@ bun run check
 .
 ├── apps
 │   └── macos-host
+├── docs
+│   ├── plans
+│   └── codebase
 ├── packages
 │   ├── extension-chrome
 │   ├── extension-safari
@@ -63,15 +68,19 @@ swift run
 
 Current host capabilities:
 - menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Quit`)
+- global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
 - deterministic markdown generation from Safari transport responses
 - local markdown persistence + clipboard copy
 - local diagnostics (transport reachability + protocol compatibility) and host logging
 
 ## Next Steps
-- wire Safari Web Extension runtime extraction to the bridge (replace fixture-backed extension source)
-- add global hotkey capture parity with menu capture
-- add integration tests for timeout/unavailable/fallback and markdown determinism
+- replace Safari AppleScript extraction path with full Safari Web Extension runtime extraction
+- add integration tests for timeout/unavailable/fallback and markdown determinism at host level
 - add Chrome transport parity after Safari path is stable
 
-## Product Plan
-Implementation milestones, capture contracts, and roadmap details live in `context-grabber-project-plan.md`.
+## Documentation
+- Docs index: `docs/README.md`
+- Product plan: `docs/plans/context-grabber-project-plan.md`
+- Architecture: `docs/codebase/architecture.md`
+- Usage: `docs/codebase/usage.md`
+- Codebase details: `docs/codebase/details.md`

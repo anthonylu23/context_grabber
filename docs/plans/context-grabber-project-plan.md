@@ -362,12 +362,14 @@ interface NormalizedContext {
 17. Diagnostics now check Safari transport reachability and protocol compatibility against pinned version `1`.
 18. Safari native-messaging CLI now reads stdin via Bun stream API and has integration test coverage for host request stdin->response flow.
 19. Host transport now attempts to decode structured bridge JSON responses before treating non-zero exits as hard transport failures.
+20. Safari transport now uses live active-tab extraction by default (AppleScript + in-page JS) with fixture mode only for explicit override/testing.
+21. Host now supports global hotkey capture parity (`manual_hotkey`) using the same pipeline as menu-triggered capture.
+22. Diagnostics now surface last capture timestamp, last transport error code, and last transport latency.
 
 ## Next Steps (Implementation Queue)
-1. Replace fixture-backed extension source with real Safari active-tab extraction runtime.
-2. Integrate hotkey registration and trigger parity between menu action and hotkey action.
-3. Add capture integration tests using fixture variants for:
+1. Replace Safari AppleScript extraction path with full Safari Web Extension runtime extraction.
+2. Add capture integration tests using fixture variants for:
 - long content truncation
 - metadata-only fallback
 - byte-identical markdown determinism checks
-4. Implement Chrome transport path against the same protocol envelope and fallback rules.
+3. Implement Chrome transport path against the same protocol envelope and fallback rules.

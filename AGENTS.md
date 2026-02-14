@@ -18,4 +18,8 @@ If new changes shouldn't be pushed to main, let me (the human) know if I should 
 
 Approvals is not needed for **web search**, feel free to use web search when necessary.
 
-# If deemed necessary suggest refactors, and I will verify whether or not to make the changes.
+**If deemed necessary suggest refactors, and I will verify whether or not to make the changes.**
+
+### Commiting practices:
+
+When commiting to git, avoid bulk commiting. Commit files together or seperately so commit logs are more detailed.
