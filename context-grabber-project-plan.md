@@ -338,3 +338,30 @@ interface NormalizedContext {
 7. Runtime message validation now checks supported message types and payload shapes (`browser.capture`, `desktop.capture`).
 8. Typecheck now includes package test files via per-package `tsconfig.typecheck.json`.
 9. Shared-types export strategy is Bun-first for workspace dev while preserving `dist` default runtime output.
+10. Protocol-level contracts now include:
+- protocol version pinning (`"1"`)
+- host request / extension response / extension error message envelopes
+- canonical bridge error codes (`ERR_PROTOCOL_VERSION`, `ERR_PAYLOAD_INVALID`, `ERR_TIMEOUT`, `ERR_EXTENSION_UNAVAILABLE`, `ERR_PAYLOAD_TOO_LARGE`)
+- envelope and browser payload size validators
+11. Native host bridge now includes:
+- timeout-wrapped extension request flow (`1200ms` default)
+- metadata-only fallback generation on timeout/transport/validation failure
+- deterministic normalization + markdown rendering utilities
+12. Safari/Chrome extension packages now emit protocol-versioned extension response envelopes.
+13. macOS host scaffold is now present under `apps/macos-host`:
+- SwiftUI/AppKit menu bar shell
+- mock fixture-based capture path
+- deterministic markdown write to local history
+- clipboard copy and local diagnostics/logging
+14. macOS host capture now fails explicitly when markdown persistence or clipboard write fails.
+15. macOS host frontmatter rendering now escapes YAML-quoted values for safer output.
+
+## Next Steps (Implementation Queue)
+1. Replace fixture-based host capture with Safari native messaging transport (host request + extension response handshake).
+2. Add host-side protocol mapping from extension errors to user-facing diagnostics and notification text.
+3. Integrate hotkey registration and trigger parity between menu action and hotkey action.
+4. Add capture integration tests using fixture variants for:
+- long content truncation
+- metadata-only fallback
+- byte-identical markdown determinism checks
+5. Implement Chrome transport path against the same protocol envelope and fallback rules.

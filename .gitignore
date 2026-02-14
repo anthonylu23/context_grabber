@@ -4,8 +4,8 @@ node_modules/
 # Build artifacts
 dist/
 build/
+.build/
 coverage/
-types/
 *.tsbuildinfo
 
 # Environment files

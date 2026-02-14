@@ -1,16 +1,22 @@
-import type { BrowserContextPayload, NativeMessageEnvelope } from "@context-grabber/shared-types";
+import {
+  type BrowserContextPayload,
+  type ExtensionResponseMessage,
+  PROTOCOL_VERSION,
+  createNativeMessageEnvelope,
+} from "@context-grabber/shared-types";
 
-export type ChromeCaptureMessage = NativeMessageEnvelope<"browser.capture", BrowserContextPayload>;
-
-export const createChromeCaptureMessage = (
-  payload: BrowserContextPayload,
+export const createChromeCaptureResponseMessage = (
+  capture: BrowserContextPayload,
   id: string,
   timestamp: string,
-): ChromeCaptureMessage => {
-  return {
+): ExtensionResponseMessage => {
+  return createNativeMessageEnvelope({
     id,
-    type: "browser.capture",
+    type: "extension.capture.result",
     timestamp,
-    payload,
-  };
+    payload: {
+      protocolVersion: PROTOCOL_VERSION,
+      capture,
+    },
+  });
 };

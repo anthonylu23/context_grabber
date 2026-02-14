@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { createChromeCaptureMessage } from "../src/index.js";
+import { createChromeCaptureResponseMessage } from "../src/index.js";
 
-describe("createChromeCaptureMessage", () => {
-  it("builds a browser capture envelope", () => {
-    const message = createChromeCaptureMessage(
+describe("createChromeCaptureResponseMessage", () => {
+  it("builds a protocol-versioned browser capture response envelope", () => {
+    const message = createChromeCaptureResponseMessage(
       {
         source: "browser",
         browser: "chrome",
@@ -17,7 +17,8 @@ describe("createChromeCaptureMessage", () => {
       "2026-02-14T00:00:00.000Z",
     );
 
-    expect(message.type).toBe("browser.capture");
-    expect(message.payload.browser).toBe("chrome");
+    expect(message.type).toBe("extension.capture.result");
+    expect(message.payload.capture.browser).toBe("chrome");
+    expect(message.payload.protocolVersion).toBe("1");
   });
 });

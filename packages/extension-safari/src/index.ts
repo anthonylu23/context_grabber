@@ -1,16 +1,101 @@
-import type { BrowserContextPayload, NativeMessageEnvelope } from "@context-grabber/shared-types";
+import {
+  type BrowserContextPayload,
+  type ErrorMessage,
+  type ExtensionResponseMessage,
+  type HostRequestMessage,
+  PROTOCOL_VERSION,
+  type ProtocolErrorCode,
+  createNativeMessageEnvelope,
+  isHostRequestMessage,
+} from "@context-grabber/shared-types";
 
-export type SafariCaptureMessage = NativeMessageEnvelope<"browser.capture", BrowserContextPayload>;
+export interface SafariExtractionInput {
+  url: string;
+  title: string;
+  fullText: string;
+  headings?: Array<{ level: number; text: string }>;
+  links?: Array<{ text: string; href: string }>;
+  metaDescription?: string;
+  siteName?: string;
+  language?: string;
+  author?: string;
+  publishedTime?: string;
+  selectionText?: string;
+  extractionWarnings?: string[];
+}
 
-export const createSafariCaptureMessage = (
-  payload: BrowserContextPayload,
+export const supportsHostCaptureRequest = (value: unknown): value is HostRequestMessage => {
+  return isHostRequestMessage(value);
+};
+
+export const createSafariBrowserPayload = (input: SafariExtractionInput): BrowserContextPayload => {
+  const payload: BrowserContextPayload = {
+    source: "browser",
+    browser: "safari",
+    url: input.url,
+    title: input.title,
+    fullText: input.fullText,
+    headings: input.headings ?? [],
+    links: input.links ?? [],
+  };
+
+  if (input.metaDescription !== undefined) {
+    payload.metaDescription = input.metaDescription;
+  }
+  if (input.siteName !== undefined) {
+    payload.siteName = input.siteName;
+  }
+  if (input.language !== undefined) {
+    payload.language = input.language;
+  }
+  if (input.author !== undefined) {
+    payload.author = input.author;
+  }
+  if (input.publishedTime !== undefined) {
+    payload.publishedTime = input.publishedTime;
+  }
+  if (input.selectionText !== undefined) {
+    payload.selectionText = input.selectionText;
+  }
+  if (input.extractionWarnings !== undefined) {
+    payload.extractionWarnings = input.extractionWarnings;
+  }
+
+  return payload;
+};
+
+export const createSafariCaptureResponseMessage = (
+  capture: BrowserContextPayload,
   id: string,
   timestamp: string,
-): SafariCaptureMessage => {
-  return {
+): ExtensionResponseMessage => {
+  return createNativeMessageEnvelope({
     id,
-    type: "browser.capture",
+    type: "extension.capture.result",
     timestamp,
-    payload,
-  };
+    payload: {
+      protocolVersion: PROTOCOL_VERSION,
+      capture,
+    },
+  });
+};
+
+export const createSafariErrorMessage = (
+  code: ProtocolErrorCode,
+  message: string,
+  id: string,
+  timestamp: string,
+  recoverable = true,
+): ErrorMessage => {
+  return createNativeMessageEnvelope({
+    id,
+    type: "extension.error",
+    timestamp,
+    payload: {
+      protocolVersion: PROTOCOL_VERSION,
+      code,
+      message,
+      recoverable,
+    },
+  });
 };

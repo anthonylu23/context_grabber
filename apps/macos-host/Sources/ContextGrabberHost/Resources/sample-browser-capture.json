@@ -1,0 +1,21 @@
+{
+  "source": "browser",
+  "browser": "safari",
+  "url": "https://developer.apple.com/documentation/swiftui/menubarextra",
+  "title": "MenuBarExtra | Apple Developer Documentation",
+  "metaDescription": "Display a menu in the menu bar.",
+  "siteName": "Apple Developer",
+  "language": "en-US",
+  "author": "Apple",
+  "publishedTime": "2026-02-14T00:00:00.000Z",
+  "selectionText": "Display a menu in the menu bar.",
+  "fullText": "MenuBarExtra lets you build a menu bar app experience in SwiftUI. Use it for manual user-triggered workflows. Keep capture behavior deterministic and local-first. This fixture powers initial host pipeline testing.",
+  "headings": [{ "level": 1, "text": "MenuBarExtra" }, { "level": 2, "text": "Overview" }],
+  "links": [
+    {
+      "text": "MenuBarExtra",
+      "href": "https://developer.apple.com/documentation/swiftui/menubarextra"
+    }
+  ],
+  "extractionWarnings": []
+}

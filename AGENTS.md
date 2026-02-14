@@ -2,9 +2,11 @@ Build test as you deem necessary.
 
 Update docs as we go (with your best judgement) as necessary. Document both tasks and codebase changes. Document both task status and docs for the codebase (architecture, implementation details, usage, etc.)
 
+Update next steps in docs.
+
 If you are an agent working in parallel with another, be aware of the work the other agents will/are doing
 
-Feel free to modify AGENTS.md if necessary
+**Feel free to modify AGENTS.md if necessary whenever, use your best judgemenet**
 
 Be sensible with typing, file naming, file organization, etc.
 
