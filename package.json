@@ -8,9 +8,9 @@
     "prepare": "git config core.hooksPath .githooks",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "typecheck": "bash scripts/check-workspace.sh typecheck",
-    "test": "bash scripts/check-workspace.sh test",
-    "check": "bash scripts/check-workspace.sh check"
+    "typecheck": "bun run scripts/check-workspace.ts typecheck",
+    "test": "bun run scripts/check-workspace.ts test",
+    "check": "bun run scripts/check-workspace.ts check"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -39,7 +39,7 @@ bun run check
 │   ├── native-host-bridge
 │   └── shared-types
 ├── scripts
-│   └── check-workspace.sh
+│   └── check-workspace.ts
 ├── biome.json
 ├── bunfig.toml
 ├── package.json

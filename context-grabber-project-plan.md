@@ -333,7 +333,7 @@ interface NormalizedContext {
 5. Native-host bridge package is scaffolded with message-envelope parsing utilities.
 6. Repo-level tooling baseline is added:
 - Biome lint/format configuration.
-- Workspace check script (`scripts/check-workspace.sh`).
+- Workspace check script (`scripts/check-workspace.ts`).
 - Git pre-commit hook that runs `bun run check`.
 7. Runtime message validation now checks supported message types and payload shapes (`browser.capture`, `desktop.capture`).
 8. Typecheck now includes package test files via per-package `tsconfig.typecheck.json`.
