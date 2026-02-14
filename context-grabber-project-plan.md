@@ -324,3 +324,17 @@ interface NormalizedContext {
 4. Markdown schema is stable and includes provenance/fidelity fields.
 5. Each capture is saved locally and copied to clipboard.
 6. Capture path remains local-only and network-independent.
+
+## Scaffold Status (2026-02-14)
+1. Initial Bun + TypeScript monorepo workspace is in place.
+2. Strict base TypeScript configuration is defined in `tsconfig.base.json`.
+3. Shared capture contracts are implemented in `packages/shared-types`.
+4. Chrome and Safari extension packages are scaffolded with placeholder TS entrypoints.
+5. Native-host bridge package is scaffolded with message-envelope parsing utilities.
+6. Repo-level tooling baseline is added:
+- Biome lint/format configuration.
+- Workspace check script (`scripts/check-workspace.sh`).
+- Git pre-commit hook that runs `bun run check`.
+7. Runtime message validation now checks supported message types and payload shapes (`browser.capture`, `desktop.capture`).
+8. Typecheck now includes package test files via per-package `tsconfig.typecheck.json`.
+9. Shared-types export strategy is Bun-first for workspace dev while preserving `dist` default runtime output.

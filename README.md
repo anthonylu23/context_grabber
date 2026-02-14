@@ -1,27 +1,50 @@
 # Context Grabber
 
-Context Grabber is a local-first macOS menu bar app for quickly capturing the current screen context and turning it into structured markdown for LLM workflows.
+Context Grabber is a local-first macOS menu bar app that captures active user context and emits deterministic markdown for LLM workflows.
 
-## What This Project Will Be
-- Manual hotkey/menu trigger for one-click context capture
-- Full-page capture for Safari and Chrome tabs via browser extensions
-- Desktop app capture using Accessibility text extraction with OCR fallback
-- Deterministic markdown output copied to clipboard and saved locally
-- Diagnostics for permissions, capture source, and failure reasons
+## Workspace Status
+The initial Bun + TypeScript monorepo scaffold is set up with strict typing and shared contracts.
 
-## Tech Stack
-- Native app: Swift 5.10+, SwiftUI + AppKit (macOS)
-- Browser extensions: TypeScript (Safari Web Extension + Chrome MV3)
-- JS runtime/tooling: Bun (`bun install`, `bun run`)
-- OCR: Apple Vision framework
-- Desktop extraction: macOS Accessibility APIs
-- Storage/output: local markdown files + system clipboard
+### Recent Hardening
+- Runtime guards validate supported native message types and payload schemas at the bridge boundary.
+- Package typecheck now includes both `src` and `test` files via `tsconfig.typecheck.json`.
+- Workspace checks auto-discover package directories under `packages/`.
+- `@context-grabber/shared-types` now exports Bun-first source for dev and `dist` output for default runtime consumers.
 
-## Core Constraints
-- Local-only processing and storage in the capture pipeline
-- No cloud dependency required
-- Deterministic, paste-ready markdown schema
+### Packages
+- `packages/shared-types`: shared contracts and message envelope types.
+- `packages/extension-chrome`: Chrome extension TypeScript scaffold.
+- `packages/extension-safari`: Safari extension TypeScript scaffold.
+- `packages/native-host-bridge`: native-host bridge TypeScript scaffold.
 
-## Current Status
-- Planning complete and implementation roadmap defined in `context-grabber-project-plan.md`.
-- Next step: scaffold the workspace and build the first end-to-end manual capture slice.
+## Quick Start
+```bash
+bun install
+bun run check
+```
+
+## Scripts
+- `bun run lint`: run Biome checks.
+- `bun run format`: format repository files with Biome.
+- `bun run typecheck`: run TypeScript type checks across all packages.
+- `bun run test`: run package tests.
+- `bun run check`: lint + typecheck + test.
+
+## Project Layout
+```text
+.
+├── packages
+│   ├── extension-chrome
+│   ├── extension-safari
+│   ├── native-host-bridge
+│   └── shared-types
+├── scripts
+│   └── check-workspace.sh
+├── biome.json
+├── bunfig.toml
+├── package.json
+└── tsconfig.base.json
+```
+
+## Product Plan
+Implementation milestones, capture contracts, and roadmap details live in `context-grabber-project-plan.md`.
