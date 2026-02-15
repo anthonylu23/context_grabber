@@ -2,6 +2,22 @@ import XCTest
 @testable import ContextGrabberHost
 
 final class CapturePipelineTests: XCTestCase {
+  private struct StubAccessibilityExtractor: DesktopAccessibilityExtracting {
+    let text: String?
+
+    func extractFocusedText(frontmostProcessIdentifier _: pid_t?) -> String? {
+      return text
+    }
+  }
+
+  private struct StubOCRExtractor: DesktopOCRExtracting {
+    let result: OCRCaptureResult?
+
+    func extractText(frontmostProcessIdentifier _: pid_t?) async -> OCRCaptureResult? {
+      return result
+    }
+  }
+
   func testDetectBrowserTargetSelectsChromeAndSafari() {
     let safariTarget = detectBrowserTarget(
       frontmostBundleIdentifier: "com.apple.Safari",
@@ -328,6 +344,26 @@ final class CapturePipelineTests: XCTestCase {
       ]
     )
     XCTAssertEqual(resolution.payload.fullText, accessibilityText)
+  }
+
+  func testResolveDesktopCaptureUsesServiceDependencies() async {
+    let dependencies = DesktopCaptureDependencies.live(
+      accessibility: StubAccessibilityExtractor(text: nil),
+      ocr: StubOCRExtractor(result: OCRCaptureResult(text: "OCR from service", confidence: 0.88))
+    )
+
+    let resolution = await resolveDesktopCapture(
+      context: DesktopCaptureContext(appName: "TextEdit", bundleIdentifier: "com.apple.TextEdit"),
+      accessibilityTextOverride: nil,
+      ocrTextOverride: nil,
+      frontmostProcessIdentifier: nil,
+      dependencies: dependencies
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "ocr")
+    XCTAssertEqual(resolution.transportStatus, "desktop_capture_ocr")
+    XCTAssertEqual(resolution.payload.fullText, "OCR from service")
+    XCTAssertNil(resolution.errorCode)
   }
 
   func testDesktopPermissionReadinessUsesInjectedProviders() {
