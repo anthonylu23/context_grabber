@@ -11,7 +11,7 @@
 1. Focus non-browser app.
 2. Trigger capture.
 3. Host attempts AX extraction.
-4. If AX text is weak, host attempts OCR.
+4. If AX text is below the app-specific threshold, host attempts OCR.
 5. If both fail, host writes metadata-only capture with explicit warnings.
 
 ## Reviewing Output

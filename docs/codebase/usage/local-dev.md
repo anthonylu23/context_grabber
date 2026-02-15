@@ -19,6 +19,26 @@ cd apps/macos-host
 swift run
 ```
 
+## Safari Container Project
+```bash
+# regenerate from packaged Safari runtime assets
+bun run safari:container:sync
+
+# compile-check generated project (unsigned)
+bun run safari:container:build
+```
+
+Open in Xcode:
+```bash
+open apps/safari-container/ContextGrabberSafari/ContextGrabberSafari.xcodeproj
+```
+
+Signed first-run checklist:
+1. Set the same Apple Development team for both app and extension targets.
+2. Keep extension bundle id prefixed by app bundle id.
+3. Run `ContextGrabberSafari` app target, then enable extension in Safari Settings -> Extensions.
+4. See `apps/safari-container/README.md` for troubleshooting details.
+
 ## Targeted Test Runs
 ```bash
 # Swift host

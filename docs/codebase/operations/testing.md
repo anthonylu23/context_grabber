@@ -13,11 +13,19 @@ swift build
 swift test
 ```
 
+## Safari Container Validation
+```bash
+bun run safari:container:sync
+bun run safari:container:build
+```
+
 ## Coverage Focus
 1. Host (`CapturePipelineTests`)
 - Browser target routing.
 - Browser fallback mapping.
+- Diagnostics presentation/status mapping.
 - Desktop AX/OCR/metadata branches.
+- Desktop AX threshold tuning for app-specific profiles.
 - Deterministic markdown and truncation.
 - Menu indicator helper behavior.
 - Host retention label/ordering behavior.

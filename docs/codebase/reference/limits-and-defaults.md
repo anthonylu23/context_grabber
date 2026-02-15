@@ -3,7 +3,13 @@
 ## Capture and Transport
 - Protocol version: `1`
 - Host default timeout: `1200ms`
-- Desktop AX minimum threshold: `400` chars
+- Desktop AX default threshold: `400` chars
+- Desktop AX tuned thresholds:
+  - dense editor apps: `220` chars
+  - terminal-like apps: `180` chars
+- Desktop AX traversal defaults:
+  - max depth: `2` (raised to `3` for tuned app profiles)
+  - max visited elements: `96` (raised for tuned app profiles)
 - Desktop ScreenCaptureKit callback timeout: `1.5s`
 
 ## Content and Rendering

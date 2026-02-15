@@ -449,6 +449,26 @@ interface NormalizedContext {
 - retention settings (max file count + max file age) with post-capture pruning
 - pause/resume capture placeholder toggle
 - diagnostics status submenu with inline Safari/Chrome/Desktop readiness labels
+40. Safari container integration milestone is now implemented:
+- concrete converter-generated macOS Safari container project at `apps/safari-container`
+- container resources wired to packaged runtime artifacts (`manifest.json` + `dist/**`)
+- reproducible regeneration flow via `scripts/sync-safari-container.sh`
+- unsigned compile validation command via `scripts/build-safari-container.sh`
+41. Safari local-install UX hardening is now implemented:
+- Safari manifest icons now provided by in-repo placeholder assets (`packages/extension-safari/assets/icons`)
+- sync flow now validates and stages `icons/**` into converter input bundle
+- step-by-step signed first-run install flow documented for Xcode + Safari enablement
+- troubleshooting now includes bundle-id prefix and signing/profile remediation notes
+42. Desktop extraction fidelity hardening is now implemented:
+- AX extraction now traverses focused element/window trees with bounded child/parent/title-linked walks
+- app-aware AX extraction profiles now tune thresholds and attribute sets for dense editor and terminal-like apps
+- desktop warning strings now include observed-vs-threshold character counts for clearer OCR fallback diagnostics
+- host tests now cover tuned threshold behavior for profiled vs untuned apps
+43. Host decomposition refactor is now implemented for browser and diagnostics concerns:
+- browser capture resolution + metadata fallback mapping moved to `BrowserCapturePipeline.swift`
+- diagnostics status/summary formatting moved to `DiagnosticsPresentation.swift`
+- `ContextGrabberHostApp.swift` now keeps scene/model orchestration with slimmer transport/diagnostics glue
+- host tests now include diagnostics presentation helper coverage (protocol match/mismatch/unreachable + summary shape)
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 
@@ -543,9 +563,6 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
-2. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
-3. Continue host decomposition: move browser transport and diagnostics/status formatting into dedicated modules (leave app scene + model orchestration in app file).
-4. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
-5. UI polish & capture feedback panel (Milestone F2) — capture summary popup, custom icon, settings surface, interaction polish.
-6. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.
+1. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+2. UI polish & capture feedback panel (Milestone F2) — capture summary popup, custom icon, settings surface, interaction polish.
+3. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.

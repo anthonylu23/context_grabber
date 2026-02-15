@@ -2,6 +2,7 @@
 
 ## Top-Level
 - `apps/macos-host`: native macOS host (SwiftUI/AppKit).
+- `apps/safari-container`: generated Safari app-extension container Xcode project.
 - `packages/shared-types`: protocol contracts and validators.
 - `packages/extension-safari`: Safari bridge + runtime modules.
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
@@ -9,8 +10,10 @@
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules
-- `ContextGrabberHostApp.swift`: app scene, host model, transport wiring, diagnostics.
+- `ContextGrabberHostApp.swift`: app scene + host model orchestration and menu wiring.
+- `BrowserCapturePipeline.swift`: browser transport result resolution and metadata fallback mapping.
 - `DesktopCapturePipeline.swift`: desktop AX/OCR extraction and resolver.
+- `DiagnosticsPresentation.swift`: diagnostics status + summary formatting helpers.
 - `MenuBarPresentation.swift`: menu icon state and capture label formatting helpers.
 - `MarkdownRendering.swift`: deterministic markdown renderer and related text helpers.
 

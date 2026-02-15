@@ -23,7 +23,7 @@ Context Grabber is a local-first macOS menu bar app that captures active context
 
 2. Frontmost app is non-browser:
 - Attempt AX focused-element extraction.
-- If AX text below threshold, attempt OCR via ScreenCaptureKit + Vision.
+- If AX text is below app-aware threshold, attempt OCR via ScreenCaptureKit + Vision.
 - If OCR unavailable, produce metadata-only desktop capture with warning.
 
 ## Reliability Guards

@@ -33,6 +33,8 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
   - `runtime/content-entrypoint` for content-script capture message handling
 - Chrome now has live AppleScript active-tab extraction (`extract-active-tab`) and CLI source modes `live`, `runtime`, `fixture`, with `auto` fallback `live -> runtime` (fixture is explicit).
 - Safari package now includes runtime bootstrap entry files (`runtime/background-main`, `runtime/content-main`) and a WebExtension `manifest.json` that references compiled runtime assets.
+- A concrete Safari container app-extension project is now scaffolded at `apps/safari-container` via `safari-web-extension-converter`, using packaged runtime assets (`manifest.json` + `dist/**`).
+- Safari extension manifest now includes placeholder icon assets (`packages/extension-safari/assets/icons`) and sync flow stages `icons/**` into the generated container.
 - Host unsupported-app capture now uses a real desktop AX->OCR path:
   - AX focused-element extraction first
   - Vision OCR fallback second
@@ -40,9 +42,12 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Host diagnostics now report desktop readiness (Accessibility + Screen Recording permission states).
 - Desktop OCR image capture now uses ScreenCaptureKit (window-first, display fallback), replacing deprecated `CGWindowListCreateImage`.
 - Host menu now includes one-click permission remediation actions for missing desktop permissions.
+- Desktop AX extraction now walks focused element/window trees with bounded depth and app-aware threshold tuning for dense editor and terminal app profiles.
 - Swift host integration tests now cover desktop AX/OCR branches and resolver-level timeout/unavailable mapping.
 - Swift host internals are now split into focused modules:
+  - `BrowserCapturePipeline.swift`
   - `DesktopCapturePipeline.swift`
+  - `DiagnosticsPresentation.swift`
   - `MenuBarPresentation.swift`
   - `MarkdownRendering.swift`
 
@@ -52,6 +57,7 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - `packages/extension-safari`: Safari extension TypeScript scaffold.
 - `packages/native-host-bridge`: native-host bridge TypeScript scaffold.
 - `apps/macos-host`: SwiftUI/AppKit menu bar host scaffold with mock capture flow.
+- `apps/safari-container`: generated macOS Safari app-extension container project.
 
 ## Quick Start
 ```bash
@@ -65,12 +71,15 @@ bun run check
 - `bun run typecheck`: run TypeScript type checks across all packages.
 - `bun run test`: run package tests.
 - `bun run check`: lint + typecheck + test.
+- `bun run safari:container:sync`: rebuild Safari runtime artifacts and regenerate the Safari container Xcode project.
+- `bun run safari:container:build`: compile-validate Safari container project with unsigned `xcodebuild`.
 
 ## Project Layout
 ```text
 .
 ├── apps
-│   └── macos-host
+│   ├── macos-host
+│   └── safari-container
 ├── docs
 │   ├── plans
 │   └── codebase
@@ -80,7 +89,9 @@ bun run check
 │   ├── native-host-bridge
 │   └── shared-types
 ├── scripts
-│   └── check-workspace.ts
+│   ├── build-safari-container.sh
+│   ├── check-workspace.ts
+│   └── sync-safari-container.sh
 ├── biome.json
 ├── bunfig.toml
 ├── package.json
@@ -110,9 +121,6 @@ Browser live extraction requirements:
 - macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
 
 ## Next Steps
-- integrate runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local install workflows.
-- improve AX text quality heuristics (attribute expansion, focused-window traversal depth, threshold tuning).
-- continue host decomposition by moving browser transport and diagnostics formatting to dedicated modules.
 - down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript fallback for dev modes.
 - milestone F2 polish: capture feedback popup, custom menu bar icon, and lightweight settings surface polish.
 - milestone G: companion CLI + agent integration using the shared capture pipeline.

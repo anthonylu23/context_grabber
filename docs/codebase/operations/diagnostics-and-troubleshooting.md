@@ -33,3 +33,15 @@ The menu `Diagnostics Status` submenu mirrors the latest diagnostics snapshot wi
 2. Use `Open Accessibility Settings` and `Open Screen Recording Settings` actions.
 3. Re-run capture and verify transport status and warning count.
 4. For paused-state confusion, check `Preferences` and ensure captures are resumed.
+
+## Safari Container Local-Install Issues
+1. `Embedded binary's bundle identifier is not prefixed with the parent app's bundle identifier`
+- In Xcode, ensure extension bundle id is `<app_bundle_id>.Extension`.
+
+2. Signing/provisioning failures for app or extension target
+- Set the same Apple Development team on both targets.
+- Use automatic signing for local development.
+
+3. Extension not visible in Safari settings
+- Re-run the app target after successful signed build.
+- Open Safari -> Settings -> Extensions and verify `ContextGrabberSafari Extension`.

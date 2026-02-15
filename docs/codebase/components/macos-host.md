@@ -16,7 +16,8 @@
 ## Refactored Internal Modules
 1. `DesktopCapturePipeline.swift`
 - Desktop capture data models.
-- AX extraction utilities.
+- AX extraction utilities, including bounded focused-tree traversal and deduplicated attribute collection.
+- App-aware AX extraction profile tuning (threshold + attribute set for dense editors and terminal apps).
 - ScreenCaptureKit + Vision OCR pipeline.
 - Protocol-driven dependency injection for desktop extractors.
 
@@ -35,6 +36,15 @@
 - Output directory override + label helpers.
 - Retention policy primitives and deterministic prune candidate ordering.
 - Shared option sets for menu-driven retention controls.
+
+5. `BrowserCapturePipeline.swift`
+- Browser capture resolution and metadata fallback mapping.
+- Shared `CaptureResolution` shape for browser/desktop resolver outputs.
+
+6. `DiagnosticsPresentation.swift`
+- Extension diagnostics status mapping from ping responses/errors.
+- Diagnostics summary-string formatting helpers.
+- Browser-target diagnostics transport status selection helper.
 
 ## Current Operational Behavior
 - Capture lock prevents concurrent runs (`captureInFlight`).

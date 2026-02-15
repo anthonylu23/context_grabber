@@ -29,3 +29,5 @@ When checking for errors, see if its due to a feature not being implemented yet.
 When commiting to git, avoid bulk commiting. Commit files together or seperately so commit logs are more detailed.
 
 No need for branching, this is a side project that I'm working on until it gets to a place where I can use it with the features I need for my personal workflow.
+
+Follow stand good git practices

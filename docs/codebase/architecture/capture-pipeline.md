@@ -15,13 +15,19 @@
 5. Host maps transport errors to metadata-only fallback payload.
 
 ## Desktop Pipeline
-1. AX extraction from focused element/window attributes.
-2. Threshold gate: use AX if text length >= `minimumAccessibilityTextChars`.
-3. OCR fallback:
+1. AX extraction from focused element/window via bounded tree traversal:
+- start from focused element + focused window roots
+- walk child/parent/title-linked AX elements with depth/element caps
+- collect and dedupe normalized text attributes per node
+2. Adaptive threshold gate:
+- default AX threshold: `400` chars
+- lower per-app thresholds for dense editor/terminal-style apps
+3. If AX text meets threshold, emit desktop accessibility capture.
+4. OCR fallback:
 - Get shareable content from ScreenCaptureKit.
 - Capture frontmost window image (display fallback if needed).
 - Run Vision text recognition.
-4. Metadata fallback when AX and OCR cannot provide text.
+5. Metadata fallback when AX and OCR cannot provide text.
 
 ## Warnings and Transport Status
 - Browser success: `*_extension_ok`.
