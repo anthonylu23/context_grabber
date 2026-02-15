@@ -90,7 +90,8 @@ swift run
 ```
 
 Current host capabilities:
-- menu bar actions (`Capture Now`, `Open Recent Captures`, `Run Diagnostics`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
+- menu bar actions (`Capture Now`, `Recent Captures` submenu, `Copy Last Capture`, `Open History Folder`, `Run Diagnostics`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
+- menu status surfaces: relative last-capture label and menu-bar icon indicator states (success/failure/disconnected)
 - global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
 - deterministic markdown generation from browser and desktop (AX/OCR) capture responses
 - local markdown persistence + clipboard copy
@@ -103,6 +104,7 @@ Browser live extraction requirements:
 
 ## Next Steps
 - integrate runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local install workflows.
+- complete Milestone F functional additions (preferences + retention settings + richer diagnostics submenu).
 - improve AX text quality heuristics (attribute expansion, focused-window traversal depth, threshold tuning).
 
 ## Documentation

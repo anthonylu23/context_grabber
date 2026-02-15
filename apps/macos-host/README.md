@@ -5,11 +5,14 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
 ## Current Capabilities
 - Menu bar app with actions:
   - `Capture Now (⌃⌥⌘C)` (menu action + global hotkey trigger)
-  - `Open Recent Captures`
+  - `Recent Captures` submenu (open recent markdown files directly)
+  - `Copy Last Capture`
+  - `Open History Folder`
   - `Run Diagnostics`
   - `Open Accessibility Settings`
   - `Open Screen Recording Settings`
   - `Quit`
+- Menu includes relative last-capture status and icon-state indicator feedback.
 - Sends a protocol-versioned host request to Safari native-messaging bridge (`@context-grabber/extension-safari`).
 - Selects Safari or Chrome native-messaging bridge based on the effective frontmost browser app (with optional env override).
 - Menu-trigger capture prefers the last known browser app (Safari/Chrome) when the menu bar host is active.

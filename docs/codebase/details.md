@@ -57,10 +57,15 @@
   - ScreenCaptureKit screenshots (`SCScreenshotManager`) for frontmost window or display
   - Vision OCR fallback from the captured screenshot image
   - metadata-only desktop fallback when AX and OCR both fail
-- ScreenCaptureKit callback bridging is async (no main-thread semaphore waits in the host capture path).
+- ScreenCaptureKit waits run off the main actor with bounded callback timeouts (defaults to `1.5s`) to avoid capture hangs.
 - ScreenCaptureKit display fallback capture now uses native `SCDisplay.width/height` pixel dimensions directly.
 - Desktop metadata fallback warnings now distinguish:
   - AX unavailable + OCR unavailable, vs
   - AX below-threshold + OCR unavailable.
 - Desktop diagnostics now include Accessibility + Screen Recording readiness checks.
 - Host menu includes direct remediation actions that deep-link to macOS privacy panes for Accessibility and Screen Recording.
+- Host menu now includes quick-win UX signals from Milestone F:
+  - relative last-capture label
+  - recent captures submenu with direct file-open actions
+  - copy-last-capture shortcut
+  - icon-state indicators for success/failure/disconnected extension diagnostics

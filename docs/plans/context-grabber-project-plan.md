@@ -237,7 +237,7 @@ interface NormalizedContext {
 - Emit warning when confidence < `0.55`.
 
 4. Clipboard failure:
-- File write still succeeds, user gets saved file path.
+- Capture is marked failed, but the already-written markdown file remains in history.
 
 5. Oversized or malformed content:
 - Continue with truncation and warnings instead of failing capture.
@@ -287,13 +287,38 @@ interface NormalizedContext {
   - Deterministic outputs on repeated runs for same input.
   - Performance and reliability targets reached.
 
-6. Milestone F: Quality of Life
+6. Milestone F: Quality of Life + Menu Bar UI Enhancements
 - Deliverables:
   - Recent captures list in menu.
   - Configurable retention settings.
   - Improved notifications and failure visibility.
+  - Menu bar UI enhancements (see below).
 - Exit criteria:
   - Daily personal-use loop is smooth with no blocking manual fixes.
+  - Menu bar provides at-a-glance capture status and quick access to recent output.
+
+### Menu Bar UI Enhancements (Milestone F)
+
+#### Quick Wins
+- **Menu bar icon status indicator**: brief checkmark/flash after successful capture; dot badge when extension is disconnected.
+- **Separator lines**: `NSMenuItem.separator()` between action groups (capture, history, diagnostics, quit) for visual hierarchy.
+- **Last capture timestamp**: disabled menu item near the top showing "Last capture: 2m ago" for quick status.
+
+#### Functional Additions
+- **Recent captures submenu**: instead of only "Open Recent Captures" (opens Finder), show last 3–5 captures inline as a submenu with title + timestamp, clickable to open the markdown file directly.
+- **Transient capture feedback**: replace static "Opened history folder" text with dynamic status reflecting the last action (e.g. "Captured: developer.apple.com — copied to clipboard").
+- **Preferences item**: capture output directory, hotkey customization, auto-capture toggle.
+- **Pause/Resume toggle**: for future auto-capture, a menu item to pause/resume.
+- **"Copy Last Capture" shortcut**: quick re-copy of the most recent capture without re-capturing.
+
+#### Polish
+- **Dynamic hotkey display**: if the user rebinds the global hotkey, reflect the current binding in the menu item text.
+- **Inline diagnostics submenu**: show connection status per-browser inline (e.g. "Safari extension: connected", "Chrome: not installed") rather than requiring a separate diagnostics action.
+
+#### Design Guardrails
+- No full settings window unless strictly necessary — menu bar apps should stay lightweight.
+- No notification banners for every capture — icon flash is sufficient feedback.
+- Keep menu item count low; use submenus for detail rather than top-level clutter.
 
 ## Test Matrix
 1. Browser full-page capture:
@@ -404,8 +429,15 @@ interface NormalizedContext {
 - resolver-level timeout/unavailable browser mapping assertions
 - desktop AX success / OCR fallback / metadata-only failure assertions
 35. Desktop OCR image capture now uses ScreenCaptureKit (`SCScreenshotManager`) with window-first targeting and display fallback; host menu now includes direct permission remediation actions for Accessibility and Screen Recording settings panes.
+36. Milestone F quick-win menu UX improvements are now partially implemented in host UI:
+- relative last-capture label shown at top of the menu
+- grouped menu sections with clearer separators
+- recent captures submenu (direct file-open actions)
+- copy-last-capture action
+- menu-bar icon indicator states for success/failure/disconnected extension diagnostics
 
 ## Next Steps (Implementation Queue)
 1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
-2. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
-3. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+2. Complete Milestone F functional additions: preferences surface (output directory + retention config), pause/resume placeholder, and richer diagnostics submenu.
+3. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
+4. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.

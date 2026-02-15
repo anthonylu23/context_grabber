@@ -24,7 +24,9 @@ swift run
 
 ## Host Menu Actions
 - `Capture Now (⌃⌥⌘C)`
-- `Open Recent Captures`
+- `Recent Captures` submenu
+- `Copy Last Capture`
+- `Open History Folder`
 - `Run Diagnostics`
 - `Open Accessibility Settings`
 - `Open Screen Recording Settings`
