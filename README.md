@@ -1,129 +1,25 @@
 # Context Grabber
 
-Context Grabber is a local-first macOS menu bar app that captures active user context and emits deterministic markdown for LLM workflows.
+A local-first macOS menu bar app that captures active browser tabs and desktop apps into structured markdown for LLM workflows.
 
-## Workspace Status
-The initial Bun + TypeScript monorepo scaffold is set up with strict typing and shared contracts.
+## Installation & Usage
 
-### Recent Hardening
-- Runtime guards validate supported native message types and payload schemas at the bridge boundary.
-- Package typecheck now includes both `src` and `test` files via `tsconfig.typecheck.json`.
-- Workspace checks auto-discover package directories under `packages/`.
-- `@context-grabber/shared-types` now exports Bun-first source for dev and `dist` output for default runtime consumers.
-- Swift host capture now treats markdown write and clipboard write failures as capture failures.
-- Swift host frontmatter values now use YAML-safe quoting/escaping.
-- Swift host capture now uses a Safari native-messaging transport request instead of direct fixture reads.
-- Safari extension package now includes a native-messaging CLI bridge and transport request handler.
-- Safari CLI stdin handling is now validated via integration tests (real stdin -> JSON response path).
-- Swift host now accepts structured bridge responses even if the bridge exits non-zero.
-- Safari native-messaging CLI now supports runtime-first source resolution (`auto: runtime -> live`) with explicit fixture mode for deterministic testing.
-- Global hotkey capture is now wired to the same capture pipeline (`⌃⌥⌘C`).
-- Safari extraction now increases `spawnSync` max buffer to handle larger page payloads safely.
-- Swift host now resolves Bun via explicit env/path fallbacks for non-terminal launch environments.
-- Safari runtime now includes explicit Web Extension modules (`runtime/content`, `runtime/background`) for extension-side capture/request handling.
-- Chrome extension now has protocol-parity transport + native-messaging CLI scaffolding and tests.
-- Native host bridge tests now cover unavailable/invalid transport fallback and oversized-content truncation determinism.
-- Safari runtime now includes a native host port binder (`runtime/native-host`) for packaged Web Extension request/response wiring.
-- Safari CLI source modes now include `runtime`, `live`, `fixture`, and `auto`, with `auto` preferring runtime and falling back to live extraction.
-- Swift host now routes capture transport by frontmost browser (Safari or Chrome) and diagnostics report both channels.
-- Menu-triggered host captures now prefer the last known browser app when the menu bar app is active.
-- Swift host now has integration tests for truncation behavior, metadata-only fallback payload/markdown, and markdown determinism.
-- Safari runtime now includes concrete packaged entrypoint helpers:
-  - `runtime/background-entrypoint` for native-host port handling and active-tab content-script requests
-  - `runtime/content-entrypoint` for content-script capture message handling
-- Chrome CLI source modes are `runtime`, `live`, `fixture`, with `auto` fallback `runtime -> live` (fixture is explicit).
-- Safari package now includes runtime bootstrap entry files (`runtime/background-main`, `runtime/content-main`) and a WebExtension `manifest.json` that references compiled runtime assets.
-- A concrete Safari container app-extension project is now scaffolded at `apps/safari-container` via `safari-web-extension-converter`, using packaged runtime assets (`manifest.json` + `dist/**`).
-- Safari extension manifest now includes placeholder icon assets (`packages/extension-safari/assets/icons`) and sync flow stages `icons/**` into the generated container.
-- Host unsupported-app capture now uses a real desktop AX->OCR path:
-  - AX focused-element extraction first
-  - Vision OCR fallback second
-  - metadata-only desktop fallback when both fail
-- Host diagnostics now report desktop readiness (Accessibility + Screen Recording permission states).
-- Desktop OCR image capture now uses ScreenCaptureKit (window-first, display fallback), replacing deprecated `CGWindowListCreateImage`.
-- Host menu now includes one-click permission remediation actions for missing desktop permissions.
-- Desktop AX extraction now walks focused element/window trees with bounded depth and app-aware threshold tuning for dense editor and terminal app profiles.
-- Swift host integration tests now cover desktop AX/OCR branches and resolver-level timeout/unavailable mapping.
-- Swift host internals are now split into focused modules:
-  - `BrowserCapturePipeline.swift`
-  - `DesktopCapturePipeline.swift`
-  - `DiagnosticsPresentation.swift`
-  - `MenuBarPresentation.swift`
-  - `MarkdownRendering.swift`
-
-### Packages
-- `packages/shared-types`: shared contracts and message envelope types.
-- `packages/extension-chrome`: Chrome extension TypeScript scaffold.
-- `packages/extension-safari`: Safari extension TypeScript scaffold.
-- `packages/native-host-bridge`: native-host bridge TypeScript scaffold.
-- `packages/companion-cli`: companion CLI (`doctor`, `capture --focused`).
-- `apps/macos-host`: SwiftUI/AppKit menu bar host scaffold with mock capture flow.
-- `apps/safari-container`: generated macOS Safari app-extension container project.
-
-## Quick Start
+### Quick Start
 ```bash
 bun install
-bun run check
+bun run check          # lint + typecheck + test
 ```
 
-## Scripts
-- `bun run lint`: run Biome checks.
-- `bun run format`: format repository files with Biome.
-- `bun run typecheck`: run TypeScript type checks across all packages.
-- `bun run test`: run package tests.
-- `bun run check`: lint + typecheck + test.
-- `bun run safari:container:sync`: rebuild Safari runtime artifacts and regenerate the Safari container Xcode project.
-- `bun run safari:container:build`: compile-validate Safari container project with unsigned `xcodebuild`.
-
-## Project Layout
-```text
-.
-├── apps
-│   ├── macos-host
-│   └── safari-container
-├── docs
-│   ├── plans
-│   └── codebase
-├── packages
-│   ├── companion-cli
-│   ├── extension-chrome
-│   ├── extension-safari
-│   ├── native-host-bridge
-│   └── shared-types
-├── scripts
-│   ├── build-safari-container.sh
-│   ├── check-workspace.ts
-│   └── sync-safari-container.sh
-├── biome.json
-├── bunfig.toml
-├── package.json
-└── tsconfig.base.json
-```
-
-## Host App (Milestone A Scaffold)
+### Host App
 ```bash
 cd apps/macos-host
 swift run
 ```
+Trigger captures via the menu bar icon or the global hotkey `⌃⌥⌘C`.
 
-Current host capabilities:
-- menu bar actions (`Capture Now`, `Recent Captures` submenu, `Copy Last Capture`, `Open History Folder`, `Run Diagnostics`, `Diagnostics Status` submenu, `Preferences`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
-- menu status surfaces: relative last-capture label and menu-bar icon indicator states (success/failure/disconnected)
-- preferences-backed output controls for custom output directory and retention policy (max files, max age)
-- retention/recent-history operations are scoped to host-generated capture files only (safe with mixed markdown folders)
-- pause/resume capture placeholder toggle in menu
-- about menu section with app version/build label and handbook link
-- global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
-- deterministic markdown generation from browser and desktop (AX/OCR) capture responses
-- local markdown persistence + clipboard copy
-- local diagnostics (transport reachability + protocol compatibility), probe-based storage writability checks, and host logging
+Browser live extraction requires JavaScript from Apple Events enabled in Safari (`Settings > Developer`) or Chrome (`View > Developer`), plus Automation permission for the calling app in `System Settings > Privacy & Security > Automation`.
 
-Browser live extraction requirements:
-- Safari: enable `Settings -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `do JavaScript` capture.
-- Chrome: enable `View -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `execute javascript`.
-- macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
-
-## Companion CLI (Milestone G Scaffold)
+### Companion CLI
 ```bash
 bun run --cwd packages/companion-cli start doctor
 bun run --cwd packages/companion-cli start list tabs
@@ -131,22 +27,91 @@ bun run --cwd packages/companion-cli start list apps
 bun run --cwd packages/companion-cli start capture --focused
 ```
 
-Current companion CLI capabilities:
-- `doctor`: reports Safari/Chrome extension bridge readiness.
-- `list tabs`: enumerates Safari/Chrome tabs (JSON output; optional `--browser` filter).
-- `list apps`: enumerates desktop apps with visible window counts (JSON output).
-- `capture --focused`: captures focused browser context and writes markdown to stdout.
-- honors `CONTEXT_GRABBER_BROWSER_TARGET` override (`safari` / `chrome`).
+### Scripts
+| Command | Description |
+|---------|-------------|
+| `bun run lint` | Biome lint checks |
+| `bun run format` | Biome formatting |
+| `bun run typecheck` | TypeScript type checks |
+| `bun run test` | Run package tests |
+| `bun run check` | lint + typecheck + test |
+| `bun run safari:container:sync` | Rebuild Safari runtime artifacts |
+| `bun run safari:container:build` | Compile-validate Safari container |
 
-## Next Steps
-- milestone G: expand companion CLI targeted capture surface (`capture --tab`, `capture --app`, method overrides).
-- milestone G: add agent integration manifests (MCP/Claude Code skill wiring) on top of the CLI.
+## Features
 
-## Documentation
-- Docs index: `docs/README.md`
-- Product plan: `docs/plans/context-grabber-project-plan.md`
-- Codebase handbook index: `docs/codebase/README.md`
-- Architecture overview: `docs/codebase/architecture/overview.md`
-- Local dev usage: `docs/codebase/usage/local-dev.md`
-- Testing strategy: `docs/codebase/operations/testing.md`
-- Limits/defaults reference: `docs/codebase/reference/limits-and-defaults.md`
+- **Menu bar capture** — one-click or hotkey (`⌃⌥⌘C`) context capture
+- **Browser extraction** — Safari and Chrome tab content via AppleScript
+- **Desktop extraction** — AX focused-element extraction with Vision OCR fallback
+- **Deterministic markdown** — structured output with frontmatter, summary, key points, and chunked content
+- **LLM summarization** — optional OpenAI / Anthropic / Gemini / Ollama summarization (heuristic fallback)
+- **Clipboard integration** — copy as markdown file reference or plain text
+- **Output format presets** — brief (capped key points/links) or full output
+- **Retention management** — configurable max file count and max age with safe pruning
+- **Diagnostics** — transport reachability, permission status, and storage writability checks
+- **Companion CLI** — `doctor`, `list tabs`, `list apps`, `capture --focused`
+
+## Architecture & Docs
+
+The system follows a trigger → routing → capture → render pipeline. Browser contexts are extracted via native messaging bridges; desktop contexts use Accessibility and Vision OCR. All processing is local.
+
+| Doc | Path |
+|-----|------|
+| Handbook index | `docs/codebase/README.md` |
+| Architecture overview | `docs/codebase/architecture/overview.md` |
+| Capture pipeline | `docs/codebase/architecture/capture-pipeline.md` |
+| Component docs | `docs/codebase/components/` |
+| Local dev | `docs/codebase/usage/local-dev.md` |
+| Environment variables | `docs/codebase/usage/environment-variables.md` |
+| Testing strategy | `docs/codebase/operations/testing.md` |
+| Limits & defaults | `docs/codebase/reference/limits-and-defaults.md` |
+| Project plan | `docs/plans/context-grabber-project-plan.md` |
+
+## Settings
+
+Configurable via the menu bar Settings submenu and Advanced Settings window:
+
+| Setting | Options | Default |
+|---------|---------|---------|
+| Output directory | Default or custom path | `~/Documents/ContextGrabber` |
+| Output format | Brief, Full | Brief |
+| Clipboard copy mode | Markdown file, Plain text | Markdown file |
+| Product context line | On, Off | On |
+| Retention max files | 0 (unlimited) – N | 200 |
+| Retention max age | 0 (unlimited) – N days | 30 days |
+| Summarization mode | Heuristic, LLM | Heuristic |
+| Summarization provider | OpenAI, Anthropic, Gemini, Ollama | — |
+| Summary token budget | Integer | 120 |
+| Summary timeout | Milliseconds | 2500 |
+
+LLM providers require corresponding API key environment variables. See `docs/codebase/usage/environment-variables.md`.
+
+## Tech Stack
+
+- **Host app**: Swift, SwiftUI, AppKit, ScreenCaptureKit, Vision
+- **Extensions**: TypeScript, Bun, WebExtension APIs
+- **Bridge**: Native messaging (Safari + Chrome)
+- **Tooling**: Biome (lint/format), Xcode (Safari container)
+- **Testing**: XCTest (Swift), Bun test (TypeScript)
+
+## Project Layout
+```text
+.
+├── apps
+│   ├── macos-host          # SwiftUI/AppKit menu bar host
+│   └── safari-container    # Safari app-extension container
+├── docs
+│   ├── plans               # Project plans
+│   └── codebase            # Technical handbook
+├── packages
+│   ├── companion-cli       # CLI tool (doctor, list, capture)
+│   ├── extension-chrome    # Chrome extension
+│   ├── extension-safari    # Safari extension
+│   ├── native-host-bridge  # Native messaging bridge
+│   └── shared-types        # Shared contracts and types
+├── scripts                 # Build and workspace scripts
+├── biome.json
+├── bunfig.toml
+├── package.json
+└── tsconfig.base.json
+```
