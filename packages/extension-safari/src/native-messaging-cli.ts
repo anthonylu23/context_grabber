@@ -93,8 +93,10 @@ const resolveCaptureSource = async (
 
   const fromLive = (): SafariExtractionInput => {
     const osascriptBinary = process.env.CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN;
+    const timeoutMs = hostRequest.payload.timeoutMs;
     return extractActiveTabContextFromSafari({
       includeSelectionText,
+      timeoutMs,
       ...(osascriptBinary && osascriptBinary.length > 0 ? { osascriptBinary } : {}),
     });
   };
