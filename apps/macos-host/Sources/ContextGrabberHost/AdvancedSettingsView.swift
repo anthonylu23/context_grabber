@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct AdvancedSettingsView: View {
@@ -144,26 +143,5 @@ struct AdvancedSettingsView: View {
     .formStyle(.grouped)
     .padding(12)
     .frame(minWidth: 560, minHeight: 620)
-    .onAppear {
-      configureAdvancedSettingsWindow()
-    }
-  }
-
-  /// Configure the hosting NSWindow so it appears above full-screen apps
-  /// as a regular desktop window on top of the window stack.
-  private func configureAdvancedSettingsWindow() {
-    DispatchQueue.main.async {
-      guard
-        let window = NSApp.windows.first(where: {
-          $0.identifier?.rawValue == "advanced-settings" && $0.isVisible
-        })
-      else { return }
-
-      // Appear above full-screen spaces as a floating auxiliary window.
-      window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
-      window.level = .floating
-      window.hidesOnDeactivate = false
-      window.orderFrontRegardless()
-    }
   }
 }

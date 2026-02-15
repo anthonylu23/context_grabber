@@ -52,6 +52,9 @@
 - Popup UI with quick actions (`Copy to Clipboard`, `Open File`, `Dismiss`).
 - Popup positioning and non-focus-stealing presentation behavior.
 
+8. `AdvancedSettingsView.swift`
+- Advanced Settings form view (output, retention, summarization, capture controls).
+
 ## Current Operational Behavior
 - Capture lock prevents concurrent runs (`captureInFlight`).
 - Successful capture updates:
