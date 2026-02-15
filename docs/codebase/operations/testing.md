@@ -9,6 +9,7 @@ Runs lint, typecheck, and package tests across the workspace.
 ## Host Validation
 ```bash
 cd apps/macos-host
+swift build
 swift test
 ```
 
@@ -19,6 +20,8 @@ swift test
 - Desktop AX/OCR/metadata branches.
 - Deterministic markdown and truncation.
 - Menu indicator helper behavior.
+- Host retention label/ordering behavior.
+- Settings load sanitization for persisted retention preferences.
 
 2. Extension packages
 - CLI request/response behavior.

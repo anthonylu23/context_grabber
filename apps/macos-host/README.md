@@ -9,6 +9,8 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
   - `Copy Last Capture`
   - `Open History Folder`
   - `Run Diagnostics`
+  - `Diagnostics Status` submenu
+  - `Preferences` (output directory + retention settings + pause/resume placeholder)
   - `Open Accessibility Settings`
   - `Open Screen Recording Settings`
   - `Quit`
@@ -22,6 +24,7 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
 - Generates deterministic markdown and writes to:
   - `~/Library/Application Support/ContextGrabber/history/`
 - Copies markdown output to clipboard.
+- Supports optional custom output directory + retention pruning policy (`max file count`, `max file age`) persisted via user defaults.
 - Writes local logs to:
   - `~/Library/Application Support/ContextGrabber/logs/host.log`
 

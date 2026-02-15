@@ -30,6 +30,12 @@
 - Summary/key-point/chunk extraction helpers.
 - YAML-safe quoting utilities.
 
+4. `HostSettings.swift`
+- UserDefaults-backed host preferences model.
+- Output directory override + label helpers.
+- Retention policy primitives and deterministic prune candidate ordering.
+- Shared option sets for menu-driven retention controls.
+
 ## Current Operational Behavior
 - Capture lock prevents concurrent runs (`captureInFlight`).
 - Successful capture updates:
@@ -38,3 +44,15 @@
   - recent captures list
   - clipboard and history file
 - Failures preserve explicit warnings and error codes in status/markdown metadata.
+- History storage resolves from settings:
+  - default: `~/Library/Application Support/ContextGrabber/history`
+  - custom: user-selected folder from menu preferences
+- Post-write retention pruning is applied on each successful capture:
+  - max file count
+  - max file age (days)
+- Menu preferences currently expose:
+  - output directory selection/reset
+  - retention max files
+  - retention max age
+  - pause/resume capture placeholder toggle
+- Diagnostics state is also surfaced inline in menu (`Diagnostics Status`) for Safari, Chrome, Accessibility, and Screen Recording.

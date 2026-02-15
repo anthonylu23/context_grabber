@@ -7,7 +7,9 @@
 - Chrome transport status
 - desktop permission readiness (AX + Screen Recording)
 - last capture timestamp/error/latency
-- storage writability
+- storage writability (verified by probe file write/remove in the active history directory)
+
+The menu `Diagnostics Status` submenu mirrors the latest diagnostics snapshot with inline labels and a `Refresh Diagnostics` action.
 
 ## Common Failures
 1. `ERR_EXTENSION_UNAVAILABLE`
@@ -22,7 +24,12 @@
 - AX below threshold and OCR unavailable.
 - Check Accessibility and Screen Recording permissions.
 
+4. Captures paused placeholder
+- Capture trigger intentionally no-ops while pause placeholder is enabled in `Preferences`.
+- Disable `Pause Captures (Placeholder)` to resume normal capture behavior.
+
 ## Quick Remediation Path
 1. Run diagnostics from menu.
 2. Use `Open Accessibility Settings` and `Open Screen Recording Settings` actions.
 3. Re-run capture and verify transport status and warning count.
+4. For paused-state confusion, check `Preferences` and ensure captures are resumed.

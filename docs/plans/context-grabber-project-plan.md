@@ -444,8 +444,71 @@ interface NormalizedContext {
 - component-level docs
 - operations (permissions/diagnostics/testing)
 - usage and reference sections
+39. Milestone F functional additions are now implemented in host menu workflow:
+- preferences-backed output directory selection
+- retention settings (max file count + max file age) with post-capture pruning
+- pause/resume capture placeholder toggle
+- diagnostics status submenu with inline Safari/Chrome/Desktop readiness labels
 
-7. Milestone G: Companion CLI + Agent Integration
+7. Milestone F2: UI Polish & Capture Feedback Panel
+
+### Capture Summary Popup
+After each capture, show a transient floating panel (SwiftUI `.popover` or lightweight `NSPanel`) with:
+- **Title** of captured content (truncated)
+- **Source app/site** (e.g. "Safari — developer.apple.com")
+- **Extraction method** badge (extension / applescript / ax / ocr / metadata-only)
+- **Token estimate** (from NormalizedContext)
+- **Truncation warning** if applicable
+- **Quick actions**: "Copy to Clipboard" / "Open File" / "Dismiss"
+- Auto-dismiss after ~4 seconds, or click to dismiss immediately
+- Replaces the current `UNMutableNotificationContent` approach (which doesn't work in `swift run` anyway)
+
+### App Icon
+- Custom menu bar icon (not just SF Symbols) — a small monochrome glyph that fits the macOS menu bar style (template image)
+- Keep SF Symbol state overlays for success/failure/disconnected, but as modifications to the custom base icon
+- Include a proper app icon for the dock/About/Finder (1024x1024 asset catalog)
+
+### Settings Panel
+Lightweight settings popover or small window accessible from the menu:
+- **Output directory** picker (currently hardcoded to local app directory)
+- **Retention settings**: max file count, max file age, one-click purge (already spec'd in project plan but no UI)
+- **Global hotkey** rebinding
+- **Capture defaults**: preferred method override, include selection text toggle
+- **Appearance**: dark/light/system (if the popup has its own chrome)
+- Keep it a single-pane popover — no tab bar, no multi-page settings
+
+### Menu Visual Refinements
+- **Capture status section**: replace plain text status line with a styled mini-card (icon + colored text for last capture result)
+- **Recent captures**: add favicons or SF Symbol type indicators (webpage vs desktop app) next to each entry
+- **Keyboard shortcut hints**: show shortcut badges on more menu items (Copy Last, Open History)
+- **"About" item**: app version, build info, link to project repo
+
+### Interaction Polish
+- **Menu bar icon animation**: brief pulse/spin during active capture (not just state change after)
+- **Haptic feedback** on capture completion (if trackpad is available, via `NSHapticFeedbackManager`)
+- **Sound**: optional subtle capture sound (like Screenshot.app), off by default
+
+### Design Guardrails
+- The popup must not steal focus or interrupt workflow — behave like a macOS notification, not a modal
+- Settings should persist via `UserDefaults` or a simple plist — no database
+- Keep total menu item count low; use submenus for detail
+- All icons should be template images that adapt to light/dark mode automatically
+
+### Key Files
+- `apps/macos-host/Sources/ContextGrabberHost/ContextGrabberHostApp.swift` — popup view, settings surface, about item, animation during capture
+- `apps/macos-host/Sources/ContextGrabberHost/MenuBarPresentation.swift` — extend indicator states for animation, capture summary formatting helpers
+- New: `CaptureResultPopup.swift` — transient capture summary panel
+- New: `SettingsView.swift` — settings popover
+- New: asset catalog for custom menu bar icon and app icon
+
+- Exit criteria:
+  - Capture triggers popup with correct token count, title, source app.
+  - Popup auto-dismisses and doesn't steal focus.
+  - Settings changes persist across app restart.
+  - Menu bar icon shows custom glyph with state overlays.
+  - `swift build` compiles cleanly and existing tests pass.
+
+8. Milestone G: Companion CLI + Agent Integration
 - Deliverables:
   - Standalone CLI that reuses the existing capture pipeline (bridge, normalization, markdown engine).
   - Tab and app enumeration commands.
@@ -481,8 +544,8 @@ interface NormalizedContext {
 
 ## Next Steps (Implementation Queue)
 1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
-2. Complete Milestone F functional additions: preferences surface (output directory + retention config), pause/resume placeholder, and richer diagnostics submenu.
-3. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
-4. Continue host decomposition: move browser transport and diagnostics/status formatting into dedicated modules (leave app scene + model orchestration in app file).
-5. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+2. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
+3. Continue host decomposition: move browser transport and diagnostics/status formatting into dedicated modules (leave app scene + model orchestration in app file).
+4. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+5. UI polish & capture feedback panel (Milestone F2) — capture summary popup, custom icon, settings surface, interaction polish.
 6. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.

@@ -94,12 +94,15 @@ swift run
 ```
 
 Current host capabilities:
-- menu bar actions (`Capture Now`, `Recent Captures` submenu, `Copy Last Capture`, `Open History Folder`, `Run Diagnostics`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
+- menu bar actions (`Capture Now`, `Recent Captures` submenu, `Copy Last Capture`, `Open History Folder`, `Run Diagnostics`, `Diagnostics Status` submenu, `Preferences`, `Open Accessibility Settings`, `Open Screen Recording Settings`, `Quit`)
 - menu status surfaces: relative last-capture label and menu-bar icon indicator states (success/failure/disconnected)
+- preferences-backed output controls for custom output directory and retention policy (max files, max age)
+- retention/recent-history operations are scoped to host-generated capture files only (safe with mixed markdown folders)
+- pause/resume capture placeholder toggle in menu
 - global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
 - deterministic markdown generation from browser and desktop (AX/OCR) capture responses
 - local markdown persistence + clipboard copy
-- local diagnostics (transport reachability + protocol compatibility) and host logging
+- local diagnostics (transport reachability + protocol compatibility), probe-based storage writability checks, and host logging
 
 Browser live extraction requirements:
 - Safari: enable `Settings -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `do JavaScript` capture.
@@ -108,8 +111,11 @@ Browser live extraction requirements:
 
 ## Next Steps
 - integrate runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local install workflows.
-- complete Milestone F functional additions (preferences + retention settings + richer diagnostics submenu).
 - improve AX text quality heuristics (attribute expansion, focused-window traversal depth, threshold tuning).
+- continue host decomposition by moving browser transport and diagnostics formatting to dedicated modules.
+- down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript fallback for dev modes.
+- milestone F2 polish: capture feedback popup, custom menu bar icon, and lightweight settings surface polish.
+- milestone G: companion CLI + agent integration using the shared capture pipeline.
 
 ## Documentation
 - Docs index: `docs/README.md`
