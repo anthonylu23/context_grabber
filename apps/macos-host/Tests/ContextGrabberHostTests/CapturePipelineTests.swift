@@ -18,6 +18,44 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  private struct StubLLMSummaryProvider: LLMSummaryProviding {
+    let result: Result<LLMSummaryResponse, Error>
+
+    func summarize(_: LLMSummaryRequest) async throws -> LLMSummaryResponse {
+      return try result.get()
+    }
+  }
+
+  private func makeHostSettings(
+    outputDirectoryPath: String? = nil,
+    retentionMaxFileCount: Int = HostSettings.defaultRetentionMaxFileCount,
+    retentionMaxAgeDays: Int = HostSettings.defaultRetentionMaxAgeDays,
+    capturesPausedPlaceholder: Bool = false,
+    clipboardCopyMode: ClipboardCopyMode = HostSettings.defaultClipboardCopyMode,
+    outputFormatPreset: OutputFormatPreset = HostSettings.defaultOutputFormatPreset,
+    includeProductContextLine: Bool = HostSettings.defaultIncludeProductContextLine,
+    summarizationMode: SummarizationMode = HostSettings.defaultSummarizationMode,
+    summarizationProvider: SummarizationProvider? = nil,
+    summarizationModel: String? = nil,
+    summaryTokenBudget: Int = HostSettings.defaultSummaryTokenBudget,
+    summaryTimeoutMs: Int = HostSettings.defaultSummaryTimeoutMs
+  ) -> HostSettings {
+    return HostSettings(
+      outputDirectoryPath: outputDirectoryPath,
+      retentionMaxFileCount: retentionMaxFileCount,
+      retentionMaxAgeDays: retentionMaxAgeDays,
+      capturesPausedPlaceholder: capturesPausedPlaceholder,
+      clipboardCopyMode: clipboardCopyMode,
+      outputFormatPreset: outputFormatPreset,
+      includeProductContextLine: includeProductContextLine,
+      summarizationMode: summarizationMode,
+      summarizationProvider: summarizationProvider,
+      summarizationModel: summarizationModel,
+      summaryTokenBudget: summaryTokenBudget,
+      summaryTimeoutMs: summaryTimeoutMs
+    )
+  }
+
   private func withTemporaryDirectory(_ body: (URL) throws -> Void) throws {
     let directoryURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("context-grabber-tests-\(UUID().uuidString.lowercased())", isDirectory: true)
@@ -227,6 +265,9 @@ final class CapturePipelineTests: XCTestCase {
       formatCaptureFailureFeedbackDetail("Bridge timeout"),
       "Error: Bridge timeout"
     )
+
+    XCTAssertEqual(formatTokenEstimateLabel(nil), nil)
+    XCTAssertEqual(formatTokenEstimateLabel(1234), "~1,234 tokens")
   }
 
   func testAppVersionLabelFormatting() {
@@ -411,11 +452,19 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertTrue(visited.contains(second))
   }
 
-  func testRetentionLabelFormatting() {
+  func testRetentionAndCheckmarkLabelFormatting() {
     XCTAssertEqual(retentionMaxFileCountLabel(0), "Unlimited")
     XCTAssertEqual(retentionMaxFileCountLabel(100), "100")
     XCTAssertEqual(retentionMaxAgeDaysLabel(0), "Unlimited")
     XCTAssertEqual(retentionMaxAgeDaysLabel(30), "30 days")
+    XCTAssertEqual(
+      checkmarkMenuOptionLabel(valueLabel: "Default Output Directory", isSelected: true),
+      "✓ Default Output Directory"
+    )
+    XCTAssertEqual(
+      checkmarkMenuOptionLabel(valueLabel: "Custom Output Directory", isSelected: false),
+      "Custom Output Directory"
+    )
   }
 
   func testRetentionPruneCandidatesAppliesAgeThenCount() {
@@ -536,6 +585,11 @@ final class CapturePipelineTests: XCTestCase {
     defaults.set("", forKey: "context_grabber.output_directory_path")
     defaults.set(true, forKey: "context_grabber.captures_paused_placeholder")
     defaults.set("invalid_mode", forKey: "context_grabber.clipboard_copy_mode")
+    defaults.set("invalid_preset", forKey: "context_grabber.output_format_preset")
+    defaults.set("invalid_summary_mode", forKey: "context_grabber.summarization_mode")
+    defaults.set("invalid_provider", forKey: "context_grabber.summarization_provider")
+    defaults.set(999, forKey: "context_grabber.summary_token_budget")
+    defaults.set(-1, forKey: "context_grabber.summary_timeout_ms")
 
     let settings = loadHostSettings(userDefaults: defaults)
     XCTAssertEqual(settings.retentionMaxFileCount, HostSettings.defaultRetentionMaxFileCount)
@@ -543,9 +597,18 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertNil(settings.outputDirectoryURL)
     XCTAssertEqual(settings.capturesPausedPlaceholder, true)
     XCTAssertEqual(settings.clipboardCopyMode, HostSettings.defaultClipboardCopyMode)
+    XCTAssertEqual(settings.outputFormatPreset, HostSettings.defaultOutputFormatPreset)
+    XCTAssertEqual(
+      settings.includeProductContextLine,
+      HostSettings.defaultIncludeProductContextLine
+    )
+    XCTAssertEqual(settings.summarizationMode, HostSettings.defaultSummarizationMode)
+    XCTAssertNil(settings.summarizationProvider)
+    XCTAssertEqual(settings.summaryTokenBudget, HostSettings.defaultSummaryTokenBudget)
+    XCTAssertEqual(settings.summaryTimeoutMs, HostSettings.defaultSummaryTimeoutMs)
   }
 
-  func testSaveHostSettingsPersistsClipboardCopyMode() {
+  func testSaveHostSettingsPersistsClipboardAndOutputPreferences() {
     let suiteName = "context-grabber-tests-\(UUID().uuidString.lowercased())"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
       XCTFail("Expected ephemeral test UserDefaults suite.")
@@ -555,12 +618,15 @@ final class CapturePipelineTests: XCTestCase {
       defaults.removePersistentDomain(forName: suiteName)
     }
 
-    let settings = HostSettings(
-      outputDirectoryPath: nil,
-      retentionMaxFileCount: HostSettings.defaultRetentionMaxFileCount,
-      retentionMaxAgeDays: HostSettings.defaultRetentionMaxAgeDays,
-      capturesPausedPlaceholder: false,
-      clipboardCopyMode: .text
+    let settings = makeHostSettings(
+      clipboardCopyMode: .text,
+      outputFormatPreset: .full,
+      includeProductContextLine: false,
+      summarizationMode: .llm,
+      summarizationProvider: .openAI,
+      summarizationModel: "gpt-4o-mini",
+      summaryTokenBudget: 180,
+      summaryTimeoutMs: 3_000
     )
     saveHostSettings(settings, userDefaults: defaults)
 
@@ -568,6 +634,52 @@ final class CapturePipelineTests: XCTestCase {
       defaults.string(forKey: "context_grabber.clipboard_copy_mode"),
       ClipboardCopyMode.text.rawValue
     )
+    XCTAssertEqual(
+      defaults.string(forKey: "context_grabber.output_format_preset"),
+      OutputFormatPreset.full.rawValue
+    )
+    XCTAssertEqual(
+      defaults.object(forKey: "context_grabber.include_product_context_line") as? Bool,
+      false
+    )
+    XCTAssertEqual(
+      defaults.string(forKey: "context_grabber.summarization_mode"),
+      SummarizationMode.llm.rawValue
+    )
+    XCTAssertEqual(
+      defaults.string(forKey: "context_grabber.summarization_provider"),
+      SummarizationProvider.openAI.rawValue
+    )
+    XCTAssertEqual(
+      defaults.string(forKey: "context_grabber.summarization_model"),
+      "gpt-4o-mini"
+    )
+    XCTAssertEqual(
+      defaults.object(forKey: "context_grabber.summary_token_budget") as? Int,
+      180
+    )
+    XCTAssertEqual(
+      defaults.object(forKey: "context_grabber.summary_timeout_ms") as? Int,
+      3_000
+    )
+  }
+
+  func testLoadHostSettingsDowngradesLLMModeWithoutProvider() {
+    let suiteName = "context-grabber-tests-\(UUID().uuidString.lowercased())"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      XCTFail("Expected ephemeral test UserDefaults suite.")
+      return
+    }
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    defaults.set("llm", forKey: "context_grabber.summarization_mode")
+    defaults.removeObject(forKey: "context_grabber.summarization_provider")
+
+    let settings = loadHostSettings(userDefaults: defaults)
+    XCTAssertEqual(settings.summarizationMode, .heuristic)
+    XCTAssertNil(settings.summarizationProvider)
   }
 
   func testFrontmostWindowIDFromWindowListPrefersFrontmostAppLayerZeroWindow() {
@@ -992,6 +1104,75 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertTrue(markdown.contains("- app_bundle_id: com.apple.Terminal"))
   }
 
+  func testRenderMarkdownBriefPresetOmitsChunksAndRawExcerpt() {
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "safari",
+      url: "https://example.com/brief",
+      title: "Brief Capture",
+      fullText: "One. Two. Three. Four. Five. Six. Seven.",
+      headings: [],
+      links: [
+        BrowserContextPayload.Link(text: "A", href: "https://example.com/a"),
+        BrowserContextPayload.Link(text: "B", href: "https://example.com/b"),
+      ],
+      metaDescription: "Meta",
+      siteName: "Example",
+      language: "en",
+      author: "Author",
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: []
+    )
+
+    let markdown = renderMarkdown(
+      requestID: "req-brief-1",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "browser_extension",
+      payload: payload,
+      outputPreset: .brief,
+      includeProductContextLine: true
+    )
+
+    XCTAssertTrue(markdown.contains("## Product Context"))
+    XCTAssertFalse(markdown.contains("## Content Chunks"))
+    XCTAssertFalse(markdown.contains("## Raw Excerpt"))
+    XCTAssertFalse(markdown.contains("- author:"))
+  }
+
+  func testRenderMarkdownFullPresetIncludesRawSectionsAndOptionalProductContextOff() {
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "chrome",
+      url: "https://example.com/full",
+      title: "Full Capture",
+      fullText: "Alpha paragraph.\n\nBeta paragraph.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: "Example",
+      language: "en",
+      author: "Author",
+      publishedTime: "2026-02-14T00:00:00.000Z",
+      selectionText: nil,
+      extractionWarnings: []
+    )
+
+    let markdown = renderMarkdown(
+      requestID: "req-full-1",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "browser_extension",
+      payload: payload,
+      outputPreset: .full,
+      includeProductContextLine: false
+    )
+
+    XCTAssertFalse(markdown.contains("## Product Context"))
+    XCTAssertTrue(markdown.contains("## Content Chunks"))
+    XCTAssertTrue(markdown.contains("## Raw Excerpt"))
+    XCTAssertTrue(markdown.contains("- author: Author"))
+  }
+
   func testRenderMarkdownIsDeterministicForSameInput() {
     let payload = BrowserContextPayload(
       source: "browser",
@@ -1025,5 +1206,116 @@ final class CapturePipelineTests: XCTestCase {
     )
 
     XCTAssertEqual(first, second)
+  }
+
+  func testResolveSummarizationSectionsFallbacksWhenProviderNotConfigured() async {
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "safari",
+      url: "https://example.com/summary",
+      title: "Summary Capture",
+      fullText: "First important sentence. Second sentence with details. Third point with context.",
+      headings: [BrowserContextPayload.Heading(level: 1, text: "Summary")],
+      links: [],
+      metaDescription: nil,
+      siteName: nil,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: nil
+    )
+    let settings = makeHostSettings(
+      summarizationMode: .llm,
+      summarizationProvider: nil
+    )
+
+    let result = await resolveSummarizationSections(
+      payload: payload,
+      settings: settings,
+      outputPreset: .brief
+    )
+
+    XCTAssertFalse(result.summary.isEmpty)
+    XCTAssertFalse(result.keyPoints.isEmpty)
+    XCTAssertTrue(result.warnings.contains(where: { $0.contains("provider not configured") }))
+  }
+
+  func testResolveSummarizationSectionsUsesLLMResultWhenAvailable() async {
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "chrome",
+      url: "https://example.com/llm",
+      title: "LLM Capture",
+      fullText: "Long body text. More body text. Another detail.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: nil,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: nil
+    )
+    let settings = makeHostSettings(
+      summarizationMode: .llm,
+      summarizationProvider: .openAI,
+      summarizationModel: "gpt-4o-mini"
+    )
+    let provider = StubLLMSummaryProvider(result: .success(LLMSummaryResponse(
+      summary: "LLM summary output.",
+      keyPoints: ["A", "B"]
+    )))
+
+    let result = await resolveSummarizationSections(
+      payload: payload,
+      settings: settings,
+      outputPreset: .brief,
+      llmProvider: provider
+    )
+
+    XCTAssertEqual(result.summary, "LLM summary output.")
+    XCTAssertEqual(result.keyPoints, ["A", "B"])
+    XCTAssertTrue(result.warnings.isEmpty)
+  }
+
+  func testResolveSummarizationSectionsFallsBackWhenLLMFails() async {
+    enum StubError: Error {
+      case failed
+    }
+
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "chrome",
+      url: "https://example.com/llm-fail",
+      title: "LLM Capture",
+      fullText: "First sentence. Second sentence. Third sentence.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: nil,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: nil
+    )
+    let settings = makeHostSettings(
+      summarizationMode: .llm,
+      summarizationProvider: .openAI
+    )
+    let provider = StubLLMSummaryProvider(result: .failure(StubError.failed))
+
+    let result = await resolveSummarizationSections(
+      payload: payload,
+      settings: settings,
+      outputPreset: .brief,
+      llmProvider: provider
+    )
+
+    XCTAssertFalse(result.summary.isEmpty)
+    XCTAssertFalse(result.keyPoints.isEmpty)
+    XCTAssertTrue(result.warnings.contains(where: { $0.contains("LLM summary fallback") }))
   }
 }
