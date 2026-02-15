@@ -87,4 +87,21 @@ describe("safari runtime content extraction", () => {
     expect((extraction.headings ?? []).length).toBe(2);
     expect((extraction.links ?? []).length).toBe(1);
   });
+
+  it("does not persist null selection text from runtime selection API", () => {
+    const runtimeGlobal = globalThis as {
+      getSelection: (() => Selection | null) | undefined;
+    };
+    const originalGetSelection = runtimeGlobal.getSelection;
+    runtimeGlobal.getSelection = () => null;
+
+    try {
+      const snapshot = capturePageSnapshotFromDocument(createFakeDocument(), {
+        includeSelectionText: true,
+      });
+      expect(snapshot.selectionText).toBeUndefined();
+    } finally {
+      runtimeGlobal.getSelection = originalGetSelection;
+    }
+  });
 });

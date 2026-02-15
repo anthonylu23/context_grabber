@@ -84,7 +84,9 @@ export const capturePageSnapshotFromDocument = (
     ? safeText(
         options.selectionProvider
           ? options.selectionProvider()
-          : String(globalThis.getSelection ? globalThis.getSelection() : ""),
+          : globalThis.getSelection
+            ? (globalThis.getSelection()?.toString() ?? "")
+            : "",
       )
     : undefined;
 
