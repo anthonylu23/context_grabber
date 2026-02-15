@@ -106,6 +106,28 @@ struct NativeMessagingPingResponse: Codable {
   let protocolVersion: String
 }
 
+func shouldPromptDesktopPermissionsPopup(
+  payload: BrowserContextPayload,
+  extractionMethod: String
+) -> Bool {
+  guard payload.source == "desktop" else {
+    return false
+  }
+
+  return extractionMethod == "metadata_only" || extractionMethod == "ocr"
+}
+
+func desktopPermissionsPopupFallbackDescription(extractionMethod: String) -> String {
+  switch extractionMethod {
+  case "ocr":
+    return "This capture fell back to OCR text extraction."
+  case "metadata_only":
+    return "This capture fell back to metadata-only."
+  default:
+    return "This capture used a desktop fallback path."
+  }
+}
+
 struct MarkdownCaptureOutput {
   let requestID: String
   let markdown: String
@@ -961,6 +983,12 @@ final class ContextGrabberModel: ObservableObject {
         autoDismissAfter: 4.0
       )
       setMenuBarIndicator(.success, autoResetAfter: 1.5)
+      if shouldPromptDesktopPermissionsPopup(
+        payload: resolution.payload,
+        extractionMethod: resolution.extractionMethod
+      ) {
+        presentDesktopPermissionsPopup(extractionMethod: resolution.extractionMethod)
+      }
 
       let triggerLabel = mode == "manual_hotkey" ? "hotkey" : "menu"
       let warningCount = (resolution.payload.extractionWarnings?.count ?? 0) + (clipboardCopyFailed ? 1 : 0)
@@ -1570,6 +1598,38 @@ final class ContextGrabberModel: ObservableObject {
     } else {
       statusLine = "Unable to open \(pane.displayName) settings"
       logger.error("Failed to open settings pane: \(pane.displayName)")
+    }
+  }
+
+  private func presentDesktopPermissionsPopup(extractionMethod: String) {
+    let readiness = desktopPermissionReadiness()
+    let accessibilityLabel = readiness.accessibilityTrusted ? "granted" : "missing"
+    let screenLabel = readiness.screenRecordingGranted.map { $0 ? "granted" : "missing" } ?? "unknown"
+    let fallbackDescription = desktopPermissionsPopupFallbackDescription(
+      extractionMethod: extractionMethod
+    )
+
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Desktop capture needs permissions"
+    alert.informativeText = """
+    \(fallbackDescription)
+    Approve Accessibility and Screen Recording for Context Grabber, then retry.
+
+    Accessibility: \(accessibilityLabel)
+    Screen Recording: \(screenLabel)
+    """
+    alert.addButton(withTitle: "Open Accessibility Settings")
+    alert.addButton(withTitle: "Open Screen Recording Settings")
+    alert.addButton(withTitle: "Dismiss")
+
+    switch alert.runModal() {
+    case .alertFirstButtonReturn:
+      openDesktopPermissionSettings(.accessibility)
+    case .alertSecondButtonReturn:
+      openDesktopPermissionSettings(.screenRecording)
+    default:
+      break
     }
   }
 

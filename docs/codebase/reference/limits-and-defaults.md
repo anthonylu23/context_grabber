@@ -3,7 +3,7 @@
 ## Capture and Transport
 - Protocol version: `1`
 - Host default timeout: `1200ms`
-- Desktop AX default threshold: `400` chars
+- Desktop AX default threshold: `240` chars
 - Desktop AX tuned thresholds:
   - dense editor apps: `220` chars
   - terminal-like apps: `180` chars

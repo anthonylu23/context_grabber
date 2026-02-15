@@ -93,6 +93,77 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  func testDesktopMetadataAndOCRTriggerPermissionsPopupPrompt() {
+    let desktopPayload = BrowserContextPayload(
+      source: "desktop",
+      browser: "desktop",
+      url: "app://com.example.App",
+      title: "Example App",
+      fullText: "",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: nil,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: ["AX and OCR extraction unavailable."]
+    )
+
+    XCTAssertTrue(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "metadata_only"
+      )
+    )
+    XCTAssertTrue(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "ocr"
+      )
+    )
+
+    let browserPayload = BrowserContextPayload(
+      source: "browser",
+      browser: "safari",
+      url: "https://example.com",
+      title: "Example",
+      fullText: "",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: nil,
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: nil
+    )
+
+    XCTAssertFalse(
+      shouldPromptDesktopPermissionsPopup(
+        payload: browserPayload,
+        extractionMethod: "metadata_only"
+      )
+    )
+  }
+
+  func testDesktopPermissionsPopupFallbackDescriptionMatchesMethod() {
+    XCTAssertEqual(
+      desktopPermissionsPopupFallbackDescription(extractionMethod: "ocr"),
+      "This capture fell back to OCR text extraction."
+    )
+    XCTAssertEqual(
+      desktopPermissionsPopupFallbackDescription(extractionMethod: "metadata_only"),
+      "This capture fell back to metadata-only."
+    )
+    XCTAssertEqual(
+      desktopPermissionsPopupFallbackDescription(extractionMethod: "accessibility"),
+      "This capture used a desktop fallback path."
+    )
+  }
+
   func testDesktopPermissionSettingsURLUsesExpectedPrivacyAnchors() {
     XCTAssertEqual(
       desktopPermissionSettingsURL(for: .accessibility)?.absoluteString,
@@ -777,7 +848,7 @@ final class CapturePipelineTests: XCTestCase {
   }
 
   func testResolveDesktopCaptureUsesDefaultThresholdForUntunedApps() async {
-    let accessibilityText = String(repeating: "a", count: 260)
+    let accessibilityText = String(repeating: "a", count: max(minimumAccessibilityTextChars - 1, 1))
     let resolution = await resolveDesktopCapture(
       context: DesktopCaptureContext(appName: "Notes", bundleIdentifier: "com.apple.Notes"),
       accessibilityTextOverride: accessibilityText,

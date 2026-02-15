@@ -164,7 +164,7 @@ interface NormalizedContext {
 - If extension timeout/error: create `metadata_only` capture using browser title + URL when available, with warning.
 4. If not browser capture (or browser capture has insufficient text under threshold):
 - Attempt Accessibility extraction from focused UI element/window.
-- If extracted text length >= `MIN_TEXT_LEN` (default `400` chars): use AX path.
+- If extracted text length >= `MIN_TEXT_LEN` (default `240` chars): use AX path.
 - Else run OCR on focused window image and use OCR path.
 5. Normalize, chunk, summarize, generate markdown.
 6. Persist file, copy clipboard, notify user with capture method + warnings.
@@ -418,7 +418,7 @@ interface NormalizedContext {
 - packaged WebExtension manifest (`packages/extension-safari/manifest.json`) targeting compiled runtime assets
 31. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `runtime -> live` fallback; fixture is explicit).
 32. Host unsupported-app capture now routes through a real desktop app resolver:
-- falls back to Accessibility focused-element extraction (`minimumAccessibilityTextChars = 400`)
+- falls back to Accessibility focused-element extraction (`minimumAccessibilityTextChars = 240`)
 - falls back to Vision OCR window/screen text extraction
 - falls back to deterministic desktop `metadata_only` when AX and OCR both fail
 - emits desktop provenance (`source_type: desktop_app`) and desktop metadata in markdown
@@ -499,6 +499,13 @@ interface NormalizedContext {
 - OCR path now retries once before metadata-only fallback when AX text is unavailable
 - metadata-only desktop captures now include a non-empty diagnostic excerpt in markdown content
 - host tests now cover OCR retry recovery and non-empty metadata-only fallback text
+50. Desktop permission guidance is now more proactive during fallback capture paths:
+- global AX minimum threshold lowered to `240` chars to reduce unnecessary OCR fallback
+- desktop permission popup now appears for both `metadata_only` and `ocr` extraction methods
+- docs updated to reflect new threshold and popup behavior
+51. Desktop permissions popup copy is now fallback-aware:
+- popup message now reports the actual capture fallback mode (`metadata_only` or `ocr`)
+- host tests now cover popup fallback-description mapping for OCR/metadata/default branches
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 

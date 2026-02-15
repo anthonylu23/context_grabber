@@ -23,7 +23,7 @@
 - walk child/parent/title-linked AX elements with depth/element caps
 - collect and dedupe normalized text attributes per node
 2. Adaptive threshold gate:
-- default AX threshold: `400` chars
+- default AX threshold: `240` chars
 - lower per-app thresholds for dense editor/terminal-style apps
 3. If AX text meets threshold, emit desktop accessibility capture.
 4. OCR fallback:

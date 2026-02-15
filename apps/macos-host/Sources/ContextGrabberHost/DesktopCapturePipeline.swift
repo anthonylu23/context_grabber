@@ -5,7 +5,7 @@ import Foundation
 @preconcurrency import ScreenCaptureKit
 import Vision
 
-let minimumAccessibilityTextChars = 400
+let minimumAccessibilityTextChars = 240
 let defaultAccessibilityTraversalDepth = 2
 let defaultAccessibilityTraversalMaxElements = 96
 private let desktopOCRRetryAttempts = 2
