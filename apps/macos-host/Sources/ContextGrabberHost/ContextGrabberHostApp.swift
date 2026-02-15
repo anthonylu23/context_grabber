@@ -383,6 +383,10 @@ final class SafariNativeMessagingTransport {
 
     let stdinPipe = Pipe()
     process.standardInput = stdinPipe
+    let processExited = DispatchSemaphore(value: 0)
+    process.terminationHandler = { _ in
+      processExited.signal()
+    }
 
     do {
       try process.run()
@@ -390,24 +394,46 @@ final class SafariNativeMessagingTransport {
       throw SafariNativeMessagingTransportError.launchFailed(error.localizedDescription)
     }
 
+    let stdoutResult = SynchronousResultBox<Data>()
+    let stderrResult = SynchronousResultBox<Data>()
+    let stdoutReadDone = DispatchSemaphore(value: 0)
+    let stderrReadDone = DispatchSemaphore(value: 0)
+
+    DispatchQueue.global(qos: .utility).async {
+      let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+      stdoutResult.set(data)
+      stdoutReadDone.signal()
+    }
+    DispatchQueue.global(qos: .utility).async {
+      let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+      stderrResult.set(data)
+      stderrReadDone.signal()
+    }
+
     if let stdinData {
-      stdinPipe.fileHandleForWriting.write(stdinData)
+      do {
+        try stdinPipe.fileHandleForWriting.write(contentsOf: stdinData)
+      } catch {
+        if process.isRunning {
+          process.terminate()
+          _ = processExited.wait(timeout: .now() + .milliseconds(200))
+        }
+        throw SafariNativeMessagingTransportError.launchFailed("Failed to write request payload: \(error.localizedDescription)")
+      }
     }
     stdinPipe.fileHandleForWriting.closeFile()
 
-    let timeoutDate = Date().addingTimeInterval(Double(timeoutMs) / 1_000.0)
-    while process.isRunning && Date() < timeoutDate {
-      _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
-    }
-
-    if process.isRunning {
+    let waitResult = processExited.wait(timeout: .now() + .milliseconds(max(1, timeoutMs)))
+    if waitResult == .timedOut {
       process.terminate()
+      _ = processExited.wait(timeout: .now() + .milliseconds(200))
       throw SafariNativeMessagingTransportError.timedOut
     }
 
-    process.waitUntilExit()
-    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    _ = stdoutReadDone.wait(timeout: .now() + .milliseconds(500))
+    _ = stderrReadDone.wait(timeout: .now() + .milliseconds(500))
+    let stdoutData = stdoutResult.get() ?? stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderrResult.get() ?? stderrPipe.fileHandleForReading.readDataToEndOfFile()
 
     return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
   }
@@ -637,6 +663,10 @@ final class ChromeNativeMessagingTransport {
 
     let stdinPipe = Pipe()
     process.standardInput = stdinPipe
+    let processExited = DispatchSemaphore(value: 0)
+    process.terminationHandler = { _ in
+      processExited.signal()
+    }
 
     do {
       try process.run()
@@ -644,24 +674,46 @@ final class ChromeNativeMessagingTransport {
       throw ChromeNativeMessagingTransportError.launchFailed(error.localizedDescription)
     }
 
+    let stdoutResult = SynchronousResultBox<Data>()
+    let stderrResult = SynchronousResultBox<Data>()
+    let stdoutReadDone = DispatchSemaphore(value: 0)
+    let stderrReadDone = DispatchSemaphore(value: 0)
+
+    DispatchQueue.global(qos: .utility).async {
+      let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+      stdoutResult.set(data)
+      stdoutReadDone.signal()
+    }
+    DispatchQueue.global(qos: .utility).async {
+      let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+      stderrResult.set(data)
+      stderrReadDone.signal()
+    }
+
     if let stdinData {
-      stdinPipe.fileHandleForWriting.write(stdinData)
+      do {
+        try stdinPipe.fileHandleForWriting.write(contentsOf: stdinData)
+      } catch {
+        if process.isRunning {
+          process.terminate()
+          _ = processExited.wait(timeout: .now() + .milliseconds(200))
+        }
+        throw ChromeNativeMessagingTransportError.launchFailed("Failed to write request payload: \(error.localizedDescription)")
+      }
     }
     stdinPipe.fileHandleForWriting.closeFile()
 
-    let timeoutDate = Date().addingTimeInterval(Double(timeoutMs) / 1_000.0)
-    while process.isRunning && Date() < timeoutDate {
-      _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
-    }
-
-    if process.isRunning {
+    let waitResult = processExited.wait(timeout: .now() + .milliseconds(max(1, timeoutMs)))
+    if waitResult == .timedOut {
       process.terminate()
+      _ = processExited.wait(timeout: .now() + .milliseconds(200))
       throw ChromeNativeMessagingTransportError.timedOut
     }
 
-    process.waitUntilExit()
-    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    _ = stdoutReadDone.wait(timeout: .now() + .milliseconds(500))
+    _ = stderrReadDone.wait(timeout: .now() + .milliseconds(500))
+    let stdoutData = stdoutResult.get() ?? stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderrResult.get() ?? stderrPipe.fileHandleForReading.readDataToEndOfFile()
 
     return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
   }
