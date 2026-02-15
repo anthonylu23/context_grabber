@@ -230,6 +230,17 @@ func recentHostCaptureFiles(
     .map { $0 }
 }
 
+func outputDirectoryValidationError(
+  _ directoryURL: URL,
+  writableCheck: (URL) -> Bool = { isDirectoryWritable($0) }
+) -> String? {
+  let normalizedURL = directoryURL.standardizedFileURL
+  guard writableCheck(normalizedURL) else {
+    return "Selected output directory is not writable."
+  }
+  return nil
+}
+
 func isDirectoryWritable(
   _ directoryURL: URL,
   ensureDirectory: (URL) throws -> Void = defaultEnsureDirectory,
