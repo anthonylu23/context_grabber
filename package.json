@@ -10,7 +10,9 @@
     "format": "biome format --write .",
     "typecheck": "bun run scripts/check-workspace.ts typecheck",
     "test": "bun run scripts/check-workspace.ts test",
-    "check": "bun run scripts/check-workspace.ts check"
+    "check": "bun run scripts/check-workspace.ts check",
+    "safari:container:sync": "bash scripts/sync-safari-container.sh",
+    "safari:container:build": "bash scripts/build-safari-container.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

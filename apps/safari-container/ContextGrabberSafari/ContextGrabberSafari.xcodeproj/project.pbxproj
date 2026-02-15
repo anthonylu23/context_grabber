@@ -1,0 +1,605 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		922972DB2F41602A007A8994 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922972DA2F41602A007A8994 /* AppDelegate.swift */; };
+		922972DF2F41602A007A8994 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 922972DD2F41602A007A8994 /* Main.html */; };
+		922972E12F41602A007A8994 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 922972E02F41602A007A8994 /* Icon.png */; };
+		922972E32F41602A007A8994 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 922972E22F41602A007A8994 /* Style.css */; };
+		922972E52F41602A007A8994 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 922972E42F41602A007A8994 /* Script.js */; };
+		922972E72F41602A007A8994 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922972E62F41602A007A8994 /* ViewController.swift */; };
+		922972EA2F41602A007A8994 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 922972E82F41602A007A8994 /* Main.storyboard */; };
+		922972EC2F41602B007A8994 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 922972EB2F41602B007A8994 /* Assets.xcassets */; };
+		922972F32F41602B007A8994 /* ContextGrabberSafari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 922972F22F41602B007A8994 /* ContextGrabberSafari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		922972F82F41602B007A8994 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922972F72F41602B007A8994 /* SafariWebExtensionHandler.swift */; };
+		922973072F41602B007A8994 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = 922973042F41602B007A8994 /* dist */; };
+		922973082F41602B007A8994 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 922973052F41602B007A8994 /* icons */; };
+		922973092F41602B007A8994 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 922973062F41602B007A8994 /* manifest.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		922972F42F41602B007A8994 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 922972CF2F41602A007A8994 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 922972F12F41602B007A8994;
+			remoteInfo = "ContextGrabberSafari Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		922972FF2F41602B007A8994 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				922972F32F41602B007A8994 /* ContextGrabberSafari Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		922972D72F41602A007A8994 /* ContextGrabberSafari.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ContextGrabberSafari.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		922972DA2F41602A007A8994 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		922972DE2F41602A007A8994 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		922972E02F41602A007A8994 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		922972E22F41602A007A8994 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		922972E42F41602A007A8994 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		922972E62F41602A007A8994 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		922972E92F41602A007A8994 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		922972EB2F41602B007A8994 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		922972ED2F41602B007A8994 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		922972F22F41602B007A8994 /* ContextGrabberSafari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ContextGrabberSafari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		922972F72F41602B007A8994 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		922972F92F41602B007A8994 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		922973042F41602B007A8994 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; name = dist; path = Resources/dist; sourceTree = "<group>"; };
+		922973052F41602B007A8994 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		922973062F41602B007A8994 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		922972D42F41602A007A8994 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		922972EF2F41602B007A8994 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		922972CE2F41602A007A8994 = {
+			isa = PBXGroup;
+			children = (
+				922972D92F41602A007A8994 /* ContextGrabberSafari */,
+				922972F62F41602B007A8994 /* ContextGrabberSafari Extension */,
+				922972D82F41602A007A8994 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		922972D82F41602A007A8994 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				922972D72F41602A007A8994 /* ContextGrabberSafari.app */,
+				922972F22F41602B007A8994 /* ContextGrabberSafari Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		922972D92F41602A007A8994 /* ContextGrabberSafari */ = {
+			isa = PBXGroup;
+			children = (
+				922972DA2F41602A007A8994 /* AppDelegate.swift */,
+				922972E62F41602A007A8994 /* ViewController.swift */,
+				922972E82F41602A007A8994 /* Main.storyboard */,
+				922972EB2F41602B007A8994 /* Assets.xcassets */,
+				922972ED2F41602B007A8994 /* Info.plist */,
+				922972DC2F41602A007A8994 /* Resources */,
+			);
+			path = ContextGrabberSafari;
+			sourceTree = "<group>";
+		};
+		922972DC2F41602A007A8994 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				922972DD2F41602A007A8994 /* Main.html */,
+				922972E02F41602A007A8994 /* Icon.png */,
+				922972E22F41602A007A8994 /* Style.css */,
+				922972E42F41602A007A8994 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		922972F62F41602B007A8994 /* ContextGrabberSafari Extension */ = {
+			isa = PBXGroup;
+			children = (
+				922973032F41602B007A8994 /* Resources */,
+				922972F72F41602B007A8994 /* SafariWebExtensionHandler.swift */,
+				922972F92F41602B007A8994 /* Info.plist */,
+			);
+			path = "ContextGrabberSafari Extension";
+			sourceTree = "<group>";
+		};
+		922973032F41602B007A8994 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				922973042F41602B007A8994 /* dist */,
+				922973052F41602B007A8994 /* icons */,
+				922973062F41602B007A8994 /* manifest.json */,
+			);
+			name = Resources;
+			path = "ContextGrabberSafari Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		922972D62F41602A007A8994 /* ContextGrabberSafari */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 922973002F41602B007A8994 /* Build configuration list for PBXNativeTarget "ContextGrabberSafari" */;
+			buildPhases = (
+				922972D32F41602A007A8994 /* Sources */,
+				922972D42F41602A007A8994 /* Frameworks */,
+				922972D52F41602A007A8994 /* Resources */,
+				922972FF2F41602B007A8994 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				922972F52F41602B007A8994 /* PBXTargetDependency */,
+			);
+			name = ContextGrabberSafari;
+			packageProductDependencies = (
+			);
+			productName = ContextGrabberSafari;
+			productReference = 922972D72F41602A007A8994 /* ContextGrabberSafari.app */;
+			productType = "com.apple.product-type.application";
+		};
+		922972F12F41602B007A8994 /* ContextGrabberSafari Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 922972FC2F41602B007A8994 /* Build configuration list for PBXNativeTarget "ContextGrabberSafari Extension" */;
+			buildPhases = (
+				922972EE2F41602B007A8994 /* Sources */,
+				922972EF2F41602B007A8994 /* Frameworks */,
+				922972F02F41602B007A8994 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ContextGrabberSafari Extension";
+			packageProductDependencies = (
+			);
+			productName = "ContextGrabberSafari Extension";
+			productReference = 922972F22F41602B007A8994 /* ContextGrabberSafari Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		922972CF2F41602A007A8994 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					922972D62F41602A007A8994 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					922972F12F41602B007A8994 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+				};
+			};
+			buildConfigurationList = 922972D22F41602A007A8994 /* Build configuration list for PBXProject "ContextGrabberSafari" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 922972CE2F41602A007A8994;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 922972D82F41602A007A8994 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				922972D62F41602A007A8994 /* ContextGrabberSafari */,
+				922972F12F41602B007A8994 /* ContextGrabberSafari Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		922972D52F41602A007A8994 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				922972E12F41602A007A8994 /* Icon.png in Resources */,
+				922972EA2F41602A007A8994 /* Main.storyboard in Resources */,
+				922972E52F41602A007A8994 /* Script.js in Resources */,
+				922972DF2F41602A007A8994 /* Main.html in Resources */,
+				922972EC2F41602B007A8994 /* Assets.xcassets in Resources */,
+				922972E32F41602A007A8994 /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		922972F02F41602B007A8994 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				922973072F41602B007A8994 /* dist in Resources */,
+				922973092F41602B007A8994 /* manifest.json in Resources */,
+				922973082F41602B007A8994 /* icons in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		922972D32F41602A007A8994 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				922972E72F41602A007A8994 /* ViewController.swift in Sources */,
+				922972DB2F41602A007A8994 /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		922972EE2F41602B007A8994 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				922972F82F41602B007A8994 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		922972F52F41602B007A8994 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 922972F12F41602B007A8994 /* ContextGrabberSafari Extension */;
+			targetProxy = 922972F42F41602B007A8994 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		922972DD2F41602A007A8994 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				922972DE2F41602A007A8994 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		922972E82F41602A007A8994 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				922972E92F41602A007A8994 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		922972FA2F41602B007A8994 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		922972FB2F41602B007A8994 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		922972FD2F41602B007A8994 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ContextGrabberSafari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ContextGrabberSafari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.contextgrabber.ContextGrabberSafari.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		922972FE2F41602B007A8994 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ContextGrabberSafari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ContextGrabberSafari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.contextgrabber.ContextGrabberSafari.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		922973012F41602B007A8994 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ContextGrabberSafari/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ContextGrabberSafari;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.contextgrabber.ContextGrabberSafari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		922973022F41602B007A8994 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ContextGrabberSafari/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ContextGrabberSafari;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.contextgrabber.ContextGrabberSafari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		922972D22F41602A007A8994 /* Build configuration list for PBXProject "ContextGrabberSafari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				922972FA2F41602B007A8994 /* Debug */,
+				922972FB2F41602B007A8994 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		922972FC2F41602B007A8994 /* Build configuration list for PBXNativeTarget "ContextGrabberSafari Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				922972FD2F41602B007A8994 /* Debug */,
+				922972FE2F41602B007A8994 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		922973002F41602B007A8994 /* Build configuration list for PBXNativeTarget "ContextGrabberSafari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				922973012F41602B007A8994 /* Debug */,
+				922973022F41602B007A8994 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 922972CF2F41602A007A8994 /* Project object */;
+}

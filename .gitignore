@@ -21,3 +21,8 @@ coverage/
 .idea/
 .vscode/
 .claude/
+.tmp/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
