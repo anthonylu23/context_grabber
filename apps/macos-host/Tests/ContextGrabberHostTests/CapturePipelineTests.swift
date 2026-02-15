@@ -635,6 +635,17 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  func testRecentHostCaptureFilesReturnsEmptyWhenLimitIsZero() throws {
+    try withTemporaryDirectory { directoryURL in
+      let captureURL = directoryURL.appendingPathComponent("20260214-231151-ad3fdb24.md", isDirectory: false)
+      try sampleCaptureMarkdown(requestID: "ad3fdb24-5a1c-49d0-bfae-144f3bf96149")
+        .write(to: captureURL, atomically: true, encoding: .utf8)
+
+      let entries = recentHostCaptureFiles([captureURL], limit: 0)
+      XCTAssertEqual(entries, [])
+    }
+  }
+
   func testIsDirectoryWritableRequiresSuccessfulProbeWrite() throws {
     try withTemporaryDirectory { directoryURL in
       XCTAssertTrue(isDirectoryWritable(directoryURL))

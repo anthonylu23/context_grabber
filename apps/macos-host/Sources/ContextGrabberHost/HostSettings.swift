@@ -390,7 +390,7 @@ func recentHostCaptureFiles(
 ) -> [URL] {
   return filterHostGeneratedCaptureFiles(files, readMarkdown: readMarkdown)
     .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
-    .prefix(max(1, limit))
+    .prefix(max(0, limit))
     .map { $0 }
 }
 
