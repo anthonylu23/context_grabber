@@ -36,14 +36,57 @@ const escapeAppleScriptString = (value: string): string => {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 };
 
+const sanitizeProcessMessage = (value: string): string => {
+  // Remove ASCII control bytes (including NUL) so warning text stays valid markdown text.
+  let sanitized = "";
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    const isPrintable = code >= 32 && code !== 127;
+    const isAllowedWhitespace = code === 9 || code === 10 || code === 13;
+    if (isPrintable || isAllowedWhitespace) {
+      sanitized += char;
+    }
+  }
+  return sanitized.trim();
+};
+
+const decodeSnapshotFromStdout = (stdout: string, appName: string): unknown => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown JSON parse failure.";
+    throw new Error(`${appName} extraction produced invalid JSON: ${reason}`);
+  }
+
+  // Arc/Chromium AppleScript bridges can occasionally return a JSON string literal
+  // containing escaped JSON; decode that second layer when present.
+  if (typeof parsed === "string") {
+    const nested = parsed.trim();
+    if (nested.length === 0) {
+      return parsed;
+    }
+
+    try {
+      return JSON.parse(nested);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown nested JSON parse failure.";
+      throw new Error(
+        `${appName} extraction produced wrapped JSON that could not be decoded: ${reason}`,
+      );
+    }
+  }
+
+  return parsed;
+};
+
 const buildAppleScriptProgram = (javascript: string, appName = "Google Chrome"): string[] => {
   const escapedScript = escapeAppleScriptString(javascript);
 
   return [
     `tell application "${appName}"`,
     `if (count of windows) = 0 then error "No ${appName} window is open."`,
-    "set frontTab to active tab of front window",
-    `set pageJSON to execute frontTab javascript "${escapedScript}"`,
+    `set pageJSON to execute (active tab of front window) javascript "${escapedScript}"`,
     "return pageJSON",
     "end tell",
   ];
@@ -71,7 +114,7 @@ export const extractActiveTabContextFromChrome = (
   }
 
   if (typeof result.status === "number" && result.status !== 0) {
-    const stderr = (result.stderr || "").trim();
+    const stderr = sanitizeProcessMessage(result.stderr || "");
     throw new Error(stderr.length > 0 ? stderr : `osascript exited with status ${result.status}`);
   }
 
@@ -80,13 +123,7 @@ export const extractActiveTabContextFromChrome = (
     throw new Error(`${appName} extraction returned an empty response.`);
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "Unknown JSON parse failure.";
-    throw new Error(`${appName} extraction produced invalid JSON: ${reason}`);
-  }
+  const parsed = decodeSnapshotFromStdout(stdout, appName);
 
   return toChromeExtractionInput(parsed, options.includeSelectionText);
 };

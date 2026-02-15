@@ -21,6 +21,19 @@ const createFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string
   return binaryPath;
 };
 
+const createWrappedJsonOsaScriptBinary = async (wrappedPayloadPath: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-osa-wrapped-"));
+  const binaryPath = join(dir, "wrapped-osascript.sh");
+
+  await writeFile(
+    binaryPath,
+    ["#!/bin/sh", `cat "${wrappedPayloadPath}"`, "exit 0", ""].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
+
 const createAppleScriptSpyBinary = async (outputFilePath: string): Promise<string> => {
   const dir = await mkdtemp(join(tmpdir(), "context-grabber-osa-spy-"));
   const binaryPath = join(dir, "spy-osascript.sh");
@@ -34,6 +47,24 @@ const createAppleScriptSpyBinary = async (outputFilePath: string): Promise<strin
       // Output valid JSON so the extraction doesn't fail on parse
       'echo \'{"url":"https://example.com","title":"Test","fullText":"body","headings":[],"links":[]}\'',
       "exit 0",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
+
+const createFailingOsaScriptBinary = async (): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-osa-fail-"));
+  const binaryPath = join(dir, "fail-osascript.sh");
+
+  await writeFile(
+    binaryPath,
+    [
+      "#!/bin/sh",
+      "printf '144:2431: execution error: Arc got an error: Cannot make «class \\000\\000\\000\\000» id \"22DB91DB-4AA9-4023-8C36-396EDB9C5715\" into type specifier. (-1700).\\n' 1>&2",
+      "exit 1",
       "",
     ].join("\n"),
     "utf8",
@@ -128,6 +159,39 @@ describe("chrome active-tab extraction helpers", () => {
     }
   });
 
+  it("decodes wrapped JSON string payloads from osascript output", async () => {
+    const wrappedPath = join(tmpdir(), `context-grabber-chrome-wrapped-${Date.now()}.json`);
+    let wrappedBinary: string | undefined;
+    try {
+      await writeFile(
+        wrappedPath,
+        JSON.stringify(
+          JSON.stringify({
+            url: "https://example.com/wrapped",
+            title: "Wrapped JSON",
+            fullText: "Wrapped output.",
+            headings: [],
+            links: [],
+          }),
+        ),
+        "utf8",
+      );
+      wrappedBinary = await createWrappedJsonOsaScriptBinary(wrappedPath);
+      const payload = extractActiveTabContextFromChrome({
+        includeSelectionText: false,
+        osascriptBinary: wrappedBinary,
+      });
+
+      expect(payload.title).toBe("Wrapped JSON");
+      expect(payload.url).toBe("https://example.com/wrapped");
+    } finally {
+      await rm(wrappedPath, { force: true });
+      if (wrappedBinary) {
+        await rm(dirname(wrappedBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
   it("uses custom chromeAppName in AppleScript when provided", async () => {
     const argsOutputPath = join(tmpdir(), `context-grabber-osa-args-${Date.now()}.txt`);
     let spyBinary: string | undefined;
@@ -145,6 +209,7 @@ describe("chrome active-tab extraction helpers", () => {
 
       expect(capturedArgs.includes('tell application "Arc"')).toBe(true);
       expect(capturedArgs.includes("No Arc window is open.")).toBe(true);
+      expect(capturedArgs.includes("execute (active tab of front window) javascript")).toBe(true);
       expect(capturedArgs.includes("Google Chrome")).toBe(false);
     } finally {
       await rm(argsOutputPath, { force: true });
@@ -170,10 +235,38 @@ describe("chrome active-tab extraction helpers", () => {
 
       expect(capturedArgs.includes('tell application "Google Chrome"')).toBe(true);
       expect(capturedArgs.includes("No Google Chrome window is open.")).toBe(true);
+      expect(capturedArgs.includes("execute (active tab of front window) javascript")).toBe(true);
     } finally {
       await rm(argsOutputPath, { force: true });
       if (spyBinary) {
         await rm(dirname(spyBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("sanitizes control bytes from osascript stderr errors", async () => {
+    let failingBinary: string | undefined;
+    try {
+      failingBinary = await createFailingOsaScriptBinary();
+
+      let thrown: Error | undefined;
+      try {
+        extractActiveTabContextFromChrome({
+          includeSelectionText: false,
+          osascriptBinary: failingBinary,
+          chromeAppName: "Arc",
+        });
+      } catch (error) {
+        thrown = error as Error;
+      }
+
+      expect(Boolean(thrown)).toBe(true);
+      const message = thrown?.message ?? "";
+      expect(message.includes("\u0000")).toBe(false);
+      expect(message.includes("into type specifier")).toBe(true);
+    } finally {
+      if (failingBinary) {
+        await rm(dirname(failingBinary), { recursive: true, force: true });
       }
     }
   });
