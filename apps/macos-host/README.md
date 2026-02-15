@@ -36,6 +36,23 @@ cd apps/macos-host
 swift run
 ```
 
+## Run (Headless CLI Mode)
+```bash
+cd /path/to/context_grabber/apps/macos-host
+
+# Show usage
+swift run ContextGrabberHost --capture --help
+
+# Capture a desktop app by process name
+swift run ContextGrabberHost --capture --app Finder
+
+# Capture by bundle id, forcing AX path
+swift run ContextGrabberHost --capture --bundle-id com.apple.dt.Xcode --method ax
+
+# Emit JSON payload + rendered markdown
+swift run ContextGrabberHost --capture --format json
+```
+
 ## Troubleshooting
 - If capture falls back to metadata-only, run `Run Diagnostics` from the menu and check transport reachability.
 - Ensure Bun is installed and both extension packages exist in the repo root:
@@ -58,10 +75,10 @@ swift run
 - OCR image capture now uses ScreenCaptureKit (`SCScreenshotManager`) with window-first targeting and display fallback.
 - Permission remediation is available directly from the host menu via `Open Accessibility Settings` and `Open Screen Recording Settings`.
 - Host source is split across focused modules:
-  - `ContextGrabberHostApp.swift` (app + orchestration)
-  - `DesktopCapturePipeline.swift` (desktop AX/OCR capture path)
-  - `MenuBarPresentation.swift` (menu indicator/label helpers)
-  - `MarkdownRendering.swift` (deterministic markdown rendering)
+  - `Sources/ContextGrabberCore/` (shared library for GUI + CLI mode)
+  - `ContextGrabberHostLauncher.swift` (dual-mode entry routing)
+  - `CLIEntryPoint.swift` (headless capture mode)
+  - `ContextGrabberHostApp.swift` (menu app + orchestration)
 
 ## Related Docs
 - Project plan: `docs/plans/context-grabber-project-plan.md`

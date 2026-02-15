@@ -1,14 +1,28 @@
 import Foundation
 
-struct CaptureResolution {
-  let payload: BrowserContextPayload
-  let extractionMethod: String
-  let transportStatus: String
-  let warning: String?
-  let errorCode: String?
+public struct CaptureResolution: Sendable {
+  public let payload: BrowserContextPayload
+  public let extractionMethod: String
+  public let transportStatus: String
+  public let warning: String?
+  public let errorCode: String?
+
+  public init(
+    payload: BrowserContextPayload,
+    extractionMethod: String,
+    transportStatus: String,
+    warning: String?,
+    errorCode: String?
+  ) {
+    self.payload = payload
+    self.extractionMethod = extractionMethod
+    self.transportStatus = transportStatus
+    self.warning = warning
+    self.errorCode = errorCode
+  }
 }
 
-func createMetadataOnlyBrowserPayload(
+public func createMetadataOnlyBrowserPayload(
   browser: String,
   details: [String: String]?,
   warning: String,
@@ -35,7 +49,7 @@ func createMetadataOnlyBrowserPayload(
   )
 }
 
-func createBrowserMetadataFallbackResolution(
+public func createBrowserMetadataFallbackResolution(
   target: BrowserTarget,
   code: String,
   message: String,
@@ -57,7 +71,7 @@ func createBrowserMetadataFallbackResolution(
   )
 }
 
-func resolveBrowserCapture(
+public func resolveBrowserCapture(
   target: BrowserTarget,
   bridgeResult: Result<ExtensionBridgeMessage, Error>,
   frontAppName: String?

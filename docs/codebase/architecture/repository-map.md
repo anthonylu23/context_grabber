@@ -7,16 +7,22 @@
 - `packages/extension-safari`: Safari bridge + runtime modules.
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
-- `packages/companion-cli`: removed — being rebuilt as Go CLI under `cli/` (see `docs/plans/cli-expansion-plan.md`).
+- `packages/companion-cli`: removed.
+- `cli`: Go companion CLI scaffold (`list tabs`, `list apps`, `doctor`) with capture/MCP phases in progress.
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules
-- `ContextGrabberHostApp.swift`: app scene + host model orchestration and menu wiring.
-- `BrowserCapturePipeline.swift`: browser transport result resolution and metadata fallback mapping.
-- `DesktopCapturePipeline.swift`: desktop AX/OCR extraction and resolver.
-- `DiagnosticsPresentation.swift`: diagnostics status + summary formatting helpers.
-- `MenuBarPresentation.swift`: menu icon state and capture label formatting helpers.
-- `MarkdownRendering.swift`: deterministic markdown renderer and related text helpers.
+- `Sources/ContextGrabberCore/`: shared library target used by GUI and CLI modes.
+  - `BrowserCapturePipeline.swift`: browser transport result resolution + metadata fallback mapping.
+  - `DesktopCapturePipeline.swift`: desktop AX/OCR extraction and resolver.
+  - `DiagnosticsPresentation.swift`: diagnostics status + summary formatting helpers.
+  - `MenuBarPresentation.swift`: menu icon state and capture label formatting helpers.
+  - `MarkdownRendering.swift`: deterministic markdown renderer and related text helpers.
+  - `HostSettings.swift`, `Summarization.swift`: settings persistence + summary generation.
+  - `TransportLayer.swift`, `ProtocolTypes.swift`, `BrowserDetection.swift`, `CoreTypes.swift`: extracted protocol and transport core.
+- `Sources/ContextGrabberHost/ContextGrabberHostLauncher.swift`: entrypoint that routes to GUI or headless CLI mode.
+- `Sources/ContextGrabberHost/CLIEntryPoint.swift`: CLI-mode argument parsing + headless desktop capture execution.
+- `Sources/ContextGrabberHost/ContextGrabberHostApp.swift`: SwiftUI menu bar app scene + host model orchestration.
 
 ## Test Locations
 - Swift host tests: `apps/macos-host/Tests/ContextGrabberHostTests/CapturePipelineTests.swift`

@@ -15,52 +15,52 @@ private enum HostSettingsKeys {
   static let summaryTimeoutMs = "context_grabber.summary_timeout_ms"
 }
 
-enum ClipboardCopyMode: String, CaseIterable {
+public enum ClipboardCopyMode: String, CaseIterable, Sendable {
   case markdownFile = "markdown_file"
   case text = "text"
 }
 
-enum OutputFormatPreset: String, CaseIterable {
+public enum OutputFormatPreset: String, CaseIterable, Sendable {
   case brief = "brief"
   case full = "full"
 }
 
-enum SummarizationMode: String, CaseIterable {
+public enum SummarizationMode: String, CaseIterable, Sendable {
   case heuristic = "heuristic"
   case llm = "llm"
 }
 
-enum SummarizationProvider: String, CaseIterable {
+public enum SummarizationProvider: String, CaseIterable, Sendable {
   case openAI = "openai"
   case anthropic = "anthropic"
   case gemini = "gemini"
   case ollama = "ollama"
 }
 
-struct HostSettings {
-  static let defaultRetentionMaxFileCount = 200
-  static let defaultRetentionMaxAgeDays = 30
-  static let defaultClipboardCopyMode: ClipboardCopyMode = .markdownFile
-  static let defaultOutputFormatPreset: OutputFormatPreset = .full
-  static let defaultIncludeProductContextLine = true
-  static let defaultSummarizationMode: SummarizationMode = .heuristic
-  static let defaultSummaryTokenBudget = 120
-  static let defaultSummaryTimeoutMs = 2_500
+public struct HostSettings: Sendable {
+  public static let defaultRetentionMaxFileCount = 200
+  public static let defaultRetentionMaxAgeDays = 30
+  public static let defaultClipboardCopyMode: ClipboardCopyMode = .markdownFile
+  public static let defaultOutputFormatPreset: OutputFormatPreset = .full
+  public static let defaultIncludeProductContextLine = true
+  public static let defaultSummarizationMode: SummarizationMode = .heuristic
+  public static let defaultSummaryTokenBudget = 120
+  public static let defaultSummaryTimeoutMs = 2_500
 
-  var outputDirectoryPath: String?
-  var retentionMaxFileCount: Int
-  var retentionMaxAgeDays: Int
-  var capturesPausedPlaceholder: Bool
-  var clipboardCopyMode: ClipboardCopyMode
-  var outputFormatPreset: OutputFormatPreset
-  var includeProductContextLine: Bool
-  var summarizationMode: SummarizationMode
-  var summarizationProvider: SummarizationProvider?
-  var summarizationModel: String?
-  var summaryTokenBudget: Int
-  var summaryTimeoutMs: Int
+  public var outputDirectoryPath: String?
+  public var retentionMaxFileCount: Int
+  public var retentionMaxAgeDays: Int
+  public var capturesPausedPlaceholder: Bool
+  public var clipboardCopyMode: ClipboardCopyMode
+  public var outputFormatPreset: OutputFormatPreset
+  public var includeProductContextLine: Bool
+  public var summarizationMode: SummarizationMode
+  public var summarizationProvider: SummarizationProvider?
+  public var summarizationModel: String?
+  public var summaryTokenBudget: Int
+  public var summaryTimeoutMs: Int
 
-  var outputDirectoryURL: URL? {
+  public var outputDirectoryURL: URL? {
     guard let outputDirectoryPath else {
       return nil
     }
@@ -70,15 +70,48 @@ struct HostSettings {
     }
     return URL(fileURLWithPath: trimmed, isDirectory: true)
   }
+
+  public init(
+    outputDirectoryPath: String? = nil,
+    retentionMaxFileCount: Int,
+    retentionMaxAgeDays: Int,
+    capturesPausedPlaceholder: Bool,
+    clipboardCopyMode: ClipboardCopyMode,
+    outputFormatPreset: OutputFormatPreset,
+    includeProductContextLine: Bool,
+    summarizationMode: SummarizationMode,
+    summarizationProvider: SummarizationProvider? = nil,
+    summarizationModel: String? = nil,
+    summaryTokenBudget: Int,
+    summaryTimeoutMs: Int
+  ) {
+    self.outputDirectoryPath = outputDirectoryPath
+    self.retentionMaxFileCount = retentionMaxFileCount
+    self.retentionMaxAgeDays = retentionMaxAgeDays
+    self.capturesPausedPlaceholder = capturesPausedPlaceholder
+    self.clipboardCopyMode = clipboardCopyMode
+    self.outputFormatPreset = outputFormatPreset
+    self.includeProductContextLine = includeProductContextLine
+    self.summarizationMode = summarizationMode
+    self.summarizationProvider = summarizationProvider
+    self.summarizationModel = summarizationModel
+    self.summaryTokenBudget = summaryTokenBudget
+    self.summaryTimeoutMs = summaryTimeoutMs
+  }
 }
 
-let retentionMaxFileCountOptions: [Int] = [50, 100, 200, 500, 0]
-let retentionMaxAgeDaysOptions: [Int] = [7, 30, 90, 0]
-let summaryTokenBudgetOptions: [Int] = [80, 120, 180]
+public let retentionMaxFileCountOptions: [Int] = [50, 100, 200, 500, 0]
+public let retentionMaxAgeDaysOptions: [Int] = [7, 30, 90, 0]
+public let summaryTokenBudgetOptions: [Int] = [80, 120, 180]
 
-struct HostRetentionPolicy {
-  let maxFileCount: Int
-  let maxFileAgeDays: Int
+public struct HostRetentionPolicy: Sendable {
+  public let maxFileCount: Int
+  public let maxFileAgeDays: Int
+
+  public init(maxFileCount: Int, maxFileAgeDays: Int) {
+    self.maxFileCount = maxFileCount
+    self.maxFileAgeDays = maxFileAgeDays
+  }
 }
 
 private let captureFrontmatterRequiredKeys: Set<String> = [
@@ -89,21 +122,21 @@ private let captureFrontmatterRequiredKeys: Set<String> = [
 ]
 private let captureFrontmatterScanLineLimit = 120
 
-func retentionMaxFileCountLabel(_ value: Int) -> String {
+public func retentionMaxFileCountLabel(_ value: Int) -> String {
   if value <= 0 {
     return "Unlimited"
   }
   return "\(value)"
 }
 
-func retentionMaxAgeDaysLabel(_ value: Int) -> String {
+public func retentionMaxAgeDaysLabel(_ value: Int) -> String {
   if value <= 0 {
     return "Unlimited"
   }
   return "\(value) days"
 }
 
-func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
+public func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
   let storedCount = userDefaults.object(forKey: HostSettingsKeys.retentionMaxFileCount) as? Int
   let storedAge = userDefaults.object(forKey: HostSettingsKeys.retentionMaxAgeDays) as? Int
   let outputDirectoryPath = userDefaults.string(forKey: HostSettingsKeys.outputDirectoryPath)
@@ -166,7 +199,7 @@ func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
   )
 }
 
-func saveHostSettings(
+public func saveHostSettings(
   _ settings: HostSettings,
   userDefaults: UserDefaults = .standard
 ) {
@@ -204,7 +237,7 @@ func saveHostSettings(
   userDefaults.set(settings.summaryTimeoutMs, forKey: HostSettingsKeys.summaryTimeoutMs)
 }
 
-func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
+public func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
   switch mode {
   case .markdownFile:
     return "Markdown File"
@@ -213,7 +246,7 @@ func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
   }
 }
 
-func outputFormatPresetLabel(_ preset: OutputFormatPreset) -> String {
+public func outputFormatPresetLabel(_ preset: OutputFormatPreset) -> String {
   switch preset {
   case .brief:
     return "Brief"
@@ -222,7 +255,7 @@ func outputFormatPresetLabel(_ preset: OutputFormatPreset) -> String {
   }
 }
 
-func summarizationModeLabel(_ mode: SummarizationMode) -> String {
+public func summarizationModeLabel(_ mode: SummarizationMode) -> String {
   switch mode {
   case .heuristic:
     return "Heuristic"
@@ -231,7 +264,7 @@ func summarizationModeLabel(_ mode: SummarizationMode) -> String {
   }
 }
 
-func summarizationProviderLabel(_ provider: SummarizationProvider?) -> String {
+public func summarizationProviderLabel(_ provider: SummarizationProvider?) -> String {
   guard let provider else {
     return "Not Set"
   }
@@ -248,21 +281,21 @@ func summarizationProviderLabel(_ provider: SummarizationProvider?) -> String {
   }
 }
 
-func sanitizeSummaryTokenBudget(_ value: Int?, fallback: Int) -> Int {
+public func sanitizeSummaryTokenBudget(_ value: Int?, fallback: Int) -> Int {
   guard let value, summaryTokenBudgetOptions.contains(value) else {
     return fallback
   }
   return value
 }
 
-func sanitizeSummaryTimeoutMs(_ value: Int?, fallback: Int) -> Int {
+public func sanitizeSummaryTimeoutMs(_ value: Int?, fallback: Int) -> Int {
   guard let value, value >= 500, value <= 20_000 else {
     return fallback
   }
   return value
 }
 
-func retentionPruneCandidates(
+public func retentionPruneCandidates(
   files: [URL],
   policy: HostRetentionPolicy,
   now: Date = Date(),
@@ -315,7 +348,7 @@ func retentionPruneCandidates(
   return sortedFiles.filter { pruneSet.contains($0) }
 }
 
-func isHostGeneratedCaptureFilename(_ filename: String) -> Bool {
+public func isHostGeneratedCaptureFilename(_ filename: String) -> Bool {
   guard filename.hasSuffix(".md") else {
     return false
   }
@@ -347,7 +380,7 @@ func isHostGeneratedCaptureFilename(_ filename: String) -> Bool {
   return true
 }
 
-func hasRequiredCaptureFrontmatter(_ markdown: String) -> Bool {
+public func hasRequiredCaptureFrontmatter(_ markdown: String) -> Bool {
   guard let frontmatter = parseMarkdownFrontmatter(markdown) else {
     return false
   }
@@ -361,7 +394,7 @@ func hasRequiredCaptureFrontmatter(_ markdown: String) -> Bool {
   return true
 }
 
-func isHostGeneratedCaptureFile(
+public func isHostGeneratedCaptureFile(
   _ fileURL: URL,
   readMarkdown: (URL) -> String? = defaultReadMarkdown
 ) -> Bool {
@@ -374,7 +407,7 @@ func isHostGeneratedCaptureFile(
   return hasRequiredCaptureFrontmatter(markdown)
 }
 
-func filterHostGeneratedCaptureFiles(
+public func filterHostGeneratedCaptureFiles(
   _ files: [URL],
   readMarkdown: (URL) -> String? = defaultReadMarkdown
 ) -> [URL] {
@@ -383,7 +416,7 @@ func filterHostGeneratedCaptureFiles(
   }
 }
 
-func recentHostCaptureFiles(
+public func recentHostCaptureFiles(
   _ files: [URL],
   limit: Int,
   readMarkdown: (URL) -> String? = defaultReadMarkdown
@@ -394,7 +427,7 @@ func recentHostCaptureFiles(
     .map { $0 }
 }
 
-func outputDirectoryValidationError(
+public func outputDirectoryValidationError(
   _ directoryURL: URL,
   writableCheck: (URL) -> Bool = { isDirectoryWritable($0) }
 ) -> String? {
@@ -405,7 +438,7 @@ func outputDirectoryValidationError(
   return nil
 }
 
-func isDirectoryWritable(
+public func isDirectoryWritable(
   _ directoryURL: URL,
   ensureDirectory: (URL) throws -> Void = defaultEnsureDirectory,
   writeProbe: (Data, URL) throws -> Void = defaultWriteProbe,
@@ -432,26 +465,26 @@ func isDirectoryWritable(
   return true
 }
 
-func defaultEnsureDirectory(_ directoryURL: URL) throws {
+public func defaultEnsureDirectory(_ directoryURL: URL) throws {
   try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 }
 
-func defaultWriteProbe(_ data: Data, _ fileURL: URL) throws {
+public func defaultWriteProbe(_ data: Data, _ fileURL: URL) throws {
   try data.write(to: fileURL, options: .atomic)
 }
 
-func defaultRemoveProbe(_ fileURL: URL) throws {
+public func defaultRemoveProbe(_ fileURL: URL) throws {
   try FileManager.default.removeItem(at: fileURL)
 }
 
-func defaultProbeURL(_ directoryURL: URL) -> URL {
+public func defaultProbeURL(_ directoryURL: URL) -> URL {
   return directoryURL.appendingPathComponent(
     ".context-grabber-write-test-\(UUID().uuidString.lowercased())",
     isDirectory: false
   )
 }
 
-func defaultReadMarkdown(_ fileURL: URL) -> String? {
+public func defaultReadMarkdown(_ fileURL: URL) -> String? {
   return try? String(contentsOf: fileURL, encoding: .utf8)
 }
 

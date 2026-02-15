@@ -1,3 +1,4 @@
+import ContextGrabberCore
 import SwiftUI
 
 struct AdvancedSettingsView: View {

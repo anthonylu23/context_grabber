@@ -10,6 +10,7 @@
 - `CONTEXT_GRABBER_BUN_BIN`: explicit Bun binary for extension bridge execution.
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force capture target for `capture --focused` (`safari` or `chrome`).
 - `CONTEXT_GRABBER_OSASCRIPT_BIN`: override AppleScript binary path for `list tabs` / `list apps`.
+- `CONTEXT_GRABBER_HOST_BIN`: override `ContextGrabberHost` binary path used for desktop-capture capability checks and subprocess invocation.
 
 ## Safari Bridge
 - `CONTEXT_GRABBER_SAFARI_SOURCE`: `runtime`, `live`, `fixture`, or `auto` (default behavior: `live`; `auto` only attempts runtime fallback when runtime payload env vars are configured).

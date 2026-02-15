@@ -631,8 +631,8 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Milestone G CLI rebuild — Go + Bun/Swift hybrid CLI with MCP server. See `docs/plans/cli-expansion-plan.md`.
-2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
+1. Milestone G capture commands — add `capture --focused`, `capture --tab`, and `capture --app` wiring in Go (Bun + `ContextGrabberHost --capture` subprocesses).
+2. Milestone G agent integration — add MCP tool server (`serve`) and skill manifests/docs for discoverable invocation.
 3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 
@@ -653,3 +653,13 @@ Lightweight settings popover or small window accessible from the menu:
   - Unify duplicated `ProcessExecutionResult`, promote `GenericEnvelope`
   - No separate `ContextGrabberDesktopCLI` executable — single binary serves both GUI and CLI
 59. Native messaging bridge `auto` source behavior now prefers live extraction first (Safari/Chrome), with runtime fallback only when runtime payload env vars are explicitly configured. This avoids runtime-env error noise for normal live-capture workflows.
+60. Milestone G Phase 1 (Swift extraction + dual-mode binary) is now implemented:
+  - `ContextGrabberCore` library target is wired and consumed by host UI + tests
+  - `ContextGrabberHost` now supports headless CLI mode via `--capture` without launching SwiftUI
+  - `ContextGrabberHost --capture` supports `--app` / `--bundle-id`, `--method auto|ax|ocr`, and `--format markdown|json`
+  - Validation passed: `swift build`, `swift test`, `swift run ContextGrabberHost --capture --help`
+61. Milestone G Phase 2 CLI scaffold is now implemented (list + doctor slice):
+  - new Go module `cli/` with cobra command tree (`list`, `doctor`)
+  - `list tabs` and `list apps` now enumerate via osascript using ASCII RS/US delimiters and JSON/markdown output modes
+  - `doctor` now reports osascript/bun/host-binary capabilities and Safari/Chrome bridge ping readiness
+  - Go coverage added for osascript parsing/partial-failure behavior and doctor capability resolution (`go test ./...`)

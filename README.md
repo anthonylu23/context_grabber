@@ -22,7 +22,16 @@ Native bridge `auto` source mode now defaults to live extraction. Runtime payloa
 
 ### Companion CLI
 
-The CLI is being rebuilt as a Go binary with MCP server support. See `docs/plans/cli-expansion-plan.md` for details.
+The Go CLI scaffold now lives under `cli/`:
+
+```bash
+cd cli
+go run . list tabs --format json
+go run . list apps --format json
+go run . doctor --format json
+```
+
+Capture commands and MCP server support are still in progress. See `docs/plans/cli-expansion-plan.md` for details.
 
 ### Scripts
 | Command | Description |
@@ -46,7 +55,7 @@ The CLI is being rebuilt as a Go binary with MCP server support. See `docs/plans
 - **Output format presets** — brief (capped key points/links) or full output
 - **Retention management** — configurable max file count and max age with safe pruning
 - **Diagnostics** — transport reachability, permission status, and storage writability checks
-- **Companion CLI** — Go-based CLI with MCP server (in progress, see `docs/plans/cli-expansion-plan.md`)
+- **Companion CLI** — Go-based CLI with inventory + diagnostics implemented (`list tabs`, `list apps`, `doctor`); capture + MCP in progress
 
 ## Architecture & Docs
 
@@ -100,7 +109,7 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 ├── docs
 │   ├── plans               # Project plans
 │   └── codebase            # Technical handbook
-├── cli                     # Go CLI + MCP server (planned)
+├── cli                     # Go CLI scaffold (list + doctor implemented)
 ├── packages
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension

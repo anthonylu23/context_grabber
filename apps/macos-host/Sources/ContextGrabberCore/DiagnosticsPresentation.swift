@@ -1,21 +1,45 @@
 import Foundation
 
-typealias ExtensionDiagnosticsStatus = (label: String, transportStatus: String)
+public typealias ExtensionDiagnosticsStatus = (label: String, transportStatus: String)
 
-struct DiagnosticsSummaryContext {
-  let frontAppDisplayName: String
-  let safariLabel: String
-  let chromeLabel: String
-  let desktopAccessibilityLabel: String
-  let desktopScreenLabel: String
-  let lastCaptureLabel: String
-  let lastErrorLabel: String
-  let latencyLabel: String
-  let storageWritable: Bool
-  let historyPath: String
+public struct DiagnosticsSummaryContext: Sendable {
+  public let frontAppDisplayName: String
+  public let safariLabel: String
+  public let chromeLabel: String
+  public let desktopAccessibilityLabel: String
+  public let desktopScreenLabel: String
+  public let lastCaptureLabel: String
+  public let lastErrorLabel: String
+  public let latencyLabel: String
+  public let storageWritable: Bool
+  public let historyPath: String
+
+  public init(
+    frontAppDisplayName: String,
+    safariLabel: String,
+    chromeLabel: String,
+    desktopAccessibilityLabel: String,
+    desktopScreenLabel: String,
+    lastCaptureLabel: String,
+    lastErrorLabel: String,
+    latencyLabel: String,
+    storageWritable: Bool,
+    historyPath: String
+  ) {
+    self.frontAppDisplayName = frontAppDisplayName
+    self.safariLabel = safariLabel
+    self.chromeLabel = chromeLabel
+    self.desktopAccessibilityLabel = desktopAccessibilityLabel
+    self.desktopScreenLabel = desktopScreenLabel
+    self.lastCaptureLabel = lastCaptureLabel
+    self.lastErrorLabel = lastErrorLabel
+    self.latencyLabel = latencyLabel
+    self.storageWritable = storageWritable
+    self.historyPath = historyPath
+  }
 }
 
-func resolveExtensionDiagnosticsStatus(
+public func resolveExtensionDiagnosticsStatus(
   ping: () throws -> NativeMessagingPingResponse,
   transportStatusPrefix: String,
   expectedProtocolVersion: String = protocolVersion,
@@ -36,7 +60,7 @@ func resolveExtensionDiagnosticsStatus(
   }
 }
 
-func diagnosticsTransportStatusForTarget(
+public func diagnosticsTransportStatusForTarget(
   _ target: BrowserTarget,
   safariStatus: ExtensionDiagnosticsStatus,
   chromeStatus: ExtensionDiagnosticsStatus
@@ -51,7 +75,7 @@ func diagnosticsTransportStatusForTarget(
   }
 }
 
-func formatDiagnosticsSummary(_ context: DiagnosticsSummaryContext) -> String {
+public func formatDiagnosticsSummary(_ context: DiagnosticsSummaryContext) -> String {
   return
     "Front app: \(context.frontAppDisplayName) | Safari: \(context.safariLabel) | Chrome: \(context.chromeLabel) | Desktop AX: \(context.desktopAccessibilityLabel) | Screen: \(context.desktopScreenLabel) | Last capture: \(context.lastCaptureLabel) | Last error: \(context.lastErrorLabel) | Latency: \(context.latencyLabel) | Storage writable: \(context.storageWritable ? "yes" : "no") | History: \(context.historyPath)"
 }

@@ -5,9 +5,9 @@ import Foundation
 @preconcurrency import ScreenCaptureKit
 import Vision
 
-let minimumAccessibilityTextChars = 240
-let defaultAccessibilityTraversalDepth = 2
-let defaultAccessibilityTraversalMaxElements = 96
+public let minimumAccessibilityTextChars = 240
+public let defaultAccessibilityTraversalDepth = 2
+public let defaultAccessibilityTraversalMaxElements = 96
 private let desktopOCRRetryAttempts = 2
 
 private let defaultAccessibilityTextAttributes: [String] = [
@@ -42,12 +42,26 @@ private let terminalBundleIdentifiers: Set<String> = [
   "dev.warp.warp-stable",
 ]
 
-struct DesktopAccessibilityExtractionConfig {
-  let minimumTextChars: Int
-  let textAttributes: [String]
-  let childAttributes: [String]
-  let traversalDepth: Int
-  let traversalMaxElements: Int
+public struct DesktopAccessibilityExtractionConfig: Sendable {
+  public let minimumTextChars: Int
+  public let textAttributes: [String]
+  public let childAttributes: [String]
+  public let traversalDepth: Int
+  public let traversalMaxElements: Int
+
+  public init(
+    minimumTextChars: Int,
+    textAttributes: [String],
+    childAttributes: [String],
+    traversalDepth: Int,
+    traversalMaxElements: Int
+  ) {
+    self.minimumTextChars = minimumTextChars
+    self.textAttributes = textAttributes
+    self.childAttributes = childAttributes
+    self.traversalDepth = traversalDepth
+    self.traversalMaxElements = traversalMaxElements
+  }
 }
 
 private func deduplicatedStrings(_ values: [String]) -> [String] {
@@ -67,10 +81,12 @@ private func deduplicatedStrings(_ values: [String]) -> [String] {
   return result
 }
 
-struct CFEqualitySet {
+public struct CFEqualitySet {
   private var buckets: [CFHashCode: [CFTypeRef]] = [:]
 
-  func contains(_ value: CFTypeRef) -> Bool {
+  public init() {}
+
+  public func contains(_ value: CFTypeRef) -> Bool {
     let hash = CFHash(value)
     guard let bucket = buckets[hash] else {
       return false
@@ -82,7 +98,7 @@ struct CFEqualitySet {
   }
 
   @discardableResult
-  mutating func insert(_ value: CFTypeRef) -> Bool {
+  public mutating func insert(_ value: CFTypeRef) -> Bool {
     let hash = CFHash(value)
     var bucket = buckets[hash] ?? []
     if bucket.contains(where: { existing in CFEqual(existing, value) }) {
@@ -95,7 +111,7 @@ struct CFEqualitySet {
   }
 }
 
-func desktopAccessibilityExtractionConfig(
+public func desktopAccessibilityExtractionConfig(
   bundleIdentifier: String?,
   appName: String?
 ) -> DesktopAccessibilityExtractionConfig {
@@ -138,65 +154,106 @@ func desktopAccessibilityExtractionConfig(
   )
 }
 
-func desktopMinimumAccessibilityTextChars(context: DesktopCaptureContext) -> Int {
+public func desktopMinimumAccessibilityTextChars(context: DesktopCaptureContext) -> Int {
   return desktopAccessibilityExtractionConfig(
     bundleIdentifier: context.bundleIdentifier,
     appName: context.appName
   ).minimumTextChars
 }
 
-struct DesktopCaptureContext {
-  let appName: String?
-  let bundleIdentifier: String?
+public struct DesktopCaptureContext: Sendable {
+  public let appName: String?
+  public let bundleIdentifier: String?
+
+  public init(appName: String?, bundleIdentifier: String?) {
+    self.appName = appName
+    self.bundleIdentifier = bundleIdentifier
+  }
 }
 
-struct DesktopCaptureResolution {
-  let payload: BrowserContextPayload
-  let extractionMethod: String
-  let transportStatus: String
-  let warning: String?
-  let errorCode: String?
+public struct DesktopCaptureResolution: Sendable {
+  public let payload: BrowserContextPayload
+  public let extractionMethod: String
+  public let transportStatus: String
+  public let warning: String?
+  public let errorCode: String?
+
+  public init(
+    payload: BrowserContextPayload,
+    extractionMethod: String,
+    transportStatus: String,
+    warning: String?,
+    errorCode: String?
+  ) {
+    self.payload = payload
+    self.extractionMethod = extractionMethod
+    self.transportStatus = transportStatus
+    self.warning = warning
+    self.errorCode = errorCode
+  }
 }
 
-struct OCRCaptureResult {
-  let text: String
-  let confidence: Double?
+public struct OCRCaptureResult: Sendable {
+  public let text: String
+  public let confidence: Double?
+
+  public init(text: String, confidence: Double?) {
+    self.text = text
+    self.confidence = confidence
+  }
 }
 
-struct DesktopPermissionReadiness {
-  let accessibilityTrusted: Bool
-  let screenRecordingGranted: Bool?
+public struct DesktopPermissionReadiness: Sendable {
+  public let accessibilityTrusted: Bool
+  public let screenRecordingGranted: Bool?
+
+  public init(accessibilityTrusted: Bool, screenRecordingGranted: Bool?) {
+    self.accessibilityTrusted = accessibilityTrusted
+    self.screenRecordingGranted = screenRecordingGranted
+  }
 }
 
-protocol DesktopAccessibilityExtracting {
+public protocol DesktopAccessibilityExtracting {
   func extractFocusedText(frontmostProcessIdentifier: pid_t?) -> String?
 }
 
-protocol DesktopOCRExtracting {
+public protocol DesktopOCRExtracting {
   func extractText(frontmostProcessIdentifier: pid_t?) async -> OCRCaptureResult?
 }
 
-struct LiveDesktopAccessibilityExtractor: DesktopAccessibilityExtracting {
-  func extractFocusedText(frontmostProcessIdentifier: pid_t?) -> String? {
+public struct LiveDesktopAccessibilityExtractor: DesktopAccessibilityExtracting, Sendable {
+  public init() {}
+
+  public func extractFocusedText(frontmostProcessIdentifier: pid_t?) -> String? {
     return extractAccessibilityTextFromFocusedElement(
       frontmostProcessIdentifier: frontmostProcessIdentifier
     )
   }
 }
 
-struct LiveDesktopOCRExtractor: DesktopOCRExtracting {
-  func extractText(frontmostProcessIdentifier: pid_t?) async -> OCRCaptureResult? {
+public struct LiveDesktopOCRExtractor: DesktopOCRExtracting, Sendable {
+  public init() {}
+
+  public func extractText(frontmostProcessIdentifier: pid_t?) async -> OCRCaptureResult? {
     return await extractOCRTextFromFrontmostWindow(
       frontmostProcessIdentifier: frontmostProcessIdentifier
     )
   }
 }
 
-struct DesktopCaptureDependencies {
-  let accessibilityExtractor: (pid_t?) -> String?
-  let ocrExtractor: (pid_t?) async -> OCRCaptureResult?
+public struct DesktopCaptureDependencies: @unchecked Sendable {
+  public let accessibilityExtractor: (pid_t?) -> String?
+  public let ocrExtractor: (pid_t?) async -> OCRCaptureResult?
 
-  static func live(
+  public init(
+    accessibilityExtractor: @escaping (pid_t?) -> String?,
+    ocrExtractor: @escaping (pid_t?) async -> OCRCaptureResult?
+  ) {
+    self.accessibilityExtractor = accessibilityExtractor
+    self.ocrExtractor = ocrExtractor
+  }
+
+  public static func live(
     accessibility: any DesktopAccessibilityExtracting = LiveDesktopAccessibilityExtractor(),
     ocr: any DesktopOCRExtracting = LiveDesktopOCRExtractor()
   ) -> DesktopCaptureDependencies {
@@ -211,11 +268,11 @@ struct DesktopCaptureDependencies {
   }
 }
 
-enum DesktopPermissionPane {
+public enum DesktopPermissionPane: Sendable {
   case accessibility
   case screenRecording
 
-  var privacyAnchor: String {
+  public var privacyAnchor: String {
     switch self {
     case .accessibility:
       return "Privacy_Accessibility"
@@ -224,7 +281,7 @@ enum DesktopPermissionPane {
     }
   }
 
-  var displayName: String {
+  public var displayName: String {
     switch self {
     case .accessibility:
       return "Accessibility"
@@ -234,15 +291,15 @@ enum DesktopPermissionPane {
   }
 }
 
-func desktopPermissionSettingsURL(for pane: DesktopPermissionPane) -> URL? {
+public func desktopPermissionSettingsURL(for pane: DesktopPermissionPane) -> URL? {
   return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.privacyAnchor)")
 }
 
-func buildDesktopOriginURL(bundleIdentifier: String?) -> String {
+public func buildDesktopOriginURL(bundleIdentifier: String?) -> String {
   return "app://\(bundleIdentifier ?? "unknown")"
 }
 
-func normalizeDesktopText(_ value: String?) -> String {
+public func normalizeDesktopText(_ value: String?) -> String {
   guard let value else {
     return ""
   }
@@ -255,24 +312,26 @@ func normalizeDesktopText(_ value: String?) -> String {
     .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-final class SynchronousResultBox<Value>: @unchecked Sendable {
+public final class SynchronousResultBox<Value>: @unchecked Sendable {
   private let lock = NSLock()
   private var value: Value?
 
-  func set(_ newValue: Value?) {
+  public init() {}
+
+  public func set(_ newValue: Value?) {
     lock.lock()
     value = newValue
     lock.unlock()
   }
 
-  func get() -> Value? {
+  public func get() -> Value? {
     lock.lock()
     defer { lock.unlock() }
     return value
   }
 }
 
-func copyAXAttributeValue(_ element: AXUIElement, _ attribute: CFString) -> CFTypeRef? {
+public func copyAXAttributeValue(_ element: AXUIElement, _ attribute: CFString) -> CFTypeRef? {
   var value: CFTypeRef?
   let result = AXUIElementCopyAttributeValue(element, attribute, &value)
   guard result == .success else {
@@ -282,7 +341,7 @@ func copyAXAttributeValue(_ element: AXUIElement, _ attribute: CFString) -> CFTy
   return value
 }
 
-func extractAXStringValues(_ value: CFTypeRef?) -> [String] {
+public func extractAXStringValues(_ value: CFTypeRef?) -> [String] {
   guard let value else {
     return []
   }
@@ -306,11 +365,11 @@ func extractAXStringValues(_ value: CFTypeRef?) -> [String] {
   return []
 }
 
-func copyAXElementAttribute(_ element: AXUIElement, _ attribute: CFString) -> AXUIElement? {
+public func copyAXElementAttribute(_ element: AXUIElement, _ attribute: CFString) -> AXUIElement? {
   return asAXUIElement(copyAXAttributeValue(element, attribute))
 }
 
-func copyAXElementArrayAttribute(_ element: AXUIElement, _ attribute: CFString) -> [AXUIElement] {
+public func copyAXElementArrayAttribute(_ element: AXUIElement, _ attribute: CFString) -> [AXUIElement] {
   guard let value = copyAXAttributeValue(element, attribute), let values = value as? [Any] else {
     return []
   }
@@ -318,7 +377,7 @@ func copyAXElementArrayAttribute(_ element: AXUIElement, _ attribute: CFString) 
   return values.compactMap { asAXUIElement($0 as CFTypeRef) }
 }
 
-func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
+public func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
   guard let value else {
     return nil
   }
@@ -331,7 +390,7 @@ func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
   return unsafeDowncast(value as AnyObject, to: AXUIElement.self)
 }
 
-func collectAccessibilityTextFromElement(_ element: AXUIElement, attributes: [String]) -> String? {
+public func collectAccessibilityTextFromElement(_ element: AXUIElement, attributes: [String]) -> String? {
   var segments: [String] = []
   var seen = Set<String>()
   for attribute in attributes {
@@ -359,7 +418,7 @@ func collectAccessibilityTextFromElement(_ element: AXUIElement, attributes: [St
   return segments.joined(separator: "\n\n")
 }
 
-func collectAccessibilityTextByTraversingElementTree(
+public func collectAccessibilityTextByTraversingElementTree(
   rootElement: AXUIElement,
   config: DesktopAccessibilityExtractionConfig
 ) -> String? {
@@ -427,7 +486,7 @@ func collectAccessibilityTextByTraversingElementTree(
   return segments.joined(separator: "\n\n")
 }
 
-func extractAccessibilityTextFromFocusedElement(
+public func extractAccessibilityTextFromFocusedElement(
   frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
 ) -> String? {
   guard AXIsProcessTrusted() else {
@@ -521,7 +580,7 @@ func extractAccessibilityTextFromFocusedElement(
   return segments.joined(separator: "\n\n")
 }
 
-func frontmostWindowIDFromWindowList(
+public func frontmostWindowIDFromWindowList(
   _ windowList: [[String: Any]],
   frontmostProcessIdentifier: pid_t?
 ) -> CGWindowID? {
@@ -549,7 +608,7 @@ func frontmostWindowIDFromWindowList(
   return nil
 }
 
-func shareableDesktopContent(
+public func shareableDesktopContent(
   excludeDesktopWindows: Bool = true,
   onScreenWindowsOnly: Bool = true,
   timeoutSeconds: TimeInterval = 1.5
@@ -577,7 +636,7 @@ func shareableDesktopContent(
   }
 }
 
-func captureImageWithScreenCaptureKit(
+public func captureImageWithScreenCaptureKit(
   contentFilter: SCContentFilter,
   pixelWidth: Int,
   pixelHeight: Int,
@@ -611,7 +670,7 @@ func captureImageWithScreenCaptureKit(
   }
 }
 
-func captureFrontmostWindowImage(
+public func captureFrontmostWindowImage(
   frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
 ) async -> CGImage? {
   let windowList = CGWindowListCopyWindowInfo(
@@ -672,7 +731,7 @@ func captureFrontmostWindowImage(
   return nil
 }
 
-func extractOCRTextFromFrontmostWindow(
+public func extractOCRTextFromFrontmostWindow(
   frontmostProcessIdentifier: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier
 ) async -> OCRCaptureResult? {
   guard let image = await captureFrontmostWindowImage(frontmostProcessIdentifier: frontmostProcessIdentifier)
@@ -723,7 +782,7 @@ func extractOCRTextFromFrontmostWindow(
   return OCRCaptureResult(text: text, confidence: averageConfidence)
 }
 
-func desktopPermissionReadiness(
+public func desktopPermissionReadiness(
   isAccessibilityTrusted: () -> Bool = { AXIsProcessTrusted() },
   screenRecordingGranted: () -> Bool? = {
     if #available(macOS 10.15, *) {
@@ -738,7 +797,7 @@ func desktopPermissionReadiness(
   )
 }
 
-func resolveDesktopCapture(
+public func resolveDesktopCapture(
   context: DesktopCaptureContext,
   accessibilityTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_AX_TEXT"],
   ocrTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_OCR_TEXT"],
@@ -885,7 +944,7 @@ func resolveDesktopCapture(
   )
 }
 
-func resolveDesktopCapture(
+public func resolveDesktopCapture(
   context: DesktopCaptureContext,
   accessibilityTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_AX_TEXT"],
   ocrTextOverride: String? = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_DESKTOP_OCR_TEXT"],

@@ -5,11 +5,11 @@ private let productContextSummary =
 private let briefKeyPointLimit = 5
 private let briefLinkLimit = 5
 
-func isoTimestamp() -> String {
+public func isoTimestamp() -> String {
   return ISO8601DateFormatter().string(from: Date())
 }
 
-func renderMarkdown(
+public func renderMarkdown(
   requestID: String,
   capturedAt: String,
   extractionMethod: String,
@@ -152,7 +152,7 @@ func renderMarkdown(
   return lines.joined(separator: "\n")
 }
 
-func buildSummary(from text: String) -> String {
+public func buildSummary(from text: String) -> String {
   let sections = buildHeuristicSummarizationSections(
     text: sanitizeSummarizationText(text),
     headings: [],
@@ -162,7 +162,7 @@ func buildSummary(from text: String) -> String {
   return sections.summary
 }
 
-func buildKeyPoints(from text: String) -> [String] {
+public func buildKeyPoints(from text: String) -> [String] {
   let sections = buildHeuristicSummarizationSections(
     text: sanitizeSummarizationText(text),
     headings: [],
@@ -172,7 +172,7 @@ func buildKeyPoints(from text: String) -> [String] {
   return sections.keyPoints
 }
 
-func buildChunks(from text: String) -> [String] {
+public func buildChunks(from text: String) -> [String] {
   let paragraphs = text
     .components(separatedBy: "\n\n")
     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -201,7 +201,7 @@ func buildChunks(from text: String) -> [String] {
   return chunks
 }
 
-func uniqueWarningLines(_ warnings: [String]) -> [String] {
+public func uniqueWarningLines(_ warnings: [String]) -> [String] {
   var seen = Set<String>()
   var unique: [String] = []
   for warning in warnings {
@@ -218,7 +218,7 @@ func uniqueWarningLines(_ warnings: [String]) -> [String] {
   return unique
 }
 
-func hostFromURL(_ urlString: String) -> String? {
+public func hostFromURL(_ urlString: String) -> String? {
   guard let url = URL(string: urlString) else {
     return nil
   }
@@ -226,7 +226,7 @@ func hostFromURL(_ urlString: String) -> String? {
   return url.host
 }
 
-func desktopBundleIdentifierFromOrigin(_ origin: String) -> String? {
+public func desktopBundleIdentifierFromOrigin(_ origin: String) -> String? {
   guard let url = URL(string: origin) else {
     return nil
   }
@@ -238,7 +238,7 @@ func desktopBundleIdentifierFromOrigin(_ origin: String) -> String? {
   return url.host
 }
 
-func metadataLines(
+public func metadataLines(
   payload: BrowserContextPayload,
   isDesktopSource: Bool,
   outputPreset: OutputFormatPreset
@@ -280,7 +280,7 @@ func metadataLines(
   return lines
 }
 
-func confidenceForExtractionMethod(_ method: String) -> Double {
+public func confidenceForExtractionMethod(_ method: String) -> Double {
   switch method {
   case "browser_extension":
     return 0.92
@@ -295,7 +295,7 @@ func confidenceForExtractionMethod(_ method: String) -> Double {
   }
 }
 
-func yamlQuoted(_ value: String) -> String {
+public func yamlQuoted(_ value: String) -> String {
   let escaped = value
     .replacingOccurrences(of: "\\", with: "\\\\")
     .replacingOccurrences(of: "\"", with: "\\\"")

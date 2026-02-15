@@ -5,40 +5,73 @@ private let defaultSummaryKeyPointLimit = 8
 private let briefSummaryKeyPointLimit = 5
 private let summaryKeyPointCharLimit = 220
 
-struct SummarizationSections {
-  let summary: String
-  let keyPoints: [String]
-  let warnings: [String]
+public struct SummarizationSections: Sendable {
+  public let summary: String
+  public let keyPoints: [String]
+  public let warnings: [String]
+
+  public init(summary: String, keyPoints: [String], warnings: [String]) {
+    self.summary = summary
+    self.keyPoints = keyPoints
+    self.warnings = warnings
+  }
 }
 
-struct LLMSummaryRequest {
-  let provider: SummarizationProvider
-  let model: String
-  let title: String
-  let url: String
-  let headings: [BrowserContextPayload.Heading]
-  let fullText: String
-  let summaryTokenBudget: Int
-  let keyPointLimit: Int
-  let timeoutMs: Int
+public struct LLMSummaryRequest: Sendable {
+  public let provider: SummarizationProvider
+  public let model: String
+  public let title: String
+  public let url: String
+  public let headings: [BrowserContextPayload.Heading]
+  public let fullText: String
+  public let summaryTokenBudget: Int
+  public let keyPointLimit: Int
+  public let timeoutMs: Int
+
+  public init(
+    provider: SummarizationProvider,
+    model: String,
+    title: String,
+    url: String,
+    headings: [BrowserContextPayload.Heading],
+    fullText: String,
+    summaryTokenBudget: Int,
+    keyPointLimit: Int,
+    timeoutMs: Int
+  ) {
+    self.provider = provider
+    self.model = model
+    self.title = title
+    self.url = url
+    self.headings = headings
+    self.fullText = fullText
+    self.summaryTokenBudget = summaryTokenBudget
+    self.keyPointLimit = keyPointLimit
+    self.timeoutMs = timeoutMs
+  }
 }
 
-struct LLMSummaryResponse {
-  let summary: String
-  let keyPoints: [String]
+public struct LLMSummaryResponse: Sendable {
+  public let summary: String
+  public let keyPoints: [String]
+
+  public init(summary: String, keyPoints: [String]) {
+    self.summary = summary
+    self.keyPoints = keyPoints
+  }
 }
 
-protocol LLMSummaryProviding {
+public protocol LLMSummaryProviding: Sendable {
   func summarize(_ request: LLMSummaryRequest) async throws -> LLMSummaryResponse
 }
 
-enum LLMSummaryError: LocalizedError {
+public enum LLMSummaryError: LocalizedError, Sendable {
   case providerNotConfigured
   case missingCredential(String)
   case invalidResponse(String)
   case transportFailure(String)
 
-  var errorDescription: String? {
+  public var errorDescription: String? {
     switch self {
     case .providerNotConfigured:
       return "LLM provider is not configured."
@@ -59,7 +92,7 @@ private struct ScoredSentence {
   let words: Set<String>
 }
 
-func summarizationProviderDefaultModel(_ provider: SummarizationProvider) -> String {
+public func summarizationProviderDefaultModel(_ provider: SummarizationProvider) -> String {
   switch provider {
   case .openAI:
     return "gpt-4o-mini"
@@ -72,7 +105,7 @@ func summarizationProviderDefaultModel(_ provider: SummarizationProvider) -> Str
   }
 }
 
-func summarizationModelOptions(for provider: SummarizationProvider?) -> [String] {
+public func summarizationModelOptions(for provider: SummarizationProvider?) -> [String] {
   guard let provider else {
     return []
   }
@@ -89,12 +122,12 @@ func summarizationModelOptions(for provider: SummarizationProvider?) -> [String]
   }
 }
 
-func summarizationModelLabel(_ model: String?) -> String {
+public func summarizationModelLabel(_ model: String?) -> String {
   let trimmed = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   return trimmed.isEmpty ? "Auto" : trimmed
 }
 
-func resolveSummarizationSections(
+public func resolveSummarizationSections(
   payload: BrowserContextPayload,
   settings: HostSettings,
   outputPreset: OutputFormatPreset,
@@ -165,7 +198,7 @@ func resolveSummarizationSections(
   }
 }
 
-func buildHeuristicSummarizationSections(
+public func buildHeuristicSummarizationSections(
   text: String,
   headings: [BrowserContextPayload.Heading],
   summaryTokenBudget: Int,
@@ -200,7 +233,7 @@ private func appendSummarizationWarning(
   )
 }
 
-func sanitizeSummarizationText(_ text: String) -> String {
+public func sanitizeSummarizationText(_ text: String) -> String {
   let normalizedLineEndings = text.replacingOccurrences(of: "\r\n", with: "\n")
     .replacingOccurrences(of: "\r", with: "\n")
   let compactWhitespace = normalizedLineEndings.replacingOccurrences(
@@ -216,7 +249,7 @@ func sanitizeSummarizationText(_ text: String) -> String {
   return compactParagraphs.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-func summarizeSentences(_ text: String) -> [String] {
+public func summarizeSentences(_ text: String) -> [String] {
   let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
   guard !trimmed.isEmpty else {
     return []
@@ -405,7 +438,7 @@ private func selectKeyPoints(_ scored: [ScoredSentence], limit: Int) -> [String]
     .filter { !$0.isEmpty }
 }
 
-func trimSummaryToBudget(_ text: String, summaryTokenBudget: Int) -> String {
+public func trimSummaryToBudget(_ text: String, summaryTokenBudget: Int) -> String {
   let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
   guard !trimmed.isEmpty else {
     return ""
@@ -557,8 +590,10 @@ private func summarizePrompt(for request: LLMSummaryRequest) -> String {
   """
 }
 
-struct URLSessionLLMSummaryProvider: LLMSummaryProviding {
-  func summarize(_ request: LLMSummaryRequest) async throws -> LLMSummaryResponse {
+public struct URLSessionLLMSummaryProvider: LLMSummaryProviding {
+  public init() {}
+
+  public func summarize(_ request: LLMSummaryRequest) async throws -> LLMSummaryResponse {
     let prompt = summarizePrompt(for: request)
     let rawResponse: String
 

@@ -6,6 +6,21 @@ Rebuild the Context Grabber companion CLI as a Go binary that orchestrates captu
 
 The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI is a clean reimplementation that reuses the same underlying capture infrastructure without duplicating capture logic.
 
+## Status Update
+
+- Phase 1 complete: `ContextGrabberHost` now supports headless CLI mode via `--capture`.
+- Phase 2 partial complete: `cli/` Go scaffold is implemented with:
+  - `list tabs`
+  - `list apps`
+  - `doctor`
+  - output routing (`--format`, `--file`, `--clipboard`)
+- Stabilization fixes landed for current scaffold:
+  - `list tabs` now always emits per-browser warnings to stderr before returning full-failure errors
+  - root command options are now per-invocation (no package-level mutable flag state bleed)
+  - Swift CLI parser now treats flag-like values as missing values (clearer argument errors)
+  - Swift CLI target activation now waits for frontmost handoff and fails fast on activation timeout
+- Remaining Milestone G work: capture commands (`capture --focused/--tab/--app`) and MCP server (`serve`).
+
 ### Single-Binary CLI Mode (Key Architecture Decision)
 
 Instead of creating a separate `ContextGrabberDesktopCLI` executable, the existing `ContextGrabberHost` binary gains a **CLI mode**. When invoked with capture flags (e.g. `--capture`, `--list-apps`), it skips SwiftUI initialization entirely and runs the capture pipeline headlessly, outputting results to stdout and exiting.

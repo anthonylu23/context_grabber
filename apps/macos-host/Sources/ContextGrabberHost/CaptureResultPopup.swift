@@ -1,4 +1,5 @@
 import AppKit
+import ContextGrabberCore
 import SwiftUI
 
 @MainActor

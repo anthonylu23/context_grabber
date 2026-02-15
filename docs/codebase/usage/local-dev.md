@@ -19,6 +19,23 @@ cd apps/macos-host
 swift run
 ```
 
+## Run Host (Headless CLI Mode)
+```bash
+cd /path/to/context_grabber/apps/macos-host
+
+# show CLI help
+swift run ContextGrabberHost --capture --help
+
+# capture a running desktop app by name
+swift run ContextGrabberHost --capture --app Finder
+
+# capture by bundle id and force AX-only method
+swift run ContextGrabberHost --capture --bundle-id com.apple.dt.Xcode --method ax
+
+# emit structured JSON (includes rendered markdown and capture metadata)
+swift run ContextGrabberHost --capture --format json
+```
+
 ## Safari Container Project
 ```bash
 # regenerate from packaged Safari runtime assets
@@ -51,7 +68,22 @@ bun test --cwd packages/extension-chrome
 
 ## Companion CLI
 
-The TS companion CLI has been removed. It is being rebuilt as a Go binary with MCP server support. See `docs/plans/cli-expansion-plan.md` for the implementation plan.
+The TS companion CLI has been removed. A Go scaffold now exists under `cli/` with list and doctor commands.
+
+```bash
+cd /path/to/context_grabber/cli
+go test ./...
+go build ./...
+
+# inventory commands
+go run . list tabs --format json
+go run . list apps --format json
+
+# diagnostics
+go run . doctor --format json
+```
+
+Capture and MCP commands are still in progress. See `docs/plans/cli-expansion-plan.md` for the remaining Milestone G phases.
 
 ## Browser Source Defaults
 - Safari and Chrome CLI source `auto` now prefer runtime payload input first, then fall back to AppleScript live extraction.

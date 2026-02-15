@@ -1,6 +1,6 @@
 import Foundation
 
-enum MenuBarIndicatorState {
+public enum MenuBarIndicatorState: Sendable {
   case idle
   case capturing
   case success
@@ -8,45 +8,81 @@ enum MenuBarIndicatorState {
   case disconnected
 }
 
-enum CaptureFeedbackKind {
+public enum CaptureFeedbackKind: Sendable {
   case success
   case failure
 }
 
-struct CaptureFeedbackState: Identifiable {
-  let id: UUID
-  let kind: CaptureFeedbackKind
-  let title: String
-  let detail: String
-  let sourceLabel: String?
-  let targetLabel: String?
-  let extractionMethod: String?
-  let warning: String?
-  let fileURL: URL?
-  let fileName: String?
-  let tokenCount: Int?
-  let shownAt: Date
-  let autoDismissAfter: TimeInterval
+public struct CaptureFeedbackState: Identifiable, Sendable {
+  public let id: UUID
+  public let kind: CaptureFeedbackKind
+  public let title: String
+  public let detail: String
+  public let sourceLabel: String?
+  public let targetLabel: String?
+  public let extractionMethod: String?
+  public let warning: String?
+  public let fileURL: URL?
+  public let fileName: String?
+  public let tokenCount: Int?
+  public let shownAt: Date
+  public let autoDismissAfter: TimeInterval
+
+  public init(
+    id: UUID,
+    kind: CaptureFeedbackKind,
+    title: String,
+    detail: String,
+    sourceLabel: String?,
+    targetLabel: String?,
+    extractionMethod: String?,
+    warning: String?,
+    fileURL: URL?,
+    fileName: String?,
+    tokenCount: Int?,
+    shownAt: Date,
+    autoDismissAfter: TimeInterval
+  ) {
+    self.id = id
+    self.kind = kind
+    self.title = title
+    self.detail = detail
+    self.sourceLabel = sourceLabel
+    self.targetLabel = targetLabel
+    self.extractionMethod = extractionMethod
+    self.warning = warning
+    self.fileURL = fileURL
+    self.fileName = fileName
+    self.tokenCount = tokenCount
+    self.shownAt = shownAt
+    self.autoDismissAfter = autoDismissAfter
+  }
 }
 
-struct CaptureHistoryEntry: Identifiable {
-  let fileURL: URL
-  let title: String
-  let capturedAt: Date?
+public struct CaptureHistoryEntry: Identifiable, Sendable {
+  public let fileURL: URL
+  public let title: String
+  public let capturedAt: Date?
 
-  var id: String {
+  public var id: String {
     return fileURL.path
   }
 
-  var timestampLabel: String {
+  public var timestampLabel: String {
     guard let capturedAt else {
       return "Unknown time"
     }
     return menuTimestampFormatter.string(from: capturedAt)
   }
 
-  var menuLabel: String {
+  public var menuLabel: String {
     return "\(timestampLabel) - \(title)"
+  }
+
+  public init(fileURL: URL, title: String, capturedAt: Date?) {
+    self.fileURL = fileURL
+    self.title = title
+    self.capturedAt = capturedAt
   }
 }
 
@@ -57,12 +93,17 @@ private let menuTimestampFormatter: DateFormatter = {
   return formatter
 }()
 
-struct MenuBarIcon {
-  let name: String
-  let isSystemSymbol: Bool
+public struct MenuBarIcon: Sendable {
+  public let name: String
+  public let isSystemSymbol: Bool
+
+  public init(name: String, isSystemSymbol: Bool) {
+    self.name = name
+    self.isSystemSymbol = isSystemSymbol
+  }
 }
 
-func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon {
+public func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon {
   switch state {
   case .idle:
     return MenuBarIcon(name: "\u{1F90F}", isSystemSymbol: false)
@@ -77,7 +118,7 @@ func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon
   }
 }
 
-func formatCaptureFeedbackTitle(kind: CaptureFeedbackKind) -> String {
+public func formatCaptureFeedbackTitle(kind: CaptureFeedbackKind) -> String {
   switch kind {
   case .success:
     return "Capture saved"
@@ -86,7 +127,7 @@ func formatCaptureFeedbackTitle(kind: CaptureFeedbackKind) -> String {
   }
 }
 
-func formatCaptureSuccessFeedbackDetail(
+public func formatCaptureSuccessFeedbackDetail(
   sourceLabel: String,
   targetLabel: String,
   extractionMethod: String,
@@ -96,11 +137,11 @@ func formatCaptureSuccessFeedbackDetail(
   return "\(sourceLabel): \(targetLabel) | method: \(extractionMethod) | transport: \(transportStatus)"
 }
 
-func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {
+public func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {
   return "Error: \(errorDescription)"
 }
 
-func formatTokenEstimateLabel(_ tokenCount: Int?) -> String? {
+public func formatTokenEstimateLabel(_ tokenCount: Int?) -> String? {
   guard let tokenCount else {
     return nil
   }
@@ -112,7 +153,7 @@ func formatTokenEstimateLabel(_ tokenCount: Int?) -> String? {
   return "~\(formatted) tokens"
 }
 
-func formatAppVersionLabel(shortVersion: String?, buildVersion: String?) -> String {
+public func formatAppVersionLabel(shortVersion: String?, buildVersion: String?) -> String {
   let short = shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
   let build = buildVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -131,7 +172,7 @@ func formatAppVersionLabel(shortVersion: String?, buildVersion: String?) -> Stri
   return "Version dev"
 }
 
-func shouldShowDisconnectedIndicator(
+public func shouldShowDisconnectedIndicator(
   safariTransportStatus: String,
   chromeTransportStatus: String
 ) -> Bool {
@@ -141,7 +182,7 @@ func shouldShowDisconnectedIndicator(
   return !(safariConnected || chromeConnected)
 }
 
-func steadyMenuBarIndicatorState(
+public func steadyMenuBarIndicatorState(
   safariDiagnosticsTransportStatus: String,
   chromeDiagnosticsTransportStatus: String,
   latestTransportStatus: String
@@ -169,7 +210,7 @@ func steadyMenuBarIndicatorState(
   return .idle
 }
 
-func formatRelativeLastCaptureLabel(
+public func formatRelativeLastCaptureLabel(
   isoTimestamp: String?,
   now: Date = Date()
 ) -> String {

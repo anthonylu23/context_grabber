@@ -96,30 +96,32 @@
 - Output directory changes are validated for writability before persistence.
 - Diagnostics state is also surfaced inline in menu (`System Readiness`) for Safari, Chrome, Accessibility, and Screen Recording.
 
-## Planned: Library Extraction + CLI Mode (Phase 1, Milestone G)
+## Milestone G Phase 1 Status: Implemented
 
-The monolithic executable target will be split into:
+The host is now split into a shared library and a dual-mode executable.
 
 ### `ContextGrabberCore` (library target)
-Shared logic usable by both the GUI app and CLI mode:
-- All 7 current refactored modules (listed above)
-- Types extracted from `ContextGrabberHostApp.swift` monolith:
-  - `TransportLayer.swift` — Safari/Chrome native messaging transports (~490 lines)
-  - `ProtocolTypes.swift` — `ExtensionBridgeMessage`, `NativeMessagingPingResponse`, error enums (~100 lines)
-  - `BrowserDetection.swift` — `detectBrowserTarget()`, `resolveEffectiveFrontmostApp()` (~50 lines)
-  - `CoreTypes.swift` — `BrowserContextPayload`, `HostLogger`, `FrontmostAppInfo`, constants (~60 lines)
+Shared capture/runtime logic now lives in `apps/macos-host/Sources/ContextGrabberCore/`:
+- Refactored pipeline modules (`BrowserCapturePipeline.swift`, `DesktopCapturePipeline.swift`, `MarkdownRendering.swift`, `MenuBarPresentation.swift`, `DiagnosticsPresentation.swift`, `HostSettings.swift`, `Summarization.swift`)
+- Monolith extractions:
+  - `TransportLayer.swift` — Safari/Chrome native messaging transport execution
+  - `ProtocolTypes.swift` — envelope/payload/request/response protocol shapes
+  - `BrowserDetection.swift` — browser/channel resolution helpers
+  - `CoreTypes.swift` — shared constants and host-level utility types
 
 ### `ContextGrabberHost` (single executable, dual mode)
-- **GUI mode** (default, no args): SwiftUI menu bar app as current
-- **CLI mode** (`--capture` flags): headless desktop capture, stdout output, no SwiftUI
-- CLI mode inherits GUI app's macOS permission grants (same binary path)
-- New file: `CLIEntryPoint.swift` — argument detection and headless capture orchestration
+- **GUI mode** (default): launches SwiftUI menu bar host.
+- **CLI mode** (`--capture`): runs headless desktop capture and exits without SwiftUI initialization.
+- Launcher file `ContextGrabberHostLauncher.swift` routes between CLI and GUI mode before app startup.
+- `CLIEntryPoint.swift` currently supports:
+  - `--capture`
+  - `--app <name>` or `--bundle-id <id>`
+  - `--method auto|ax|ocr`
+  - `--format markdown|json`
 
-### Motivation
-macOS Accessibility and Screen Recording permissions are granted per-binary path. A single binary means the CLI mode inherits the GUI app's existing permissions with zero extra user setup. The Go CLI (Phase 2) invokes `ContextGrabberHost --capture --app <name>` as a subprocess for desktop capture.
+### Why this architecture
+macOS Accessibility and Screen Recording grants are tied to binary path. Reusing `ContextGrabberHost` for headless capture allows CLI invocations to reuse the same permission grant as the menu bar app. This is the desktop-capture subprocess surface for the upcoming Go companion CLI.
 
-### Key Extraction Details
-- `ProcessExecutionResult` is duplicated in both transport classes → unified during extraction
-- `GenericEnvelope` is private but shared by both transports → promoted to library-internal
-- ~700 lines extracted from `ContextGrabberHostApp.swift` monolith (currently 2,217 lines → ~900 after)
-- Test target retargeted from `@testable import ContextGrabberHost` to `@testable import ContextGrabberCore`
+### Remaining Milestone G follow-ups
+- Extend CLI mode argument surface to match final Go orchestration needs (`--focused`, tab/app targeting parity where applicable).
+- Expand CLI test coverage further as capture subcommands are added (baseline parser/exit-code tests now exist in `CLIEntryPointTests.swift`).

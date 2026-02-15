@@ -10,15 +10,19 @@ let package = Package(
     .executable(name: "ContextGrabberHost", targets: ["ContextGrabberHost"])
   ],
   targets: [
+    .target(
+      name: "ContextGrabberCore"
+    ),
     .executableTarget(
       name: "ContextGrabberHost",
+      dependencies: ["ContextGrabberCore"],
       resources: [
         .process("Resources")
       ]
     ),
     .testTarget(
       name: "ContextGrabberHostTests",
-      dependencies: ["ContextGrabberHost"]
+      dependencies: ["ContextGrabberHost", "ContextGrabberCore"]
     )
   ]
 )

@@ -1,5 +1,5 @@
 import XCTest
-@testable import ContextGrabberHost
+@testable import ContextGrabberCore
 
 final class CapturePipelineTests: XCTestCase {
   private struct StubAccessibilityExtractor: DesktopAccessibilityExtracting {
