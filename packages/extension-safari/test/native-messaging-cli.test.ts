@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shared-types";
@@ -7,6 +9,19 @@ import { type HostRequestMessage, PROTOCOL_VERSION } from "@context-grabber/shar
 const packageDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(packageDir, "src", "native-messaging-cli.ts");
 const fixturePath = join(packageDir, "fixtures", "active-tab.json");
+
+const createFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-safari-osa-"));
+  const binaryPath = join(dir, "fake-osascript.sh");
+
+  await writeFile(
+    binaryPath,
+    ["#!/bin/sh", `cat "${stdoutFilePath}"`, "exit 0", ""].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
 
 const runCli = (args: string[] = [], stdinText = "", extraEnv: Record<string, string> = {}) => {
   return spawnSync("bun", [cliPath, ...args], {
@@ -17,6 +32,8 @@ const runCli = (args: string[] = [], stdinText = "", extraEnv: Record<string, st
       ...process.env,
       CONTEXT_GRABBER_SAFARI_SOURCE: "",
       CONTEXT_GRABBER_SAFARI_FIXTURE_PATH: "",
+      CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD: "",
+      CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH: "",
       CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN: "",
       ...extraEnv,
     },
@@ -130,6 +147,134 @@ describe("native messaging cli", () => {
     const parsed = parseLastJsonLine(result.stdout);
     if (typeof parsed !== "object" || parsed === null) {
       throw new Error("Invalid auto-mode failure response.");
+    }
+
+    expect((parsed as { type?: string }).type).toBe("extension.error");
+    expect((parsed as { payload?: { code?: string } }).payload?.code).toBe(
+      "ERR_EXTENSION_UNAVAILABLE",
+    );
+  });
+
+  it("uses runtime payload in auto mode before live extraction", () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-4",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-4",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: false,
+      },
+    };
+
+    const runtimePayload = JSON.stringify({
+      url: "https://example.com/safari-runtime",
+      title: "Safari Runtime",
+      fullText: "Runtime text",
+      headings: [],
+      links: [],
+      selectionText: "Drop me",
+    });
+
+    const result = runCli([], JSON.stringify(request), {
+      CONTEXT_GRABBER_SAFARI_SOURCE: "auto",
+      CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD: runtimePayload,
+      CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN: "/path/that/does/not/exist/osascript",
+    });
+    expect(result.status).toBe(0);
+
+    const parsed = parseLastJsonLine(result.stdout);
+    if (typeof parsed !== "object" || parsed === null) {
+      throw new Error("Invalid auto runtime-first response.");
+    }
+
+    expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+    expect(
+      (
+        parsed as {
+          payload?: { capture?: { selectionText?: string } };
+        }
+      ).payload?.capture?.selectionText,
+    ).toBe(undefined);
+  });
+
+  it("falls back to live extraction in auto mode when runtime payload is unavailable", async () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-5",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-5",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: true,
+      },
+    };
+
+    const fixtureOutputPath = join(tmpdir(), `context-grabber-safari-cli-live-${Date.now()}.json`);
+    let fakeOsaBinary: string | undefined;
+    try {
+      await writeFile(
+        fixtureOutputPath,
+        JSON.stringify({
+          url: "https://example.com/safari-live",
+          title: "Safari Live",
+          fullText: "Live capture text.",
+          headings: [],
+          links: [],
+        }),
+        "utf8",
+      );
+      fakeOsaBinary = await createFakeOsaScriptBinary(fixtureOutputPath);
+
+      const result = runCli([], JSON.stringify(request), {
+        CONTEXT_GRABBER_SAFARI_SOURCE: "auto",
+        CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN: fakeOsaBinary,
+      });
+      expect(result.status).toBe(0);
+
+      const parsed = parseLastJsonLine(result.stdout);
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Invalid auto live-fallback response.");
+      }
+
+      expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+    } finally {
+      await rm(fixtureOutputPath, { force: true });
+      if (fakeOsaBinary) {
+        await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("returns extension.error in runtime mode when runtime payload is missing", () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-6",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-6",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: false,
+      },
+    };
+
+    const result = runCli([], JSON.stringify(request), {
+      CONTEXT_GRABBER_SAFARI_SOURCE: "runtime",
+    });
+    expect(result.status).toBe(0);
+
+    const parsed = parseLastJsonLine(result.stdout);
+    if (typeof parsed !== "object" || parsed === null) {
+      throw new Error("Invalid runtime-mode failure response.");
     }
 
     expect((parsed as { type?: string }).type).toBe("extension.error");

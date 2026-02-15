@@ -9,6 +9,7 @@ Path: `packages/extension-safari`
 - Runtime bootstrap entries (`background-main`, `content-main`).
 - Manifest for packaged runtime wiring.
 - Placeholder extension icon assets used by manifest (`assets/icons`).
+- Source modes: `runtime`, `live`, `fixture`, `auto` (`runtime -> live`; fixture explicit).
 
 ### Hardening Notes
 - Runtime bootstrap checks now validate API shape before registration.
@@ -32,7 +33,7 @@ Path: `packages/extension-chrome`
 ### Includes
 - Native messaging CLI transport.
 - AppleScript active-tab extraction helper.
-- Source modes: `live`, `runtime`, `fixture`, `auto` (`live -> runtime`).
+- Source modes: `runtime`, `live`, `fixture`, `auto` (`runtime -> live`; fixture explicit).
 
 ## Cross-Browser Guarantees
 1. Shared protocol version and envelope shape.

@@ -16,7 +16,7 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Safari extension package now includes a native-messaging CLI bridge and transport request handler.
 - Safari CLI stdin handling is now validated via integration tests (real stdin -> JSON response path).
 - Swift host now accepts structured bridge responses even if the bridge exits non-zero.
-- Safari native-messaging CLI now performs live active-tab extraction from Safari by default.
+- Safari native-messaging CLI now supports runtime-first source resolution (`auto: runtime -> live`) with explicit fixture mode for deterministic testing.
 - Global hotkey capture is now wired to the same capture pipeline (`⌃⌥⌘C`).
 - Safari extraction now increases `spawnSync` max buffer to handle larger page payloads safely.
 - Swift host now resolves Bun via explicit env/path fallbacks for non-terminal launch environments.
@@ -24,14 +24,14 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Chrome extension now has protocol-parity transport + native-messaging CLI scaffolding and tests.
 - Native host bridge tests now cover unavailable/invalid transport fallback and oversized-content truncation determinism.
 - Safari runtime now includes a native host port binder (`runtime/native-host`) for packaged Web Extension request/response wiring.
-- Safari CLI source resolution is now strict: `auto`/`live` require live extraction, and `fixture` is explicit opt-in for testing.
+- Safari CLI source modes now include `runtime`, `live`, `fixture`, and `auto`, with `auto` preferring runtime and falling back to live extraction.
 - Swift host now routes capture transport by frontmost browser (Safari or Chrome) and diagnostics report both channels.
 - Menu-triggered host captures now prefer the last known browser app when the menu bar app is active.
 - Swift host now has integration tests for truncation behavior, metadata-only fallback payload/markdown, and markdown determinism.
 - Safari runtime now includes concrete packaged entrypoint helpers:
   - `runtime/background-entrypoint` for native-host port handling and active-tab content-script requests
   - `runtime/content-entrypoint` for content-script capture message handling
-- Chrome now has live AppleScript active-tab extraction (`extract-active-tab`) and CLI source modes `live`, `runtime`, `fixture`, with `auto` fallback `live -> runtime` (fixture is explicit).
+- Chrome CLI source modes are `runtime`, `live`, `fixture`, with `auto` fallback `runtime -> live` (fixture is explicit).
 - Safari package now includes runtime bootstrap entry files (`runtime/background-main`, `runtime/content-main`) and a WebExtension `manifest.json` that references compiled runtime assets.
 - A concrete Safari container app-extension project is now scaffolded at `apps/safari-container` via `safari-web-extension-converter`, using packaged runtime assets (`manifest.json` + `dist/**`).
 - Safari extension manifest now includes placeholder icon assets (`packages/extension-safari/assets/icons`) and sync flow stages `icons/**` into the generated container.
@@ -121,7 +121,6 @@ Browser live extraction requirements:
 - macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
 
 ## Next Steps
-- down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript fallback for dev modes.
 - milestone F2 polish: capture feedback popup, custom menu bar icon, and lightweight settings surface polish.
 - milestone G: companion CLI + agent integration using the shared capture pipeline.
 

@@ -14,7 +14,7 @@ interface PingResult {
   protocolVersion: string;
 }
 
-type SafariSourceMode = "auto" | "live" | "fixture";
+type SafariSourceMode = "auto" | "runtime" | "live" | "fixture";
 
 const readStdinText = async (): Promise<string> => {
   const bunStdin = (globalThis as { Bun?: { stdin?: { text?: () => Promise<string> } } }).Bun
@@ -51,9 +51,30 @@ const loadFixtureFromDisk = async (): Promise<unknown> => {
   return JSON.parse(raw) as unknown;
 };
 
+const loadRuntimePayload = async (): Promise<unknown> => {
+  const inlinePayload = process.env.CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD;
+  if (inlinePayload && inlinePayload.length > 0) {
+    return JSON.parse(inlinePayload) as unknown;
+  }
+
+  const payloadPath = process.env.CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH;
+  if (payloadPath && payloadPath.length > 0) {
+    if (!existsSync(payloadPath)) {
+      throw new Error(`Runtime payload file not found at ${payloadPath}`);
+    }
+
+    const raw = await readFile(payloadPath, "utf8");
+    return JSON.parse(raw) as unknown;
+  }
+
+  throw new Error(
+    "Runtime source requires CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD or CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH.",
+  );
+};
+
 const resolveSourceMode = (): SafariSourceMode => {
   const mode = process.env.CONTEXT_GRABBER_SAFARI_SOURCE;
-  if (mode === "live" || mode === "fixture" || mode === "auto") {
+  if (mode === "runtime" || mode === "live" || mode === "fixture" || mode === "auto") {
     return mode;
   }
 
@@ -78,6 +99,11 @@ const resolveCaptureSource = async (
     });
   };
 
+  const fromRuntime = async (): Promise<SafariExtractionInput> => {
+    const payload = await loadRuntimePayload();
+    return toSafariExtractionInput(payload, includeSelectionText);
+  };
+
   const fromFixture = async (): Promise<SafariExtractionInput> => {
     const payload = await loadFixtureFromDisk();
     return toSafariExtractionInput(payload, includeSelectionText);
@@ -87,11 +113,25 @@ const resolveCaptureSource = async (
     return fromLive();
   }
 
+  if (mode === "runtime") {
+    return fromRuntime();
+  }
+
   if (mode === "fixture") {
     return fromFixture();
   }
 
-  return fromLive();
+  try {
+    return await fromRuntime();
+  } catch (runtimeError) {
+    try {
+      return fromLive();
+    } catch (liveError) {
+      throw new Error(
+        `Auto source failed. Runtime error: ${runtimeError instanceof Error ? runtimeError.message : String(runtimeError)}. Live error: ${liveError instanceof Error ? liveError.message : String(liveError)}. Use CONTEXT_GRABBER_SAFARI_SOURCE=fixture for deterministic fixture capture.`,
+      );
+    }
+  }
 };
 
 const emit = (value: unknown): void => {

@@ -9,7 +9,10 @@
 
 ## Browser Pipeline (Safari/Chrome)
 1. Validate host envelope type/version.
-2. Resolve extraction source (live/runtime/fixture by package rules).
+2. Resolve extraction source by package rules:
+- `auto`: runtime-first, then AppleScript live fallback.
+- `runtime` and `live`: strict mode.
+- `fixture`: explicit deterministic test/dev mode only.
 3. Build capture payload with metadata, text, headings, links.
 4. Return `extension.capture.result` or `extension.error`.
 5. Host maps transport errors to metadata-only fallback payload.

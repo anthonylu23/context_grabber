@@ -48,3 +48,7 @@ cd apps/macos-host && swift test
 bun test --cwd packages/extension-safari
 bun test --cwd packages/extension-chrome
 ```
+
+## Browser Source Defaults
+- Safari and Chrome CLI source `auto` now prefer runtime payload input first, then fall back to AppleScript live extraction.
+- Fixture capture remains explicit (`CONTEXT_GRABBER_*_SOURCE=fixture`) for deterministic testing.

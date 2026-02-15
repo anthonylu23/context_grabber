@@ -6,12 +6,14 @@
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force browser routing (`safari` or `chrome`).
 
 ## Safari Bridge
-- `CONTEXT_GRABBER_SAFARI_SOURCE`: `auto`, `live`, or `fixture`.
+- `CONTEXT_GRABBER_SAFARI_SOURCE`: `runtime`, `live`, `fixture`, or `auto` (`runtime -> live`; fixture is explicit).
 - `CONTEXT_GRABBER_SAFARI_FIXTURE_PATH`: fixture override path.
+- `CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD`: inline runtime JSON payload.
+- `CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH`: runtime JSON payload file path.
 - `CONTEXT_GRABBER_SAFARI_OSASCRIPT_BIN`: AppleScript executable override.
 
 ## Chrome Bridge
-- `CONTEXT_GRABBER_CHROME_SOURCE`: `live`, `runtime`, `fixture`, or `auto`.
+- `CONTEXT_GRABBER_CHROME_SOURCE`: `runtime`, `live`, `fixture`, or `auto` (`runtime -> live`; fixture is explicit).
 - `CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN`: AppleScript executable override.
 - `CONTEXT_GRABBER_CHROME_FIXTURE_PATH`: fixture override path.
 - `CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD`: inline runtime JSON payload.

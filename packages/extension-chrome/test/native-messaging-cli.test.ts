@@ -183,6 +183,137 @@ describe("chrome native messaging cli", () => {
     ).toBe(undefined);
   });
 
+  it("uses runtime payload in auto mode before live extraction", () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-4a",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-4a",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: false,
+      },
+    };
+
+    const runtimePayload = JSON.stringify({
+      url: "https://example.com/runtime-auto",
+      title: "Runtime Auto Capture",
+      fullText: "Runtime auto text.",
+      headings: [],
+      links: [],
+      selectionText: "Should be dropped in auto/runtime path",
+    });
+
+    const result = runCli([], JSON.stringify(request), {
+      CONTEXT_GRABBER_CHROME_SOURCE: "auto",
+      CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD: runtimePayload,
+      CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN: "/path/that/does/not/exist/osascript",
+    });
+    expect(result.status).toBe(0);
+
+    const parsed = parseLastJsonLine(result.stdout);
+    if (typeof parsed !== "object" || parsed === null) {
+      throw new Error("Invalid auto/runtime-first response.");
+    }
+
+    expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+    expect(
+      (
+        parsed as {
+          payload?: { capture?: { selectionText?: string } };
+        }
+      ).payload?.capture?.selectionText,
+    ).toBe(undefined);
+  });
+
+  it("falls back to live extraction in auto mode when runtime payload is unavailable", async () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-4b",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-4b",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: true,
+      },
+    };
+
+    const fixtureOutputPath = join(
+      tmpdir(),
+      `context-grabber-chrome-cli-auto-live-${Date.now()}.json`,
+    );
+    let fakeOsaBinary: string | undefined;
+    try {
+      await writeFile(
+        fixtureOutputPath,
+        JSON.stringify({
+          url: "https://example.com/live-auto-fallback",
+          title: "Live Auto Fallback",
+          fullText: "Live capture text.",
+          headings: [],
+          links: [],
+        }),
+        "utf8",
+      );
+      fakeOsaBinary = await createFakeOsaScriptBinary(fixtureOutputPath);
+
+      const result = runCli([], JSON.stringify(request), {
+        CONTEXT_GRABBER_CHROME_SOURCE: "auto",
+        CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN: fakeOsaBinary,
+      });
+      expect(result.status).toBe(0);
+
+      const parsed = parseLastJsonLine(result.stdout);
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Invalid auto/live-fallback response.");
+      }
+
+      expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+    } finally {
+      await rm(fixtureOutputPath, { force: true });
+      if (fakeOsaBinary) {
+        await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("returns extension.error in runtime mode when runtime payload is missing", () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-4c",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-4c",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: true,
+      },
+    };
+
+    const result = runCli([], JSON.stringify(request), {
+      CONTEXT_GRABBER_CHROME_SOURCE: "runtime",
+    });
+    expect(result.status).toBe(0);
+
+    const parsed = parseLastJsonLine(result.stdout);
+    if (typeof parsed !== "object" || parsed === null) {
+      throw new Error("Invalid runtime-only response.");
+    }
+
+    expect((parsed as { type?: string }).type).toBe("extension.error");
+    expect((parsed as { payload?: { code?: string } }).payload?.code).toBe(
+      "ERR_EXTENSION_UNAVAILABLE",
+    );
+  });
+
   it("handles host capture request via live source mode with configured osascript binary", async () => {
     const request: HostRequestMessage = {
       id: "req-cli-3",

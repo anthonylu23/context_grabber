@@ -469,6 +469,11 @@ interface NormalizedContext {
 - diagnostics status/summary formatting moved to `DiagnosticsPresentation.swift`
 - `ContextGrabberHostApp.swift` now keeps scene/model orchestration with slimmer transport/diagnostics glue
 - host tests now include diagnostics presentation helper coverage (protocol match/mismatch/unreachable + summary shape)
+44. Browser-extension-first source resolution is now implemented for both Safari and Chrome bridge CLIs:
+- source modes are now aligned across Safari/Chrome (`runtime`, `live`, `fixture`, `auto`)
+- `auto` now resolves `runtime -> live` for both browsers, with fixture remaining explicit-only
+- Safari CLI now supports runtime payload env input (`CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD`, `CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH`)
+- package tests now cover runtime-first auto behavior, live fallback behavior, and runtime strict-mode failure behavior
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 
@@ -563,6 +568,5 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
-2. UI polish & capture feedback panel (Milestone F2) — capture summary popup, custom icon, settings surface, interaction polish.
-3. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.
+1. UI polish & capture feedback panel (Milestone F2) — capture summary popup, custom icon, settings surface, interaction polish.
+2. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.

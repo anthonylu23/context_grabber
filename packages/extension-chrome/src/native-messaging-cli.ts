@@ -16,7 +16,7 @@ interface PingResult {
   protocolVersion: string;
 }
 
-type ChromeSourceMode = "auto" | "live" | "runtime" | "fixture";
+type ChromeSourceMode = "auto" | "runtime" | "live" | "fixture";
 
 const readStdinText = async (): Promise<string> => {
   const bunStdin = (globalThis as { Bun?: { stdin?: { text?: () => Promise<string> } } }).Bun
@@ -80,7 +80,7 @@ const loadRuntimePayload = async (
 
 const resolveSourceMode = (): ChromeSourceMode => {
   const mode = process.env.CONTEXT_GRABBER_CHROME_SOURCE;
-  if (mode === "live" || mode === "runtime" || mode === "fixture" || mode === "auto") {
+  if (mode === "runtime" || mode === "live" || mode === "fixture" || mode === "auto") {
     return mode;
   }
 
@@ -116,6 +116,10 @@ const resolveCaptureSource = async (
     return loadFixtureFromDisk(includeSelectionText);
   };
 
+  if (mode === "runtime") {
+    return fromRuntime();
+  }
+
   if (mode === "live") {
     return fromLive();
   }
@@ -124,18 +128,14 @@ const resolveCaptureSource = async (
     return fromFixture();
   }
 
-  if (mode === "runtime") {
-    return fromRuntime();
-  }
-
   try {
-    return fromLive();
-  } catch (liveError) {
+    return await fromRuntime();
+  } catch (runtimeError) {
     try {
-      return await fromRuntime();
-    } catch (runtimeError) {
+      return fromLive();
+    } catch (liveError) {
       throw new Error(
-        `Auto source failed. Live error: ${liveError instanceof Error ? liveError.message : String(liveError)}. Runtime error: ${runtimeError instanceof Error ? runtimeError.message : String(runtimeError)}. Use CONTEXT_GRABBER_CHROME_SOURCE=fixture for deterministic fixture capture.`,
+        `Auto source failed. Runtime error: ${runtimeError instanceof Error ? runtimeError.message : String(runtimeError)}. Live error: ${liveError instanceof Error ? liveError.message : String(liveError)}. Use CONTEXT_GRABBER_CHROME_SOURCE=fixture for deterministic fixture capture.`,
       );
     }
   }
