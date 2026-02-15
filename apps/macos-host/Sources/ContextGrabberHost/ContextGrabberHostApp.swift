@@ -15,10 +15,28 @@ private let safariBundleIdentifiers: Set<String> = [
   "com.apple.Safari",
   "com.apple.SafariTechnologyPreview",
 ]
-private let chromeBundleIdentifiers: Set<String> = [
-  "com.google.Chrome",
-  "com.google.Chrome.canary",
+private let chromiumBundleIdentifiers: [String: String] = [
+  "com.google.Chrome": "Google Chrome",
+  "com.google.Chrome.canary": "Google Chrome Canary",
+  "company.thebrowser.Browser": "Arc",
+  "com.brave.Browser": "Brave Browser",
+  "com.brave.Browser.beta": "Brave Browser Beta",
+  "com.brave.Browser.nightly": "Brave Browser Nightly",
+  "com.microsoft.edgemac": "Microsoft Edge",
+  "com.microsoft.edgemac.Beta": "Microsoft Edge Beta",
+  "com.microsoft.edgemac.Dev": "Microsoft Edge Dev",
+  "com.microsoft.edgemac.Canary": "Microsoft Edge Canary",
+  "com.vivaldi.Vivaldi": "Vivaldi",
+  "com.operasoftware.Opera": "Opera",
+  "com.operasoftware.OperaGX": "Opera GX",
 ]
+
+/// Returns the AppleScript application name for a Chromium-based browser bundle identifier.
+/// Falls back to "Google Chrome" if the bundle identifier is not recognized.
+func chromiumAppName(forBundleIdentifier bundleIdentifier: String?) -> String {
+  guard let bundleIdentifier else { return "Google Chrome" }
+  return chromiumBundleIdentifiers[bundleIdentifier] ?? "Google Chrome"
+}
 
 struct BrowserContextPayload: Codable {
   let source: String
@@ -208,7 +226,7 @@ func detectBrowserTarget(
     if safariBundleIdentifiers.contains(frontmostBundleIdentifier) {
       return .safari
     }
-    if chromeBundleIdentifiers.contains(frontmostBundleIdentifier) {
+    if chromiumBundleIdentifiers[frontmostBundleIdentifier] != nil {
       return .chrome
     }
   }
@@ -529,9 +547,9 @@ final class ChromeNativeMessagingTransport {
   private let jsonDecoder = JSONDecoder()
   private let fileManager = FileManager.default
 
-  func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
+  func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int, chromeAppName: String? = nil) throws -> ExtensionBridgeMessage {
     let requestData = try jsonEncoder.encode(request)
-    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs)
+    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs, chromeAppName: chromeAppName)
 
     if !processResult.stdout.isEmpty, let decodedMessage = try? decodeBridgeMessage(processResult.stdout) {
       return decodedMessage
@@ -596,7 +614,7 @@ final class ChromeNativeMessagingTransport {
     }
   }
 
-  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int) throws -> ProcessExecutionResult {
+  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int, chromeAppName: String? = nil) throws -> ProcessExecutionResult {
     let packagePath = try extensionPackagePath()
     let bunExecutablePath = try resolveBunExecutablePath()
 
@@ -605,6 +623,12 @@ final class ChromeNativeMessagingTransport {
     process.currentDirectoryURL = packagePath
     let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
     process.arguments = [cliPath.path] + arguments
+
+    if let chromeAppName {
+      var env = ProcessInfo.processInfo.environment
+      env["CONTEXT_GRABBER_CHROME_APP_NAME"] = chromeAppName
+      process.environment = env
+    }
 
     let stdoutPipe = Pipe()
     let stderrPipe = Pipe()
@@ -1433,7 +1457,8 @@ final class ContextGrabberModel: ObservableObject {
       case .safari:
         return try safariTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
       case .chrome:
-        return try chromeTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs)
+        let appName = chromiumAppName(forBundleIdentifier: frontmostApp.bundleIdentifier)
+        return try chromeTransport.sendCaptureRequest(request, timeoutMs: request.payload.timeoutMs, chromeAppName: appName)
       case .unsupported:
         throw NSError(
           domain: "ContextGrabberHost",

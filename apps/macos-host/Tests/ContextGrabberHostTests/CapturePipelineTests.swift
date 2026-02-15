@@ -116,6 +116,42 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  func testDetectBrowserTargetRecognizesChromiumBrowsers() {
+    let chromiumBrowsers: [(bundleId: String, appName: String, expectedAppleScriptName: String)] = [
+      ("company.thebrowser.Browser", "Arc", "Arc"),
+      ("com.brave.Browser", "Brave Browser", "Brave Browser"),
+      ("com.brave.Browser.beta", "Brave Browser Beta", "Brave Browser Beta"),
+      ("com.microsoft.edgemac", "Microsoft Edge", "Microsoft Edge"),
+      ("com.microsoft.edgemac.Beta", "Microsoft Edge Beta", "Microsoft Edge Beta"),
+      ("com.vivaldi.Vivaldi", "Vivaldi", "Vivaldi"),
+      ("com.operasoftware.Opera", "Opera", "Opera"),
+      ("com.operasoftware.OperaGX", "Opera GX", "Opera GX"),
+      ("com.google.Chrome.canary", "Google Chrome Canary", "Google Chrome Canary"),
+    ]
+
+    for browser in chromiumBrowsers {
+      let target = detectBrowserTarget(
+        frontmostBundleIdentifier: browser.bundleId,
+        frontmostAppName: browser.appName,
+        overrideValue: nil
+      )
+      if case .chrome = target {
+        XCTAssertEqual(target.browserLabel, "chrome")
+        XCTAssertEqual(target.transportStatusPrefix, "chrome_extension")
+      } else {
+        XCTFail("Expected .chrome target for \(browser.bundleId), got \(target)")
+      }
+
+      let resolvedName = chromiumAppName(forBundleIdentifier: browser.bundleId)
+      XCTAssertEqual(resolvedName, browser.expectedAppleScriptName, "Wrong AppleScript name for \(browser.bundleId)")
+    }
+  }
+
+  func testChromiumAppNameFallsBackToGoogleChrome() {
+    XCTAssertEqual(chromiumAppName(forBundleIdentifier: nil), "Google Chrome")
+    XCTAssertEqual(chromiumAppName(forBundleIdentifier: "com.unknown.Browser"), "Google Chrome")
+  }
+
   func testDetectBrowserTargetUnsupportedUsesUnknownBrowserLabel() {
     let target = detectBrowserTarget(
       frontmostBundleIdentifier: "com.example.Terminal",

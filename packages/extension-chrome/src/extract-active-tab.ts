@@ -6,6 +6,8 @@ export interface ChromeActiveTabExtractionOptions {
   timeoutMs?: number;
   osascriptBinary?: string;
   maxBufferBytes?: number;
+  /** AppleScript application name for the Chromium browser (e.g. "Google Chrome", "Arc", "Brave Browser"). */
+  chromeAppName?: string;
 }
 
 export interface ChromePageSnapshot {
@@ -232,12 +234,12 @@ const escapeAppleScriptString = (value: string): string => {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 };
 
-const buildAppleScriptProgram = (javascript: string): string[] => {
+const buildAppleScriptProgram = (javascript: string, appName = "Google Chrome"): string[] => {
   const escapedScript = escapeAppleScriptString(javascript);
 
   return [
-    'tell application "Google Chrome"',
-    'if (count of windows) = 0 then error "No Google Chrome window is open."',
+    `tell application "${appName}"`,
+    `if (count of windows) = 0 then error "No ${appName} window is open."`,
     "set frontTab to active tab of front window",
     `set pageJSON to execute frontTab javascript "${escapedScript}"`,
     "return pageJSON",
@@ -249,7 +251,8 @@ export const extractActiveTabContextFromChrome = (
   options: ChromeActiveTabExtractionOptions,
 ): ChromeExtractionInput => {
   const script = buildChromeDocumentScript(options.includeSelectionText);
-  const program = buildAppleScriptProgram(script);
+  const appName = options.chromeAppName ?? "Google Chrome";
+  const program = buildAppleScriptProgram(script, appName);
 
   const result = spawnSync(
     options.osascriptBinary ?? "osascript",
@@ -262,7 +265,7 @@ export const extractActiveTabContextFromChrome = (
   );
 
   if (result.error) {
-    throw new Error(`Failed to execute Chrome extraction script: ${result.error.message}`);
+    throw new Error(`Failed to execute ${appName} extraction script: ${result.error.message}`);
   }
 
   if (typeof result.status === "number" && result.status !== 0) {
@@ -272,7 +275,7 @@ export const extractActiveTabContextFromChrome = (
 
   const stdout = (result.stdout || "").trim();
   if (stdout.length === 0) {
-    throw new Error("Chrome extraction returned an empty response.");
+    throw new Error(`${appName} extraction returned an empty response.`);
   }
 
   let parsed: unknown;
@@ -280,7 +283,7 @@ export const extractActiveTabContextFromChrome = (
     parsed = JSON.parse(stdout);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Unknown JSON parse failure.";
-    throw new Error(`Chrome extraction produced invalid JSON: ${reason}`);
+    throw new Error(`${appName} extraction produced invalid JSON: ${reason}`);
   }
 
   return toChromeExtractionInput(parsed, options.includeSelectionText);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -15,6 +15,27 @@ const createFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string
   await writeFile(
     binaryPath,
     ["#!/bin/sh", `cat "${stdoutFilePath}"`, "exit 0", ""].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
+
+const createAppleScriptSpyBinary = async (outputFilePath: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-osa-spy-"));
+  const binaryPath = join(dir, "spy-osascript.sh");
+
+  // Writes all arguments to outputFilePath so the test can inspect what AppleScript was generated
+  await writeFile(
+    binaryPath,
+    [
+      "#!/bin/sh",
+      `echo "$@" > "${outputFilePath}"`,
+      // Output valid JSON so the extraction doesn't fail on parse
+      'echo \'{"url":"https://example.com","title":"Test","fullText":"body","headings":[],"links":[]}\'',
+      "exit 0",
+      "",
+    ].join("\n"),
     "utf8",
   );
   await chmod(binaryPath, 0o755);
@@ -103,6 +124,56 @@ describe("chrome active-tab extraction helpers", () => {
       await rm(fixturePath, { force: true });
       if (fakeOsaBinary) {
         await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("uses custom chromeAppName in AppleScript when provided", async () => {
+    const argsOutputPath = join(tmpdir(), `context-grabber-osa-args-${Date.now()}.txt`);
+    let spyBinary: string | undefined;
+
+    try {
+      spyBinary = await createAppleScriptSpyBinary(argsOutputPath);
+
+      extractActiveTabContextFromChrome({
+        includeSelectionText: false,
+        osascriptBinary: spyBinary,
+        chromeAppName: "Arc",
+      });
+
+      const capturedArgs = await readFile(argsOutputPath, "utf8");
+
+      expect(capturedArgs.includes('tell application "Arc"')).toBe(true);
+      expect(capturedArgs.includes("No Arc window is open.")).toBe(true);
+      expect(capturedArgs.includes("Google Chrome")).toBe(false);
+    } finally {
+      await rm(argsOutputPath, { force: true });
+      if (spyBinary) {
+        await rm(dirname(spyBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("defaults to Google Chrome when chromeAppName is not provided", async () => {
+    const argsOutputPath = join(tmpdir(), `context-grabber-osa-args-default-${Date.now()}.txt`);
+    let spyBinary: string | undefined;
+
+    try {
+      spyBinary = await createAppleScriptSpyBinary(argsOutputPath);
+
+      extractActiveTabContextFromChrome({
+        includeSelectionText: false,
+        osascriptBinary: spyBinary,
+      });
+
+      const capturedArgs = await readFile(argsOutputPath, "utf8");
+
+      expect(capturedArgs.includes('tell application "Google Chrome"')).toBe(true);
+      expect(capturedArgs.includes("No Google Chrome window is open.")).toBe(true);
+    } finally {
+      await rm(argsOutputPath, { force: true });
+      if (spyBinary) {
+        await rm(dirname(spyBinary), { recursive: true, force: true });
       }
     }
   });
