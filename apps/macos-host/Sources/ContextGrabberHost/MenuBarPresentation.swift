@@ -98,6 +98,25 @@ func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {
   return "Error: \(errorDescription)"
 }
 
+func formatAppVersionLabel(shortVersion: String?, buildVersion: String?) -> String {
+  let short = shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+  let build = buildVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+  if let short, !short.isEmpty, let build, !build.isEmpty {
+    return "Version \(short) (build \(build))"
+  }
+
+  if let short, !short.isEmpty {
+    return "Version \(short)"
+  }
+
+  if let build, !build.isEmpty {
+    return "Build \(build)"
+  }
+
+  return "Version dev"
+}
+
 func shouldShowDisconnectedIndicator(
   safariTransportStatus: String,
   chromeTransportStatus: String

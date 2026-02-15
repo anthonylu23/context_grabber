@@ -158,6 +158,25 @@ final class CapturePipelineTests: XCTestCase {
     )
   }
 
+  func testAppVersionLabelFormatting() {
+    XCTAssertEqual(
+      formatAppVersionLabel(shortVersion: "0.1.0", buildVersion: "42"),
+      "Version 0.1.0 (build 42)"
+    )
+    XCTAssertEqual(
+      formatAppVersionLabel(shortVersion: "0.1.0", buildVersion: nil),
+      "Version 0.1.0"
+    )
+    XCTAssertEqual(
+      formatAppVersionLabel(shortVersion: nil, buildVersion: "42"),
+      "Build 42"
+    )
+    XCTAssertEqual(
+      formatAppVersionLabel(shortVersion: nil, buildVersion: nil),
+      "Version dev"
+    )
+  }
+
   func testDisconnectedIndicatorRequiresBothChannelsNotConnected() {
     XCTAssertEqual(
       shouldShowDisconnectedIndicator(

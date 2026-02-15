@@ -67,5 +67,7 @@
   - retention max files
   - retention max age
   - pause/resume capture placeholder toggle
+- Menu also includes an About section with version/build labeling and handbook shortcut.
+- Handbook shortcut resolves repo root through multiple runtime candidates (`CONTEXT_GRABBER_REPO_ROOT`, cwd, source path, bundle, executable path) to work from Finder/Xcode launches.
 - Output directory changes are validated for writability before persistence.
-- Diagnostics state is also surfaced inline in menu (`Diagnostics Status`) for Safari, Chrome, Accessibility, and Screen Recording.
+- Diagnostics state is also surfaced inline in menu (`System Readiness`) for Safari, Chrome, Accessibility, and Screen Recording.

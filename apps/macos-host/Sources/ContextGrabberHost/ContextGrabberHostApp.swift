@@ -815,6 +815,7 @@ final class ContextGrabberModel: ObservableObject {
   @Published private(set) var indicatorState: MenuBarIndicatorState = .idle
   @Published private(set) var menuBarIcon: MenuBarIcon = menuBarIconForIndicatorState(.idle)
   @Published private(set) var feedbackState: CaptureFeedbackState?
+  @Published private(set) var appVersionLabel: String = "Version dev"
   @Published private(set) var lastCaptureLabel: String = "Last capture: never"
   @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
   @Published private(set) var outputDirectoryLabel: String = "Default"
@@ -827,6 +828,7 @@ final class ContextGrabberModel: ObservableObject {
   @Published private(set) var desktopScreenDiagnosticsLabel: String = "unknown"
 
   private let logger = HostLogger()
+  private let fileManager = FileManager.default
   private let safariTransport = SafariNativeMessagingTransport()
   private let chromeTransport = ChromeNativeMessagingTransport()
   private let hostProcessIdentifier = ProcessInfo.processInfo.processIdentifier
@@ -859,6 +861,7 @@ final class ContextGrabberModel: ObservableObject {
 
     registerHotkeyMonitors()
     registerFrontmostAppObserver()
+    appVersionLabel = resolveAppVersionLabel()
     applySettingsToPublishedState()
     refreshRecentCaptures()
     updateLastCaptureLabel()
@@ -1141,6 +1144,24 @@ final class ContextGrabberModel: ObservableObject {
     if let screenGranted = desktopReadiness.screenRecordingGranted, !screenGranted {
       logger.error("Screen Recording permission is missing. Enable System Settings -> Privacy & Security -> Screen Recording for ContextGrabberHost.")
       logger.info("Use menu action: Open Screen Recording Settings")
+    }
+  }
+
+  func openCodebaseHandbook() {
+    guard let repoRoot = resolveRepoRoot(),
+      let docsURL = handbookDocumentURL(repoRoot: repoRoot)
+    else {
+      statusLine = "Unable to locate codebase handbook"
+      logger.error("Could not resolve docs/codebase/README.md from current runtime.")
+      return
+    }
+
+    if NSWorkspace.shared.open(docsURL) {
+      statusLine = "Opened codebase handbook"
+      logger.info("Opened handbook: \(docsURL.path)")
+    } else {
+      statusLine = "Unable to open handbook"
+      logger.error("Failed to open handbook: \(docsURL.path)")
     }
   }
 
@@ -1610,6 +1631,75 @@ final class ContextGrabberModel: ObservableObject {
     return !bundlePath.contains("/.build/")
   }
 
+  private func resolveAppVersionLabel(bundle: Bundle = .main) -> String {
+    let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    return formatAppVersionLabel(shortVersion: shortVersion, buildVersion: buildVersion)
+  }
+
+  private func resolveRepoRoot(maxDepth: Int = 12) -> URL? {
+    if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
+      let explicitRoot = URL(fileURLWithPath: envRoot, isDirectory: true)
+      if hasRepoMarker(at: explicitRoot), handbookDocumentURL(repoRoot: explicitRoot) != nil {
+        return explicitRoot
+      }
+    }
+
+    var candidates: [URL] = [
+      URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true),
+      URL(fileURLWithPath: #filePath, isDirectory: false).deletingLastPathComponent(),
+      Bundle.main.bundleURL,
+    ]
+    if let executableURL = Bundle.main.executableURL {
+      candidates.append(executableURL.deletingLastPathComponent())
+    }
+
+    var visited = Set<String>()
+    for candidate in candidates {
+      if visited.contains(candidate.path) {
+        continue
+      }
+      visited.insert(candidate.path)
+
+      if let resolvedRoot = findRepoRoot(startingAt: candidate, maxDepth: maxDepth) {
+        return resolvedRoot
+      }
+    }
+
+    return nil
+  }
+
+  private func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
+    var current = startURL
+    for _ in 0..<maxDepth {
+      if hasRepoMarker(at: current), handbookDocumentURL(repoRoot: current) != nil {
+        return current
+      }
+
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path {
+        break
+      }
+
+      current = parent
+    }
+
+    return nil
+  }
+
+  private func hasRepoMarker(at rootURL: URL) -> Bool {
+    let marker = rootURL.appendingPathComponent("packages/shared-types/package.json", isDirectory: false)
+    return fileManager.fileExists(atPath: marker.path)
+  }
+
+  private func handbookDocumentURL(repoRoot: URL) -> URL? {
+    let docsURL = repoRoot.appendingPathComponent("docs/codebase/README.md", isDirectory: false)
+    if fileManager.fileExists(atPath: docsURL.path) {
+      return docsURL
+    }
+    return nil
+  }
+
   private static func appSupportBaseURL() -> URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
       ?? URL(fileURLWithPath: NSHomeDirectory())
@@ -1663,13 +1753,13 @@ struct ContextGrabberHostApp: App {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        Button("Copy Last Capture") {
+        Button("Copy Last Capture To Clipboard") {
           model.copyLastCaptureToClipboard()
         }
         .disabled(model.recentCaptures.isEmpty)
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        Button("Open History Folder") {
+        Button("Open Capture History Folder") {
           model.openRecentCaptures()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1677,17 +1767,17 @@ struct ContextGrabberHostApp: App {
         Divider()
           .padding(.vertical, 4)
 
-        Button("Run Diagnostics") {
+        Button("Refresh Diagnostics") {
           model.runDiagnostics()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        Menu("Diagnostics Status") {
-          Text("Safari: \(model.safariDiagnosticsLabel)")
+        Menu("System Readiness") {
+          Text("Safari Extension: \(model.safariDiagnosticsLabel)")
             .foregroundStyle(.secondary)
-          Text("Chrome: \(model.chromeDiagnosticsLabel)")
+          Text("Chrome Extension: \(model.chromeDiagnosticsLabel)")
             .foregroundStyle(.secondary)
-          Text("Desktop AX: \(model.desktopAccessibilityDiagnosticsLabel)")
+          Text("Desktop Accessibility: \(model.desktopAccessibilityDiagnosticsLabel)")
             .foregroundStyle(.secondary)
           Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
             .foregroundStyle(.secondary)
@@ -1712,7 +1802,7 @@ struct ContextGrabberHostApp: App {
         Divider()
           .padding(.vertical, 4)
 
-        Menu("Preferences") {
+        Menu("Settings") {
           Text("Output: \(model.outputDirectoryLabel)")
             .foregroundStyle(.secondary)
             .lineLimit(1)
@@ -1763,6 +1853,24 @@ struct ContextGrabberHostApp: App {
           .foregroundStyle(.secondary)
           .lineLimit(3)
           .frame(maxWidth: .infinity, alignment: .leading)
+
+        Divider()
+          .padding(.vertical, 4)
+
+        Menu("About") {
+          Text("Context Grabber")
+            .font(.headline)
+          Text(model.appVersionLabel)
+            .foregroundStyle(.secondary)
+          Text("Protocol \(protocolVersion)")
+            .foregroundStyle(.secondary)
+
+          Divider()
+          Button("Open Codebase Handbook") {
+            model.openCodebaseHandbook()
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
         Divider()
           .padding(.vertical, 4)
