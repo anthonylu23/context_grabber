@@ -1660,120 +1660,150 @@ struct ContextGrabberHostApp: App {
 
   var body: some Scene {
     MenuBarExtra("Context Grabber", systemImage: model.menuBarSymbolName) {
-      Text(model.lastCaptureLabel)
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 6) {
+        Text(model.lastCaptureLabel)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.bottom, 4)
 
-      Divider()
-      Button("Capture Now (⌃⌥⌘C)") {
-        model.captureNow()
-      }
+        Divider()
+          .padding(.vertical, 4)
 
-      Divider()
-      Menu("Recent Captures") {
-        if model.recentCaptures.isEmpty {
-          Text("No captures yet")
-            .foregroundStyle(.secondary)
-        } else {
-          ForEach(model.recentCaptures) { entry in
-            Button(entry.menuLabel) {
-              model.openCaptureFile(entry.fileURL)
+        Button("Capture Now (⌃⌥⌘C)") {
+          model.captureNow()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Divider()
+          .padding(.vertical, 4)
+
+        Menu("Recent Captures") {
+          if model.recentCaptures.isEmpty {
+            Text("No captures yet")
+              .foregroundStyle(.secondary)
+          } else {
+            ForEach(model.recentCaptures) { entry in
+              Button(entry.menuLabel) {
+                model.openCaptureFile(entry.fileURL)
+              }
             }
           }
         }
-      }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-      Button("Copy Last Capture") {
-        model.copyLastCaptureToClipboard()
-      }
-      .disabled(model.recentCaptures.isEmpty)
+        Button("Copy Last Capture") {
+          model.copyLastCaptureToClipboard()
+        }
+        .disabled(model.recentCaptures.isEmpty)
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-      Button("Open History Folder") {
-        model.openRecentCaptures()
-      }
-
-      Divider()
-      Button("Run Diagnostics") {
-        model.runDiagnostics()
-      }
-
-      Menu("Diagnostics Status") {
-        Text("Safari: \(model.safariDiagnosticsLabel)")
-          .foregroundStyle(.secondary)
-        Text("Chrome: \(model.chromeDiagnosticsLabel)")
-          .foregroundStyle(.secondary)
-        Text("Desktop AX: \(model.desktopAccessibilityDiagnosticsLabel)")
-          .foregroundStyle(.secondary)
-        Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
-          .foregroundStyle(.secondary)
+        Button("Open History Folder") {
+          model.openRecentCaptures()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
         Divider()
-        Button("Refresh Diagnostics") {
+          .padding(.vertical, 4)
+
+        Button("Run Diagnostics") {
           model.runDiagnostics()
         }
-      }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-      Button("Open Accessibility Settings") {
-        model.openAccessibilitySettings()
-      }
+        Menu("Diagnostics Status") {
+          Text("Safari: \(model.safariDiagnosticsLabel)")
+            .foregroundStyle(.secondary)
+          Text("Chrome: \(model.chromeDiagnosticsLabel)")
+            .foregroundStyle(.secondary)
+          Text("Desktop AX: \(model.desktopAccessibilityDiagnosticsLabel)")
+            .foregroundStyle(.secondary)
+          Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
+            .foregroundStyle(.secondary)
 
-      Button("Open Screen Recording Settings") {
-        model.openScreenRecordingSettings()
-      }
+          Divider()
+          Button("Refresh Diagnostics") {
+            model.runDiagnostics()
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-      Divider()
-      Menu("Preferences") {
-        Text("Output: \(model.outputDirectoryLabel)")
+        Button("Open Accessibility Settings") {
+          model.openAccessibilitySettings()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Button("Open Screen Recording Settings") {
+          model.openScreenRecordingSettings()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Divider()
+          .padding(.vertical, 4)
+
+        Menu("Preferences") {
+          Text("Output: \(model.outputDirectoryLabel)")
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+
+          Button("Use Default Output Directory") {
+            model.useDefaultOutputDirectory()
+          }
+
+          Button("Choose Custom Output Directory...") {
+            model.chooseCustomOutputDirectory()
+          }
+
+          Divider()
+          Menu("Retention Max Files") {
+            ForEach(retentionMaxFileCountOptions, id: \.self) { option in
+              Button(retentionMenuOptionLabel(
+                valueLabel: retentionMaxFileCountLabel(option),
+                isSelected: model.retentionMaxFileCount == option
+              )) {
+                model.setRetentionMaxFileCountPreference(option)
+              }
+            }
+          }
+
+          Menu("Retention Max Age") {
+            ForEach(retentionMaxAgeDaysOptions, id: \.self) { option in
+              Button(retentionMenuOptionLabel(
+                valueLabel: retentionMaxAgeDaysLabel(option),
+                isSelected: model.retentionMaxAgeDays == option
+              )) {
+                model.setRetentionMaxAgeDaysPreference(option)
+              }
+            }
+          }
+
+          Divider()
+          Button(model.capturesPausedPlaceholder ? "Resume Captures (Placeholder)" : "Pause Captures (Placeholder)") {
+            model.toggleCapturePausedPlaceholder()
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Divider()
+          .padding(.vertical, 4)
+
+        Text(model.statusLine)
+          .font(.caption)
           .foregroundStyle(.secondary)
-          .lineLimit(1)
-
-        Button("Use Default Output Directory") {
-          model.useDefaultOutputDirectory()
-        }
-
-        Button("Choose Custom Output Directory...") {
-          model.chooseCustomOutputDirectory()
-        }
+          .lineLimit(3)
+          .frame(maxWidth: .infinity, alignment: .leading)
 
         Divider()
-        Menu("Retention Max Files") {
-          ForEach(retentionMaxFileCountOptions, id: \.self) { option in
-            Button(retentionMenuOptionLabel(
-              valueLabel: retentionMaxFileCountLabel(option),
-              isSelected: model.retentionMaxFileCount == option
-            )) {
-              model.setRetentionMaxFileCountPreference(option)
-            }
-          }
-        }
+          .padding(.vertical, 4)
 
-        Menu("Retention Max Age") {
-          ForEach(retentionMaxAgeDaysOptions, id: \.self) { option in
-            Button(retentionMenuOptionLabel(
-              valueLabel: retentionMaxAgeDaysLabel(option),
-              isSelected: model.retentionMaxAgeDays == option
-            )) {
-              model.setRetentionMaxAgeDaysPreference(option)
-            }
-          }
+        Button("Quit") {
+          NSApplication.shared.terminate(nil)
         }
-
-        Divider()
-        Button(model.capturesPausedPlaceholder ? "Resume Captures (Placeholder)" : "Pause Captures (Placeholder)") {
-          model.toggleCapturePausedPlaceholder()
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-
-      Divider()
-      Text(model.statusLine)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(3)
-
-      Divider()
-      Button("Quit") {
-        NSApplication.shared.terminate(nil)
-      }
+      .padding(.top, 12)
+      .padding(.bottom, 12)
+      .padding(.horizontal, 8)
     }
     .menuBarExtraStyle(.window)
   }
