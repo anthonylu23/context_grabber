@@ -1298,6 +1298,65 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertEqual(first, second)
   }
 
+  func testConfidenceForExtractionMethodReturnsCorrectValues() {
+    XCTAssertEqual(confidenceForExtractionMethod("browser_extension"), 0.92)
+    XCTAssertEqual(confidenceForExtractionMethod("accessibility"), 0.75)
+    XCTAssertEqual(confidenceForExtractionMethod("ocr"), 0.60)
+    XCTAssertEqual(confidenceForExtractionMethod("metadata_only"), 0.45)
+    XCTAssertEqual(confidenceForExtractionMethod("unknown_method"), 0.45)
+  }
+
+  func testRenderMarkdownConfidenceVariesByExtractionMethod() {
+    let payload = BrowserContextPayload(
+      source: "desktop",
+      browser: "desktop",
+      url: "app://com.apple.Terminal",
+      title: "Terminal",
+      fullText: "Some text.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: "Terminal",
+      language: nil,
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: []
+    )
+
+    let ocrMarkdown = renderMarkdown(
+      requestID: "req-conf-1",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "ocr",
+      payload: payload
+    )
+    XCTAssertTrue(ocrMarkdown.contains("confidence: 0.60"))
+
+    let axMarkdown = renderMarkdown(
+      requestID: "req-conf-2",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "accessibility",
+      payload: payload
+    )
+    XCTAssertTrue(axMarkdown.contains("confidence: 0.75"))
+
+    let metadataMarkdown = renderMarkdown(
+      requestID: "req-conf-3",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "metadata_only",
+      payload: payload
+    )
+    XCTAssertTrue(metadataMarkdown.contains("confidence: 0.45"))
+
+    let browserMarkdown = renderMarkdown(
+      requestID: "req-conf-4",
+      capturedAt: "2026-02-14T00:00:00.000Z",
+      extractionMethod: "browser_extension",
+      payload: payload
+    )
+    XCTAssertTrue(browserMarkdown.contains("confidence: 0.92"))
+  }
+
   func testResolveSummarizationSectionsFallbacksWhenProviderNotConfigured() async {
     let payload = BrowserContextPayload(
       source: "browser",

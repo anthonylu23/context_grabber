@@ -66,7 +66,8 @@ func renderMarkdown(
     "app_or_site: \(yamlQuoted(isDesktopSource ? (payload.siteName ?? payload.title) : (payload.siteName ?? hostFromURL(payload.url) ?? payload.browser)))"
   )
   lines.append("extraction_method: \(yamlQuoted(extractionMethod))")
-  lines.append("confidence: 0.92")
+  let confidence = confidenceForExtractionMethod(extractionMethod)
+  lines.append("confidence: \(String(format: "%.2f", confidence))")
   lines.append("truncated: \(truncated ? "true" : "false")")
   lines.append("token_estimate: \(tokenEstimate)")
   lines.append("warnings:")
@@ -277,6 +278,21 @@ func metadataLines(
   }
 
   return lines
+}
+
+func confidenceForExtractionMethod(_ method: String) -> Double {
+  switch method {
+  case "browser_extension":
+    return 0.92
+  case "accessibility":
+    return 0.75
+  case "ocr":
+    return 0.60
+  case "metadata_only":
+    return 0.45
+  default:
+    return 0.45
+  }
 }
 
 func yamlQuoted(_ value: String) -> String {
