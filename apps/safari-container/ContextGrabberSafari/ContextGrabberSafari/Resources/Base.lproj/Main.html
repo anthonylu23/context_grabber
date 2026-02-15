@@ -3,17 +3,23 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
-
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
     <link rel="stylesheet" href="../Style.css">
     <script src="../Script.js" defer></script>
 </head>
 <body>
-    <img src="../Icon.png" width="128" height="128" alt="ContextGrabberSafari Icon">
-    <p class="state-unknown">You can turn on ContextGrabberSafari’s extension in Safari Extensions preferences.</p>
-    <p class="state-on">ContextGrabberSafari’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
-    <p class="state-off">ContextGrabberSafari’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
-    <button class="open-preferences">Quit and Open Safari Extensions Preferences…</button>
+    <div class="card">
+        <div class="header">
+            <img src="../Icon.png" width="48" height="48" alt="Context Grabber">
+            <h1>Context Grabber</h1>
+        </div>
+        <div class="status">
+            <span class="status-dot"></span>
+            <p class="state-unknown">You can turn on the Context Grabber extension in Safari Settings.</p>
+            <p class="state-on">The Context Grabber extension is currently on. You can turn it off in Safari Settings.</p>
+            <p class="state-off">The Context Grabber extension is currently off. You can turn it on in Safari Settings.</p>
+        </div>
+        <button class="open-preferences">Open Safari Settings…</button>
+    </div>
 </body>
 </html>

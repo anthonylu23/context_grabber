@@ -612,7 +612,9 @@ Lightweight settings popover or small window accessible from the menu:
   - `cgrab capture --app <id|--name-match>` — capture a specific desktop app.
   - `cgrab capture ... --method auto|applescript|extension|ocr|ax` — override capture method.
   - `cgrab doctor` — permission status, extension connectivity, transport health.
-  - Output: markdown to stdout by default (pipe-friendly); `--file` and `--clipboard` flags for current behavior.
+  - `cgrab config show|set-output-dir|reset-output-dir` — manage persistent capture output path under `~/contextgrabber`.
+  - `cgrab docs` — open GitHub repository docs in browser (fallback prints URL).
+  - Output: `capture` saves to `~/contextgrabber/captures` by default (or configured subdir); `--file` and `--clipboard` remain supported.
 - Design constraints:
   - Single capture engine shared with the menu bar host — CLI is a trigger surface, not a reimplementation.
   - Tab/app IDs are ephemeral; prefer `--url-match` / `--title-match` / `--name-match` filters over numeric IDs for agent reliability.
@@ -631,10 +633,11 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Milestone G agent integration closeout — add skill manifests/docs for CLI-first workflows.
-2. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
-3. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
-4. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
+1. Distribution + packaging plan execution — ship one macOS installer artifact for app + CLI and wire Brew distribution. See `docs/plans/distribution-packaging-plan.md`.
+2. Milestone G agent integration closeout — add skill manifests/docs for CLI-first workflows.
+3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
+4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
+5. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
 
 ## Progress Notes (Milestone G CLI Rebuild)
 56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
@@ -668,4 +671,12 @@ Lightweight settings popover or small window accessible from the menu:
   - browser capture now routes through Bun bridge helper (`requestBrowserCapture`) with markdown generation owned by Bun
   - desktop capture now shells into `ContextGrabberHost --capture ...` with method/format routing
   - command trigger is now `cgrab` (with `context-grabber` retained as a compatibility alias in command metadata)
+  - persisted CLI storage is now grouped under `~/contextgrabber` (config + default capture output directory)
+  - new CLI commands added: `config` (set/reset/show output path) and `docs` (open GitHub repo URL)
   - validation passed: `go test ./...`, `go build ./...`, `swift test`
+63. Global `cgrab` trigger follow-up is now implemented for desktop standalone usage:
+  - new install helper script: `scripts/install-cli.sh` (installs `cgrab` to `$(go env GOPATH)/bin` by default, supports `--dest`)
+  - desktop host resolution now supports fallback to installed app binary path: `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`
+  - `bridge.CaptureDesktop` no longer hard-fails on repo-root lookup when installed host fallback is available
+  - docs updated for PATH setup, verification flow, and outside-repo behavior split (desktop fallback vs browser repo requirements)
+  - validation passed: `go test ./...`, install script smoke test, and outside-repo doctor behavior checks

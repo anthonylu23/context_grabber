@@ -80,6 +80,36 @@ func TestRunDoctorUnreachableWithoutHostOrBun(t *testing.T) {
 	}
 }
 
+func TestRunDoctorReadyWithInstalledHostFallbackOutsideRepo(t *testing.T) {
+	t.Setenv("CONTEXT_GRABBER_REPO_ROOT", "")
+	t.Setenv("CONTEXT_GRABBER_BUN_BIN", "")
+	t.Setenv("CONTEXT_GRABBER_HOST_BIN", "")
+	t.Chdir(t.TempDir())
+
+	hostPath := filepath.Join(t.TempDir(), "ContextGrabberHost")
+	mustWriteFile(t, hostPath, "#!/bin/sh\necho host\n", 0o755)
+
+	previousInstalledPath := installedHostBinaryPath
+	installedHostBinaryPath = hostPath
+	defer func() {
+		installedHostBinaryPath = previousInstalledPath
+	}()
+
+	report, err := RunDoctor(context.Background())
+	if err != nil {
+		t.Fatalf("RunDoctor returned error: %v", err)
+	}
+	if report.OverallStatus != "ready" {
+		t.Fatalf("expected overall_status=ready, got %s", report.OverallStatus)
+	}
+	if !report.HostBinaryAvailable {
+		t.Fatalf("expected host binary available, got report: %+v", report)
+	}
+	if report.HostBinaryPath != hostPath {
+		t.Fatalf("expected host binary path %q, got %q", hostPath, report.HostBinaryPath)
+	}
+}
+
 func mustWriteFile(t *testing.T, path string, contents string, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

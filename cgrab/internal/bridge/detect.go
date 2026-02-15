@@ -12,6 +12,8 @@ import (
 
 const expectedProtocolVersion = "1"
 
+var installedHostBinaryPath = "/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost"
+
 type BridgeStatus struct {
 	Target string `json:"target"`
 	Status string `json:"status"`
@@ -69,7 +71,13 @@ func RunDoctor(ctx context.Context) (DoctorReport, error) {
 	var report DoctorReport
 	repoRoot, repoErr := resolveRepoRoot()
 	if repoErr != nil {
-		report.Warnings = append(report.Warnings, repoErr.Error())
+		report.Warnings = append(
+			report.Warnings,
+			fmt.Sprintf(
+				"repository root not resolved (%v); browser bridge diagnostics need CONTEXT_GRABBER_REPO_ROOT outside the repo",
+				repoErr,
+			),
+		)
 	} else {
 		report.RepoRoot = repoRoot
 	}
@@ -90,7 +98,10 @@ func RunDoctor(ctx context.Context) (DoctorReport, error) {
 	report.HostBinaryAvailable = hostOK
 	report.HostBinaryPath = hostPath
 	if !hostOK {
-		report.Warnings = append(report.Warnings, "ContextGrabberHost binary not found; desktop capture bridge unavailable")
+		report.Warnings = append(
+			report.Warnings,
+			"ContextGrabberHost binary not found; build apps/macos-host, install ContextGrabber.app, or set CONTEXT_GRABBER_HOST_BIN",
+		)
 	}
 
 	report.Bridges = checkBrowserBridges(ctx, repoRoot, repoErr, bunPath, bunOK)
@@ -270,11 +281,25 @@ func resolveHostBinaryPath(repoRoot string) (string, bool) {
 	if explicit := strings.TrimSpace(os.Getenv("CONTEXT_GRABBER_HOST_BIN")); explicit != "" {
 		return explicit, isExecutableFile(explicit)
 	}
-	if strings.TrimSpace(repoRoot) == "" {
+
+	candidates := make([]string, 0, 2)
+	if strings.TrimSpace(repoRoot) != "" {
+		candidates = append(
+			candidates,
+			filepath.Join(repoRoot, "apps", "macos-host", ".build", "debug", "ContextGrabberHost"),
+		)
+	}
+	candidates = append(candidates, installedHostBinaryPath)
+
+	for _, candidate := range candidates {
+		if isExecutableFile(candidate) {
+			return candidate, true
+		}
+	}
+	if len(candidates) == 0 {
 		return "", false
 	}
-	path := filepath.Join(repoRoot, "apps", "macos-host", ".build", "debug", "ContextGrabberHost")
-	return path, isExecutableFile(path)
+	return candidates[0], false
 }
 
 func isExecutableFile(path string) bool {

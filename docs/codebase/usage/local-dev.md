@@ -66,16 +66,19 @@ bun test --cwd packages/extension-safari
 bun test --cwd packages/extension-chrome
 ```
 
-## Companion CLI
+## Context Grabber CLI
 
-The TS companion CLI has been removed. The Go CLI under `cli/` now supports list/capture/doctor.
+The TS companion CLI has been removed. The Go CLI under `cgrab/` now supports list/capture/doctor/config/docs.
 
 ```bash
-cd /path/to/context_grabber/cli
+cd /path/to/context_grabber/cgrab
 go test ./...
-go build -o cgrab .
+go build .
 
 # inventory commands
+./cgrab list
+./cgrab list --tabs --browser safari
+./cgrab list --apps
 ./cgrab list tabs --format json
 ./cgrab list apps --format json
 
@@ -87,21 +90,63 @@ go build -o cgrab .
 
 # diagnostics
 ./cgrab doctor --format json
+
+# config + docs
+./cgrab config show
+./cgrab config set-output-dir projects/client-a
+./cgrab docs
 ```
 
 Notes:
+- `cgrab list` defaults to both tabs + apps when no selector flags are set.
 - Browser capture methods: `auto`, `applescript` (live extraction), `extension` (runtime payload path).
 - Desktop capture methods: `auto`, `applescript` (alias of `auto`), `ax`, `ocr`.
+- Capture output default: `~/contextgrabber/captures/` (or configured subdir under `~/contextgrabber`).
+- Config file: `~/contextgrabber/config.json`.
+- Optional override for storage home: `CONTEXT_GRABBER_CLI_HOME=/absolute/path`.
 
-For a short trigger command, build the binary as `cgrab`:
+## Install `cgrab` on PATH (dev)
 
 ```bash
-cd /path/to/context_grabber/cli
-go build -o cgrab .
-./cgrab --help
+cd /path/to/context_grabber
+./scripts/install-cli.sh
+
+# optional custom install location
+./scripts/install-cli.sh --dest "$HOME/.local/bin"
 ```
 
-`go run . <command>` also works for quick local iteration.
+If your shell cannot find `cgrab`, add the install location to zsh:
+
+```bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Verify global trigger behavior:
+
+```bash
+command -v cgrab
+cgrab --version
+cgrab doctor --format json
+```
+
+Outside the repo tree:
+- desktop capture host resolution order is: `CONTEXT_GRABBER_HOST_BIN` -> repo debug host (`apps/macos-host/.build/debug/ContextGrabberHost`) -> installed app fallback (`/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`).
+- browser capture + browser bridge diagnostics still rely on repo assets (`packages/extension-*`), so set `CONTEXT_GRABBER_REPO_ROOT` for those workflows.
+
+For browser workflows outside the repo tree, set:
+
+```bash
+export CONTEXT_GRABBER_REPO_ROOT="/path/to/context_grabber"
+```
+
+Optional override if desktop host binary is elsewhere:
+
+```bash
+export CONTEXT_GRABBER_HOST_BIN="/absolute/path/to/ContextGrabberHost"
+```
+
+`go run . <command>` still works for quick local iteration.
 
 ## Browser Source Defaults
 - Safari and Chrome CLI source `auto` now prefer AppleScript live extraction first, with runtime payload fallback only when runtime payload env vars are configured.

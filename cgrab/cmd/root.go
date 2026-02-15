@@ -7,6 +7,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func initRootHelp(rootCmd *cobra.Command) {
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd == rootCmd {
+			fmt.Fprintln(cmd.OutOrStderr(), buildProductCard(detectCardWidth(cmd.OutOrStderr())))
+			fmt.Fprintln(cmd.OutOrStderr())
+		}
+		cmd.Print(cmd.UsageString())
+	})
+}
+
 const (
 	formatJSON     = "json"
 	formatMarkdown = "markdown"
@@ -33,7 +43,8 @@ func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:           "cgrab",
 		Aliases:       []string{"context-grabber"},
-		Short:         "Context Grabber companion CLI",
+		Short:         "Context Grabber CLI",
+		Example:       "  cgrab list tabs --browser safari\n  cgrab capture --focused\n  cgrab config show\n  cgrab docs",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
@@ -54,13 +65,13 @@ func newRootCommand() *cobra.Command {
 		&opts.outputFile,
 		"file",
 		"",
-		"write output to file instead of stdout",
+		"write output to file",
 	)
 	rootCmd.PersistentFlags().BoolVar(
 		&opts.clipboard,
 		"clipboard",
 		false,
-		"copy command output to clipboard",
+		"copy output to clipboard",
 	)
 	rootCmd.PersistentFlags().StringVar(
 		&opts.format,
@@ -72,6 +83,11 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newListCommand(opts))
 	rootCmd.AddCommand(newCaptureCommand(opts))
 	rootCmd.AddCommand(newDoctorCommand(opts))
+	rootCmd.AddCommand(newConfigCommand())
+	rootCmd.AddCommand(newDocsCommand())
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	applyCommandStyle(rootCmd)
+	initRootHelp(rootCmd)
 
 	return rootCmd
 }

@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
-	"github.com/anthonylu23/context_grabber/cli/internal/bridge"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/bridge"
 )
 
 func TestToBrowserCaptureSource(t *testing.T) {
@@ -154,5 +158,56 @@ func TestResolveBrowserTargetOverrideEnvRejectsInvalidValue(t *testing.T) {
 	_, err := resolveBrowserTargetOverrideEnv()
 	if err == nil {
 		t.Fatalf("expected invalid browser target override to return error")
+	}
+}
+
+func TestCaptureCommandWritesToDefaultConfiguredPathWhenFileFlagOmitted(t *testing.T) {
+	previousCaptureBrowserFunc := captureBrowserFunc
+	previousNowFunc := nowFunc
+	t.Cleanup(func() {
+		captureBrowserFunc = previousCaptureBrowserFunc
+		nowFunc = previousNowFunc
+	})
+
+	baseDir := filepath.Join(t.TempDir(), "contextgrabber")
+	t.Setenv("CONTEXT_GRABBER_CLI_HOME", baseDir)
+	nowFunc = func() time.Time {
+		return time.Date(2026, time.February, 15, 13, 30, 45, 123_000_000, time.UTC)
+	}
+	captureBrowserFunc = func(
+		_ context.Context,
+		_ bridge.BrowserTarget,
+		_ bridge.BrowserCaptureSource,
+		_ int,
+		_ bridge.BrowserCaptureMetadata,
+	) (bridge.BrowserCaptureAttempt, error) {
+		return bridge.BrowserCaptureAttempt{
+			ExtractionMethod: "browser_extension",
+			Warnings:         []string{},
+			Markdown:         "# Captured Content\n",
+		}, nil
+	}
+
+	options := defaultGlobalOptions()
+	command := newCaptureCommand(options)
+	command.SetArgs([]string{"--focused"})
+	var stdout bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stdout)
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("capture command returned error: %v", err)
+	}
+
+	expectedFile := filepath.Join(baseDir, "captures", "capture-20260215-133045.123.md")
+	raw, err := os.ReadFile(expectedFile)
+	if err != nil {
+		t.Fatalf("expected capture file %q to exist: %v", expectedFile, err)
+	}
+	if string(raw) != "# Captured Content\n" {
+		t.Fatalf("unexpected capture file contents: %q", string(raw))
+	}
+	if !strings.Contains(stdout.String(), expectedFile) {
+		t.Fatalf("expected command output to include saved path, got %q", stdout.String())
 	}
 }

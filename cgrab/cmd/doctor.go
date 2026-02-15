@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthonylu23/context_grabber/cli/internal/bridge"
-	"github.com/anthonylu23/context_grabber/cli/internal/output"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/bridge"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/output"
 	"github.com/spf13/cobra"
 )
 
 func newDoctorCommand(global *globalOptions) *cobra.Command {
 	doctorCmd := &cobra.Command{
 		Use:   "doctor",
-		Short: "Check companion CLI capabilities and bridge health",
+		Short: "Run system health checks",
+		Example: "  cgrab doctor\n" +
+			"  cgrab doctor --format json",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			report, err := bridge.RunDoctor(cmd.Context())
 			if err != nil {

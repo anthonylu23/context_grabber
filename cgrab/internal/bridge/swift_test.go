@@ -75,3 +75,42 @@ func TestCaptureDesktopRejectsMissingTarget(t *testing.T) {
 		t.Fatalf("expected error for missing app and bundle target")
 	}
 }
+
+func TestCaptureDesktopUsesInstalledHostFallbackOutsideRepo(t *testing.T) {
+	t.Setenv("CONTEXT_GRABBER_REPO_ROOT", "")
+	t.Setenv("CONTEXT_GRABBER_HOST_BIN", "")
+	t.Chdir(t.TempDir())
+
+	hostPath := filepath.Join(t.TempDir(), "ContextGrabberHost")
+	if err := os.WriteFile(hostPath, []byte("#!/bin/sh\necho host\n"), 0o755); err != nil {
+		t.Fatalf("write host binary failed: %v", err)
+	}
+	if err := os.Chmod(hostPath, 0o755); err != nil {
+		t.Fatalf("chmod host binary failed: %v", err)
+	}
+
+	previousInstalledPath := installedHostBinaryPath
+	installedHostBinaryPath = hostPath
+	defer func() {
+		installedHostBinaryPath = previousInstalledPath
+	}()
+
+	var capturedName string
+	restore := setSwiftCaptureRunnerForTesting(mockDesktopRunner(func(_ context.Context, name string, _ []string) (string, string, error) {
+		capturedName = name
+		return "markdown output\n", "", nil
+	}))
+	defer restore()
+
+	_, err := CaptureDesktop(context.Background(), DesktopCaptureRequest{
+		AppName: "Finder",
+		Method:  DesktopCaptureMethodAuto,
+		Format:  DesktopCaptureFormatMarkdown,
+	})
+	if err != nil {
+		t.Fatalf("CaptureDesktop returned error: %v", err)
+	}
+	if capturedName != hostPath {
+		t.Fatalf("expected fallback host path %q, got %q", hostPath, capturedName)
+	}
+}

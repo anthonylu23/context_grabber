@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anthonylu23/context_grabber/cli/cmd"
+	"github.com/anthonylu23/context_grabber/cgrab/cmd"
 )
 
 func main() {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Rebuild the Context Grabber companion CLI as a Go binary that orchestrates capture via subprocess calls to the existing `ContextGrabberHost` Swift binary (desktop AX/OCR capture, running in headless CLI mode) and Bun/TS pipeline (browser capture).
+Rebuild the Context Grabber CLI as a Go binary that orchestrates capture via subprocess calls to the existing `ContextGrabberHost` Swift binary (desktop AX/OCR capture, running in headless CLI mode) and Bun/TS pipeline (browser capture).
 
 The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI is a clean reimplementation that reuses the same underlying capture infrastructure without duplicating capture logic.
 
@@ -25,6 +25,12 @@ The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI 
   - `capture --tab --url-match/--title-match`
   - `capture --app <name|--name-match|--bundle-id>`
   - method routing for browser (`auto|applescript|extension`) and desktop (`auto|applescript|ax|ocr`)
+  - capture defaults now persist under `~/contextgrabber/<subdir>` when `--file` is omitted
+- CLI UX polish complete:
+  - root command presentation renamed to `Context Grabber CLI`
+  - styled no-color help/usage layout
+  - `docs` command (open GitHub repo with URL fallback)
+  - `config` command for managed capture output path under `~/contextgrabber`
 - Phase 4 deferred: MCP server support has been removed from the CLI for now.
 - Remaining Milestone G work: packaging polish, CLI UX hardening, and docs closeout.
 
@@ -61,7 +67,7 @@ Optional:  bun + browser extensions (for rich browser capture)
 
 ### Rendering Ownership
 
-Each subprocess owns its own markdown rendering. Go never renders markdown — it passes through what the subprocess emits to stdout.
+Each subprocess owns its own markdown rendering. Go never renders markdown — it forwards subprocess-rendered payloads to the configured output target (stdout/--file/default capture directory).
 
 - Browser captures: Bun/TS renders via `native-host-bridge/markdown.ts`
 - Desktop captures: Swift renders via `MarkdownRendering.swift`
@@ -82,7 +88,11 @@ cli/
     list.go              list tabs, list apps
     capture.go           capture --focused, --tab, --app
     doctor.go            diagnostics
+    config.go            config management (`show`, `set-output-dir`, `reset-output-dir`)
+    docs.go              open repository docs URL
   internal/
+    config/
+      store.go           persisted config in ~/contextgrabber/config.json
     osascript/
       tabs.go            AppleScript for tab enumeration + parsing
       apps.go            AppleScript for app enumeration + parsing
@@ -114,6 +124,10 @@ cgrab capture --app <name> [--method auto|applescript|ax|ocr]
 cgrab capture --app --name-match <pattern> [--method auto|applescript|ax|ocr]
 cgrab capture --app --bundle-id <id> [--method auto|applescript|ax|ocr]
 cgrab doctor
+cgrab config show
+cgrab config set-output-dir <subdir>
+cgrab config reset-output-dir
+cgrab docs
 
 Global flags:
   --file <path>             Write output to file instead of stdout
@@ -127,6 +141,7 @@ Environment variables:
   CONTEXT_GRABBER_BUN_BIN          Override Bun binary path
   CONTEXT_GRABBER_BROWSER_TARGET   Force browser target (safari|chrome)
   CONTEXT_GRABBER_HOST_BIN         Override ContextGrabberHost binary path (for CLI mode capture)
+  CONTEXT_GRABBER_CLI_HOME         Override CLI storage home (default: ~/contextgrabber)
 ```
 
 ### Capture Flow: `capture --tab`
@@ -149,7 +164,7 @@ Note: Tab activation briefly switches the user's active tab. This is a known tra
 
 ### Agent Integration Status
 
-MCP server support is currently deferred. The CLI remains automation-friendly via JSON output (`--format json`) on `list` and `doctor`, and structured JSON mode for capture.
+MCP server support is currently deferred. The CLI remains automation-friendly via JSON output (`--format json`) on `list` and `doctor`, plus structured JSON mode for capture payloads.
 
 ## Swift Library Extraction + CLI Mode
 

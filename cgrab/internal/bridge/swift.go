@@ -82,14 +82,13 @@ func CaptureDesktop(ctx context.Context, request DesktopCaptureRequest) ([]byte,
 		return nil, fmt.Errorf("desktop capture requires app name or bundle identifier")
 	}
 
-	repoRoot, err := resolveRepoRoot()
-	if err != nil {
-		return nil, err
-	}
+	repoRoot, _ := resolveRepoRoot()
 
 	hostBinaryPath, hostBinaryOK := resolveHostBinaryPath(repoRoot)
 	if !hostBinaryOK {
-		return nil, fmt.Errorf("ContextGrabberHost binary not found; build apps/macos-host first")
+		return nil, fmt.Errorf(
+			"ContextGrabberHost binary not found; build apps/macos-host, install ContextGrabber.app, or set CONTEXT_GRABBER_HOST_BIN",
+		)
 	}
 
 	args := []string{"--capture"}

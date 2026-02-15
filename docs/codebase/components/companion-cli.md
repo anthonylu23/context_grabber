@@ -1,10 +1,10 @@
-# Component: Companion CLI
+# Component: Context Grabber CLI
 
-> **Status:** The Bun/TS companion CLI (`packages/companion-cli`) has been removed. The Go CLI (`cli/`) now implements list/capture/doctor workflows.
+> **Status:** The Bun/TS companion CLI (`packages/companion-cli`) has been removed. The Go CLI (`cgrab/`) now implements list/capture/doctor/config/docs workflows.
 
 ## Architecture (current plan + implemented foundation)
 
-The new CLI is a Go binary (`cli/`) that orchestrates capture via subprocesses:
+The new CLI is a Go binary (`cgrab/`) that orchestrates capture via subprocesses:
 
 - **Go → osascript** for tab/app enumeration and activation
 - **Go → Bun** for browser extension-based capture (optional, requires Bun + extensions)
@@ -23,8 +23,11 @@ The new CLI is a Go binary (`cli/`) that orchestrates capture via subprocesses:
 
 ## Implemented Go CLI
 
-- `cli/` Go module initialized with cobra command framework.
+- `cgrab/` Go module initialized with cobra command framework.
 - Implemented commands:
+  - `cgrab list` (defaults to both tabs + apps)
+  - `cgrab list --tabs [--browser safari|chrome]`
+  - `cgrab list --apps`
   - `cgrab list tabs [--browser safari|chrome]`
   - `cgrab list apps`
   - `cgrab capture --focused`
@@ -33,11 +36,19 @@ The new CLI is a Go binary (`cli/`) that orchestrates capture via subprocesses:
   - `cgrab capture --tab --title-match <pattern>`
   - `cgrab capture --app <name|--name-match|--bundle-id>`
   - `cgrab doctor`
+  - `cgrab config show`
+  - `cgrab config set-output-dir <subdir>`
+  - `cgrab config reset-output-dir`
+  - `cgrab docs`
 - Global output routing is wired:
   - stdout (default)
   - `--file <path>`
   - `--clipboard`
   - `--format json|markdown`
+- Capture defaults:
+  - if `--file` is omitted for `capture`, output is saved to `~/contextgrabber/<configured-subdir>/`
+  - config is persisted at `~/contextgrabber/config.json`
+  - `CONTEXT_GRABBER_CLI_HOME` can override the base storage folder (must be an absolute path)
 - `doctor` checks:
   - osascript availability
   - bun availability
@@ -48,15 +59,39 @@ The new CLI is a Go binary (`cli/`) that orchestrates capture via subprocesses:
 
 | Command | Description |
 | --- | --- |
+| `list [--tabs|--apps]` | Enumerate both inventories by default, or filter to tabs/apps |
 | `list tabs [--browser safari\|chrome]` | Enumerate open browser tabs |
 | `list apps` | Enumerate running desktop apps with windows |
 | `capture --focused` | Capture currently focused browser tab |
 | `capture --tab <window:tab \| --url-match \| --title-match>` | Capture a specific browser tab |
 | `capture --app <name \| --name-match \| --bundle-id>` | Capture a specific desktop app |
 | `doctor` | System capability and health check |
+| `config show` | Show current CLI storage/config paths |
+| `config set-output-dir <subdir>` | Set capture output subdirectory under `~/contextgrabber` |
+| `config reset-output-dir` | Reset capture output path to default (`captures`) |
+| `docs` | Open the GitHub repository in browser (fallback prints URL) |
 
 ## Dependencies
 
 - `github.com/spf13/cobra` — CLI framework
 - Existing Bun native-messaging bridge CLIs (for browser capture)
 - Existing `ContextGrabberHost` dual-mode binary (for desktop capture)
+
+## Global Trigger (dev setup)
+
+Install `cgrab` into a PATH directory:
+
+```bash
+cd /path/to/context_grabber
+./scripts/install-cli.sh
+```
+
+Verify:
+
+```bash
+command -v cgrab
+cgrab --version
+cgrab doctor --format json
+```
+
+Current limitation: desktop host resolution order is `CONTEXT_GRABBER_HOST_BIN` -> repo debug host -> `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`; browser bridge workflows still rely on repo assets unless `CONTEXT_GRABBER_REPO_ROOT` is set.

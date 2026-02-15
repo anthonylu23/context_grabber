@@ -120,7 +120,7 @@ Shared capture/runtime logic now lives in `apps/macos-host/Sources/ContextGrabbe
   - `--format markdown|json`
 
 ### Why this architecture
-macOS Accessibility and Screen Recording grants are tied to binary path. Reusing `ContextGrabberHost` for headless capture allows CLI invocations to reuse the same permission grant as the menu bar app. This is the desktop-capture subprocess surface for the upcoming Go companion CLI.
+macOS Accessibility and Screen Recording grants are tied to binary path. Reusing `ContextGrabberHost` for headless capture allows CLI invocations to reuse the same permission grant as the menu bar app. This is the desktop-capture subprocess surface for the Go Context Grabber CLI (`cgrab`).
 
 ### Remaining Milestone G follow-ups
 - Extend CLI mode argument surface to match final Go orchestration needs (`--focused`, tab/app targeting parity where applicable).

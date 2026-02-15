@@ -5,12 +5,27 @@
 - `CONTEXT_GRABBER_BUN_BIN`: explicit Bun binary path for app-launch environments.
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force browser routing (`safari` or `chrome`).
 
-## Companion CLI
+## Context Grabber CLI
 - `CONTEXT_GRABBER_REPO_ROOT`: repo path override for bridge package lookup.
 - `CONTEXT_GRABBER_BUN_BIN`: explicit Bun binary for extension bridge execution.
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force capture target for `capture --focused` (`safari` or `chrome`).
 - `CONTEXT_GRABBER_OSASCRIPT_BIN`: override AppleScript binary path for `list tabs` / `list apps`.
 - `CONTEXT_GRABBER_HOST_BIN`: override `ContextGrabberHost` binary path used for desktop-capture capability checks and subprocess invocation.
+
+Outside-repo notes for global `cgrab` usage:
+
+- Desktop host resolution order:
+  1) `CONTEXT_GRABBER_HOST_BIN`
+  2) repo debug host at `apps/macos-host/.build/debug/ContextGrabberHost` (when repo root resolves)
+  3) installed app fallback: `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`
+- Browser capture and browser bridge diagnostics still need repo assets, so set `CONTEXT_GRABBER_REPO_ROOT`.
+
+```bash
+export CONTEXT_GRABBER_REPO_ROOT="/path/to/context_grabber"
+
+# optional if host binary is not under apps/macos-host/.build/debug
+export CONTEXT_GRABBER_HOST_BIN="/absolute/path/to/ContextGrabberHost"
+```
 
 ## Safari Bridge
 - `CONTEXT_GRABBER_SAFARI_SOURCE`: `runtime`, `live`, `fixture`, or `auto` (default behavior: `live`; `auto` only attempts runtime fallback when runtime payload env vars are configured).

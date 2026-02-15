@@ -8,7 +8,7 @@
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
 - `packages/companion-cli`: removed.
-- `cli`: Go companion CLI (`list`, `capture`, `doctor`), invoked as `cgrab` by default in help/output.
+- `cgrab`: Go Context Grabber CLI (`list`, `capture`, `doctor`, `config`, `docs`). Directory named `cgrab` so `go install` produces the `cgrab` binary automatically.
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules

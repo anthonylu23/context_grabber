@@ -7,27 +7,124 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthonylu23/context_grabber/cli/internal/osascript"
-	"github.com/anthonylu23/context_grabber/cli/internal/output"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/osascript"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/output"
 	"github.com/spf13/cobra"
 )
 
 func newListCommand(global *globalOptions) *cobra.Command {
+	var includeTabs bool
+	var includeApps bool
+	var browser string
+
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "Enumerate tabs and desktop apps",
+		Short: "List tabs and apps",
+		Example: "  cgrab list\n" +
+			"  cgrab list --tabs --browser chrome --format json\n" +
+			"  cgrab list --apps\n" +
+			"  cgrab list tabs",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			selection := resolveListSelection(includeTabs, includeApps)
+			result := combinedListResult{
+				Tabs: []osascript.TabEntry{},
+				Apps: []osascript.AppEntry{},
+			}
+
+			successCount := 0
+			var failures []string
+			if selection.tabs {
+				tabs, warnings, err := listTabsFunc(cmd.Context(), browser)
+				writeWarnings(cmd.ErrOrStderr(), warnings)
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("tabs failed: %v", err))
+				} else {
+					result.Tabs = tabs
+					successCount++
+				}
+			}
+			if selection.apps {
+				apps, err := listAppsFunc(cmd.Context())
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("apps failed: %v", err))
+				} else {
+					result.Apps = apps
+					successCount++
+				}
+			}
+
+			if len(failures) > 0 && successCount == 0 {
+				return fmt.Errorf("%s", strings.Join(failures, "; "))
+			}
+			if len(failures) > 0 {
+				writeWarnings(cmd.ErrOrStderr(), failures)
+			}
+
+			rendered, err := renderCombinedList(global.format, selection, result)
+			if err != nil {
+				return err
+			}
+			return output.Write(cmd.Context(), rendered, global.outputFile, global.clipboard)
+		},
 	}
 
 	listCmd.AddCommand(newListTabsCommand(global))
 	listCmd.AddCommand(newListAppsCommand(global))
+	listCmd.Flags().BoolVar(&includeTabs, "tabs", false, "include browser tabs")
+	listCmd.Flags().BoolVar(&includeApps, "apps", false, "include running desktop apps")
+	listCmd.Flags().StringVar(&browser, "browser", "", "browser filter for tabs: safari or chrome")
 	return listCmd
+}
+
+type listSelection struct {
+	tabs bool
+	apps bool
+}
+
+func resolveListSelection(includeTabs bool, includeApps bool) listSelection {
+	if !includeTabs && !includeApps {
+		return listSelection{tabs: true, apps: true}
+	}
+	return listSelection{tabs: includeTabs, apps: includeApps}
+}
+
+type combinedListResult struct {
+	Tabs []osascript.TabEntry `json:"tabs"`
+	Apps []osascript.AppEntry `json:"apps"`
+}
+
+func renderCombinedList(format string, selection listSelection, result combinedListResult) ([]byte, error) {
+	if selection.tabs && !selection.apps {
+		return renderTabs(format, result.Tabs)
+	}
+	if selection.apps && !selection.tabs {
+		return renderApps(format, result.Apps)
+	}
+
+	switch format {
+	case formatJSON:
+		return json.MarshalIndent(result, "", "  ")
+	case formatMarkdown:
+		tabsMarkdown, err := renderTabs(formatMarkdown, result.Tabs)
+		if err != nil {
+			return nil, err
+		}
+		appsMarkdown, err := renderApps(formatMarkdown, result.Apps)
+		if err != nil {
+			return nil, err
+		}
+		combined := strings.TrimSpace(string(tabsMarkdown)) + "\n\n" + strings.TrimSpace(string(appsMarkdown)) + "\n"
+		return []byte(combined), nil
+	default:
+		return nil, fmt.Errorf("unsupported format: %s", format)
+	}
 }
 
 func newListTabsCommand(global *globalOptions) *cobra.Command {
 	var browser string
 	tabsCmd := &cobra.Command{
 		Use:   "tabs",
-		Short: "List open browser tabs (Safari and Chrome)",
+		Short: "Show open browser tabs",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			tabs, warnings, err := osascript.ListTabs(cmd.Context(), browser)
 			writeWarnings(cmd.ErrOrStderr(), warnings)
@@ -42,7 +139,7 @@ func newListTabsCommand(global *globalOptions) *cobra.Command {
 			return output.Write(cmd.Context(), rendered, global.outputFile, global.clipboard)
 		},
 	}
-	tabsCmd.Flags().StringVar(&browser, "browser", "", "restrict to browser: safari or chrome")
+	tabsCmd.Flags().StringVar(&browser, "browser", "", "browser: safari or chrome")
 	return tabsCmd
 }
 
@@ -55,7 +152,7 @@ func writeWarnings(stderr io.Writer, warnings []string) {
 func newListAppsCommand(global *globalOptions) *cobra.Command {
 	appsCmd := &cobra.Command{
 		Use:   "apps",
-		Short: "List running desktop apps that have open windows",
+		Short: "Show running desktop apps",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			apps, err := osascript.ListApps(cmd.Context())
 			if err != nil {

@@ -20,22 +20,72 @@ Trigger captures via the menu bar icon or the global hotkey `⌃⌥⌘C`.
 Browser live extraction requires JavaScript from Apple Events enabled in Safari (`Settings > Developer`) or Chrome (`View > Developer`), plus Automation permission for the calling app in `System Settings > Privacy & Security > Automation`.
 Native bridge `auto` source mode now defaults to live extraction. Runtime payload env vars are only required for explicit `runtime` mode (or optional runtime fallback in `auto`).
 
-### Companion CLI
+### Context Grabber CLI
 
-The Go companion CLI now lives under `cli/`:
+The Go CLI lives under `cgrab/`:
 
 ```bash
-cd cli
-go build -o cgrab .
-./cgrab list tabs --format json
-./cgrab list apps --format json
-./cgrab doctor --format json
-./cgrab capture --focused
-./cgrab capture --tab 1:2 --browser safari
-./cgrab capture --app Finder --method auto
+cd cgrab && go build .
 ```
 
-`go run . ...` also works during development.
+| Command | Description |
+|---------|-------------|
+| `cgrab list` | Show both open tabs and running apps |
+| `cgrab list --tabs` | Show tabs only |
+| `cgrab list --apps` | Show apps only |
+| `cgrab list tabs` | Show open browser tabs |
+| `cgrab list apps` | Show running desktop apps |
+| `cgrab capture --focused` | Capture browser or desktop context |
+| `cgrab capture --tab 1:2 --browser safari` | Capture a specific tab |
+| `cgrab capture --app Finder` | Capture a desktop app |
+| `cgrab config show` | Show current config |
+| `cgrab config set-output-dir <subdir>` | Set capture output subdirectory |
+| `cgrab doctor` | Run system health checks |
+| `cgrab docs` | Open docs in browser |
+
+Examples:
+
+```bash
+# inventory
+cgrab list
+cgrab list --tabs --browser safari
+cgrab list --apps
+cgrab list --format json
+
+# capture
+cgrab capture --focused
+cgrab capture --tab 1:2 --browser safari
+cgrab capture --app Finder --method auto
+
+# diagnostics + config
+cgrab doctor
+cgrab config show
+cgrab config set-output-dir projects/client-a
+```
+
+`go run . ...` from `cgrab/` also works during development. `go install` from the directory installs as `cgrab` automatically.
+
+By default, `cgrab capture` saves outputs under `~/contextgrabber/captures/` (or your configured subdirectory).
+Use `CONTEXT_GRABBER_CLI_HOME=/absolute/path` to override the base storage folder.
+
+#### Global install
+
+```bash
+# from the repo root
+./scripts/install-cli.sh
+```
+
+Verify:
+
+```bash
+cgrab --version
+cgrab doctor
+```
+
+#### Outside the repo tree
+
+- Desktop capture host resolution: `CONTEXT_GRABBER_HOST_BIN` env override -> repo debug host -> installed app fallback (`/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`).
+- Browser capture and diagnostics require repo assets — set `CONTEXT_GRABBER_REPO_ROOT=/path/to/context_grabber`.
 
 ### Scripts
 | Command | Description |
@@ -59,7 +109,7 @@ go build -o cgrab .
 - **Output format presets** — brief (capped key points/links) or full output
 - **Retention management** — configurable max file count and max age with safe pruning
 - **Diagnostics** — transport reachability, permission status, and storage writability checks
-- **Companion CLI** — Go-based CLI with inventory/capture/diagnostics commands
+- **Context Grabber CLI** — Go-based CLI with inventory/capture/diagnostics plus local config/docs helpers
 
 ## Architecture & Docs
 
@@ -113,7 +163,7 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 ├── docs
 │   ├── plans               # Project plans
 │   └── codebase            # Technical handbook
-├── cli                     # Go CLI (list, capture, doctor)
+├── cgrab                   # Go CLI — `go install` produces `cgrab` binary
 ├── packages
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension

@@ -32,7 +32,7 @@ func TestRootCommandRegistersCaptureCommands(t *testing.T) {
 		commandNames[command.Name()] = true
 	}
 
-	for _, expected := range []string{"list", "capture", "doctor"} {
+	for _, expected := range []string{"list", "capture", "doctor", "config", "docs"} {
 		if !commandNames[expected] {
 			t.Fatalf("expected root command to register %q", expected)
 		}
@@ -47,5 +47,15 @@ func TestRootCommandUseIsCgrab(t *testing.T) {
 
 	if root.Use != "cgrab" {
 		t.Fatalf("expected root Use to be cgrab, got %q", root.Use)
+	}
+}
+
+func TestRootCommandShortName(t *testing.T) {
+	root := newRootCommand()
+	if root == nil {
+		t.Fatalf("expected root command")
+	}
+	if root.Short != "Context Grabber CLI" {
+		t.Fatalf("unexpected root short description: %q", root.Short)
 	}
 }

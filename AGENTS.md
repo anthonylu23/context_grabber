@@ -1,6 +1,6 @@
 Build test as you deem necessary.
 
-Update docs as we go (with your best judgement) as necessary. Document both tasks and codebase changes. Document both task status and docs for the codebase (architecture, implementation details, usage, etc.)
+Update docs and README as we go (with your best judgement) as necessary. Document both tasks and codebase changes. Document both task status and docs for the codebase (architecture, implementation details, usage, etc.)
 
 Update next steps in docs.
 

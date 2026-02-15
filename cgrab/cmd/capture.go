@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/anthonylu23/context_grabber/cli/internal/bridge"
-	"github.com/anthonylu23/context_grabber/cli/internal/osascript"
-	"github.com/anthonylu23/context_grabber/cli/internal/output"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/bridge"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/config"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/osascript"
+	"github.com/anthonylu23/context_grabber/cgrab/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +25,7 @@ var (
 	activateAppByBundleFunc = osascript.ActivateAppByBundleID
 	captureBrowserFunc      = bridge.CaptureBrowser
 	captureDesktopFunc      = bridge.CaptureDesktop
+	nowFunc                 = time.Now
 )
 
 func newCaptureCommand(global *globalOptions) *cobra.Command {
@@ -38,7 +42,11 @@ func newCaptureCommand(global *globalOptions) *cobra.Command {
 
 	captureCmd := &cobra.Command{
 		Use:   "capture",
-		Short: "Capture focused browser tab or desktop app",
+		Short: "Capture browser or desktop context",
+		Example: "  cgrab capture --focused\n" +
+			"  cgrab capture --tab 1:2 --browser safari\n" +
+			"  cgrab capture --app Finder --method auto\n" +
+			"  cgrab capture --app --name-match xcode --format json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return fmt.Errorf("capture does not accept positional args: %s", strings.Join(args, " "))
@@ -76,20 +84,37 @@ func newCaptureCommand(global *globalOptions) *cobra.Command {
 				return err
 			}
 
-			return output.Write(cmd.Context(), rendered, global.outputFile, global.clipboard)
+			outputFile := strings.TrimSpace(global.outputFile)
+			autoSave := false
+			if outputFile == "" {
+				defaultOutputFile, pathErr := resolveDefaultCaptureOutputFilePath(request.outputFormat)
+				if pathErr != nil {
+					return pathErr
+				}
+				outputFile = defaultOutputFile
+				autoSave = true
+			}
+
+			if err := output.Write(cmd.Context(), rendered, outputFile, global.clipboard); err != nil {
+				return err
+			}
+			if autoSave {
+				fmt.Fprintf(cmd.OutOrStdout(), "Saved capture to %s\n", outputFile)
+			}
+			return nil
 		},
 	}
 
-	captureCmd.Flags().BoolVar(&focused, "focused", false, "capture currently focused browser tab")
-	captureCmd.Flags().StringVar(&tabReference, "tab", "", "capture tab by <windowIndex:tabIndex>")
-	captureCmd.Flags().StringVar(&urlMatch, "url-match", "", "capture first tab matching URL substring")
-	captureCmd.Flags().StringVar(&titleMatch, "title-match", "", "capture first tab matching title substring")
-	captureCmd.Flags().StringVar(&appName, "app", "", "capture app by exact name")
-	captureCmd.Flags().StringVar(&nameMatch, "name-match", "", "capture first app with name containing value")
-	captureCmd.Flags().StringVar(&bundleID, "bundle-id", "", "capture app by bundle identifier")
-	captureCmd.Flags().StringVar(&browser, "browser", "", "restrict browser target: safari or chrome")
-	captureCmd.Flags().StringVar(&method, "method", "auto", "capture method (browser: auto|applescript|extension; app: auto|applescript|ax|ocr)")
-	captureCmd.Flags().IntVar(&timeoutMs, "timeout-ms", 1200, "capture timeout in milliseconds")
+	captureCmd.Flags().BoolVar(&focused, "focused", false, "focused browser tab")
+	captureCmd.Flags().StringVar(&tabReference, "tab", "", "tab by window:tab index")
+	captureCmd.Flags().StringVar(&urlMatch, "url-match", "", "match tab by URL substring")
+	captureCmd.Flags().StringVar(&titleMatch, "title-match", "", "match tab by title substring")
+	captureCmd.Flags().StringVar(&appName, "app", "", "app by exact name")
+	captureCmd.Flags().StringVar(&nameMatch, "name-match", "", "match app by name substring")
+	captureCmd.Flags().StringVar(&bundleID, "bundle-id", "", "app by bundle identifier")
+	captureCmd.Flags().StringVar(&browser, "browser", "", "browser: safari or chrome")
+	captureCmd.Flags().StringVar(&method, "method", "auto", "method: auto|applescript|extension|ax|ocr")
+	captureCmd.Flags().IntVar(&timeoutMs, "timeout-ms", 1200, "timeout in milliseconds")
 
 	return captureCmd
 }
@@ -567,4 +592,23 @@ func describeBrowserAttemptFailure(target bridge.BrowserTarget, attempt bridge.B
 		code = "ERR_EXTENSION_UNAVAILABLE"
 	}
 	return fmt.Sprintf("%s capture failed (%s): %s", browserDisplayName(target), code, warning)
+}
+
+func resolveDefaultCaptureOutputFilePath(format string) (string, error) {
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return "", err
+	}
+	_, captureDir, err := config.EnsureBaseLayout(settings)
+	if err != nil {
+		return "", err
+	}
+
+	timestamp := nowFunc().UTC().Format("20060102-150405.000")
+	extension := ".md"
+	if format == formatJSON {
+		extension = ".json"
+	}
+
+	return filepath.Join(captureDir, "capture-"+timestamp+extension), nil
 }
