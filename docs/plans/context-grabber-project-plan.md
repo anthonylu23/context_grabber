@@ -416,7 +416,7 @@ interface NormalizedContext {
 30. Safari packaged runtime now also includes:
 - runtime bootstrap files (`runtime/background-main`, `runtime/content-main`)
 - packaged WebExtension manifest (`packages/extension-safari/manifest.json`) targeting compiled runtime assets
-31. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `live -> runtime` fallback; fixture is explicit).
+31. Chrome live extraction path is now scaffolded via AppleScript active-tab capture (`extract-active-tab`) and wired into CLI source modes (`live`, `runtime`, `fixture`, `auto` with `runtime -> live` fallback; fixture is explicit).
 32. Host unsupported-app capture now routes through a real desktop app resolver:
 - falls back to Accessibility focused-element extraction (`minimumAccessibilityTextChars = 400`)
 - falls back to Vision OCR window/screen text extraction
@@ -490,6 +490,15 @@ interface NormalizedContext {
 - `capture --focused` uses shared request/validation/markdown pipeline from `@context-grabber/native-host-bridge`
 - auto target order defaults to Safari then Chrome, with `CONTEXT_GRABBER_BROWSER_TARGET` override
 - companion CLI tests cover command parsing, doctor status behavior, and capture fallback behavior
+48. Milestone G browser compatibility expansion now includes inventory commands:
+- `list tabs` implemented with Safari + Chrome AppleScript enumeration (optional `--browser` filter)
+- `list apps` implemented with System Events process/window enumeration
+- both commands return JSON for agent-friendly consumption and include partial-failure warning behavior
+- companion CLI tests now cover list command parsing and inventory success/failure scenarios
+49. Desktop capture fallback robustness is now improved for blank-result cases:
+- OCR path now retries once before metadata-only fallback when AX text is unavailable
+- metadata-only desktop captures now include a non-empty diagnostic excerpt in markdown content
+- host tests now cover OCR retry recovery and non-empty metadata-only fallback text
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 
@@ -594,6 +603,6 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Milestone G CLI expansion — add `list tabs`, `list apps`, and targeted capture selectors.
+1. Milestone G CLI expansion — add targeted capture selectors (`capture --tab` / `capture --app`) and method overrides.
 2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
 3. Optional post-F2 UX polish backlog — interaction effects (haptics/sound/animation) if still desired.

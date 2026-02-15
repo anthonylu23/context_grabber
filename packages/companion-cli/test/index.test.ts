@@ -8,6 +8,7 @@ import {
 import { runCaptureFocused } from "../src/capture-focused.js";
 import { companionUsage, parseCompanionCommand } from "../src/commands.js";
 import { runDoctor } from "../src/doctor.js";
+import { runListApps, runListTabs } from "../src/list.js";
 import { type BridgeClient, type BrowserTarget, createBridgeClient } from "../src/native-bridge.js";
 
 const captureResponse = (target: BrowserTarget) => {
@@ -35,6 +36,9 @@ describe("companion CLI command parser", () => {
     const help = parseCompanionCommand([]);
     const doctor = parseCompanionCommand(["doctor"]);
     const capture = parseCompanionCommand(["capture", "--focused"]);
+    const listTabs = parseCompanionCommand(["list", "tabs"]);
+    const listTabsFiltered = parseCompanionCommand(["list", "tabs", "--browser", "chrome"]);
+    const listApps = parseCompanionCommand(["list", "apps"]);
 
     expect(help.ok).toBe(true);
     if (help.ok) {
@@ -49,6 +53,21 @@ describe("companion CLI command parser", () => {
     expect(capture.ok).toBe(true);
     if (capture.ok) {
       expect(capture.command.kind).toBe("capture-focused");
+    }
+
+    expect(listTabs.ok).toBe(true);
+    if (listTabs.ok) {
+      expect(listTabs.command.kind).toBe("list-tabs");
+    }
+
+    expect(listTabsFiltered.ok).toBe(true);
+    if (listTabsFiltered.ok && listTabsFiltered.command.kind === "list-tabs") {
+      expect(listTabsFiltered.command.browser).toBe("chrome");
+    }
+
+    expect(listApps.ok).toBe(true);
+    if (listApps.ok) {
+      expect(listApps.command.kind).toBe("list-apps");
     }
   });
 
@@ -65,7 +84,14 @@ describe("companion CLI command parser", () => {
       expect(unknown.error.includes("Unknown command")).toBe(true);
     }
 
+    const invalidList = parseCompanionCommand(["list", "tabs", "--browser", "firefox"]);
+    expect(invalidList.ok).toBe(false);
+    if (!invalidList.ok) {
+      expect(invalidList.error.includes("list tabs supports optional")).toBe(true);
+    }
+
     expect(companionUsage().includes("context-grabber doctor")).toBe(true);
+    expect(companionUsage().includes("context-grabber list tabs")).toBe(true);
   });
 });
 
@@ -223,5 +249,105 @@ describe("native bridge", () => {
       throw new Error("Expected sendCaptureRequest to throw an Error.");
     }
     expect(thrown.message).toBe("ERR_TIMEOUT");
+  });
+});
+
+describe("list inventory", () => {
+  const field = String.fromCharCode(30);
+  const line = String.fromCharCode(31);
+
+  const spawnOk = (stdout: string): SpawnSyncReturns<string> => {
+    return {
+      output: [null, stdout, ""],
+      pid: 123,
+      signal: null,
+      status: 0,
+      stdout,
+      stderr: "",
+    };
+  };
+
+  const spawnErr = (stderr: string): SpawnSyncReturns<string> => {
+    return {
+      output: [null, "", stderr],
+      pid: 123,
+      signal: null,
+      status: 1,
+      stdout: "",
+      stderr,
+    };
+  };
+
+  it("lists tabs from both browsers", async () => {
+    const result = await runListTabs({
+      env: {},
+      spawnSyncImpl: (_command, _args, options) => {
+        const script = String(options.input ?? "");
+        if (script.includes('tell application "Safari"')) {
+          return spawnOk(`1${field}1${field}true${field}Safari Tab${field}https://apple.com`);
+        }
+        if (script.includes('tell application "Google Chrome"')) {
+          return spawnOk(`1${field}2${field}false${field}Chrome Tab${field}https://google.com`);
+        }
+        return spawnErr("unexpected script");
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.length).toBe(0);
+    expect(result.stdout.includes('"browser": "chrome"')).toBe(true);
+    expect(result.stdout.includes('"browser": "safari"')).toBe(true);
+  });
+
+  it("returns success when one browser fails but the other succeeds", async () => {
+    const result = await runListTabs({
+      env: {},
+      spawnSyncImpl: (_command, _args, options) => {
+        const script = String(options.input ?? "");
+        if (script.includes('tell application "Safari"')) {
+          return spawnErr("Safari not authorized");
+        }
+        return spawnOk(`1${field}1${field}true${field}Chrome Tab${field}https://example.com`);
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.includes("safari: Safari not authorized")).toBe(true);
+    expect(result.stdout.includes('"browser": "chrome"')).toBe(true);
+  });
+
+  it("returns non-zero when all selected browsers fail", async () => {
+    const result = await runListTabs({
+      env: {},
+      spawnSyncImpl: () => spawnErr("not allowed"),
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.includes("safari: not allowed")).toBe(true);
+    expect(result.stderr.includes("chrome: not allowed")).toBe(true);
+  });
+
+  it("lists desktop apps with windows", async () => {
+    const appLines = [
+      `Finder${field}com.apple.finder${field}2`,
+      `Safari${field}com.apple.Safari${field}4`,
+    ].join(line);
+
+    const result = await runListApps({
+      spawnSyncImpl: () => spawnOk(appLines),
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.includes('"appName": "Finder"')).toBe(true);
+    expect(result.stdout.includes('"windowCount": 4')).toBe(true);
+  });
+
+  it("returns non-zero when app listing fails", async () => {
+    const result = await runListApps({
+      spawnSyncImpl: () => spawnErr("System Events denied"),
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.includes("list apps failed: System Events denied")).toBe(true);
   });
 });

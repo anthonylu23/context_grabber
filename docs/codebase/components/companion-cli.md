@@ -11,6 +11,12 @@ Path: `packages/companion-cli`
 - `doctor`
   - Pings Safari and Chrome bridge CLIs.
   - Reports per-channel readiness and an overall status.
+- `list tabs [--browser safari|chrome]`
+  - Enumerates open tabs via AppleScript for Safari and/or Chrome.
+  - Returns JSON array with browser, window/tab indices, active flag, title, and URL.
+- `list apps`
+  - Enumerates visible desktop app processes with window counts via System Events.
+  - Returns JSON array with app name, bundle identifier, and window count.
 - `capture --focused`
   - Uses browser target override when set (`CONTEXT_GRABBER_BROWSER_TARGET`).
   - Otherwise attempts Safari first, then Chrome.
@@ -24,3 +30,4 @@ Path: `packages/companion-cli`
   - `CONTEXT_GRABBER_REPO_ROOT`
   - `CONTEXT_GRABBER_BUN_BIN`
   - `CONTEXT_GRABBER_BROWSER_TARGET`
+- Supports `CONTEXT_GRABBER_OSASCRIPT_BIN` override for tab/app enumeration commands.

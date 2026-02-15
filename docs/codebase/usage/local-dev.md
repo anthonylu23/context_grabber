@@ -55,6 +55,12 @@ bun test --cwd packages/companion-cli
 # diagnostics
 bun run --cwd packages/companion-cli start doctor
 
+# list browser tabs (both browsers by default)
+bun run --cwd packages/companion-cli start list tabs
+
+# list desktop apps with windows
+bun run --cwd packages/companion-cli start list apps
+
 # focused browser capture markdown -> stdout
 bun run --cwd packages/companion-cli start capture --focused
 ```

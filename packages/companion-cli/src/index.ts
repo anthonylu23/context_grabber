@@ -1,6 +1,7 @@
 import { runCaptureFocused } from "./capture-focused.js";
 import { companionUsage, parseCompanionCommand } from "./commands.js";
 import { runDoctor } from "./doctor.js";
+import { runListApps, runListTabs } from "./list.js";
 import { createBridgeClient } from "./native-bridge.js";
 
 const writeStdout = (text: string): void => {
@@ -34,6 +35,24 @@ const main = async (): Promise<void> => {
     const doctorResult = await runDoctor(bridge);
     writeStdout(`${doctorResult.output}\n`);
     process.exitCode = doctorResult.exitCode;
+    return;
+  }
+
+  if (parsed.command.kind === "list-tabs") {
+    const listResult = await runListTabs(
+      parsed.command.browser ? { browser: parsed.command.browser } : {},
+    );
+    writeStdout(listResult.stdout);
+    writeStderr(listResult.stderr);
+    process.exitCode = listResult.exitCode;
+    return;
+  }
+
+  if (parsed.command.kind === "list-apps") {
+    const listResult = await runListApps();
+    writeStdout(listResult.stdout);
+    writeStderr(listResult.stderr);
+    process.exitCode = listResult.exitCode;
     return;
   }
 

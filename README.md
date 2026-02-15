@@ -126,16 +126,20 @@ Browser live extraction requirements:
 ## Companion CLI (Milestone G Scaffold)
 ```bash
 bun run --cwd packages/companion-cli start doctor
+bun run --cwd packages/companion-cli start list tabs
+bun run --cwd packages/companion-cli start list apps
 bun run --cwd packages/companion-cli start capture --focused
 ```
 
 Current companion CLI capabilities:
 - `doctor`: reports Safari/Chrome extension bridge readiness.
+- `list tabs`: enumerates Safari/Chrome tabs (JSON output; optional `--browser` filter).
+- `list apps`: enumerates desktop apps with visible window counts (JSON output).
 - `capture --focused`: captures focused browser context and writes markdown to stdout.
 - honors `CONTEXT_GRABBER_BROWSER_TARGET` override (`safari` / `chrome`).
 
 ## Next Steps
-- milestone G: expand companion CLI surface (`list tabs/apps`, targeted capture, method overrides).
+- milestone G: expand companion CLI targeted capture surface (`capture --tab`, `capture --app`, method overrides).
 - milestone G: add agent integration manifests (MCP/Claude Code skill wiring) on top of the CLI.
 
 ## Documentation

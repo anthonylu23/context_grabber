@@ -9,6 +9,7 @@
 - `CONTEXT_GRABBER_REPO_ROOT`: repo path override for bridge package lookup.
 - `CONTEXT_GRABBER_BUN_BIN`: explicit Bun binary for extension bridge execution.
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force capture target for `capture --focused` (`safari` or `chrome`).
+- `CONTEXT_GRABBER_OSASCRIPT_BIN`: override AppleScript binary path for `list tabs` / `list apps`.
 
 ## Safari Bridge
 - `CONTEXT_GRABBER_SAFARI_SOURCE`: `runtime`, `live`, `fixture`, or `auto` (`runtime -> live`; fixture is explicit).
