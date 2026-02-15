@@ -22,16 +22,20 @@ Native bridge `auto` source mode now defaults to live extraction. Runtime payloa
 
 ### Companion CLI
 
-The Go CLI scaffold now lives under `cli/`:
+The Go companion CLI now lives under `cli/`:
 
 ```bash
 cd cli
-go run . list tabs --format json
-go run . list apps --format json
-go run . doctor --format json
+go build -o cgrab .
+./cgrab list tabs --format json
+./cgrab list apps --format json
+./cgrab doctor --format json
+./cgrab capture --focused
+./cgrab capture --tab 1:2 --browser safari
+./cgrab capture --app Finder --method auto
 ```
 
-Capture commands and MCP server support are still in progress. See `docs/plans/cli-expansion-plan.md` for details.
+`go run . ...` also works during development.
 
 ### Scripts
 | Command | Description |
@@ -55,7 +59,7 @@ Capture commands and MCP server support are still in progress. See `docs/plans/c
 - **Output format presets** — brief (capped key points/links) or full output
 - **Retention management** — configurable max file count and max age with safe pruning
 - **Diagnostics** — transport reachability, permission status, and storage writability checks
-- **Companion CLI** — Go-based CLI with inventory + diagnostics implemented (`list tabs`, `list apps`, `doctor`); capture + MCP in progress
+- **Companion CLI** — Go-based CLI with inventory/capture/diagnostics commands
 
 ## Architecture & Docs
 
@@ -109,7 +113,7 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 ├── docs
 │   ├── plans               # Project plans
 │   └── codebase            # Technical handbook
-├── cli                     # Go CLI scaffold (list + doctor implemented)
+├── cli                     # Go CLI (list, capture, doctor)
 ├── packages
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension

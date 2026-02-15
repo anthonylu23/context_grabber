@@ -602,16 +602,16 @@ Lightweight settings popover or small window accessible from the menu:
   - Tab and app enumeration commands.
   - Targeted capture by tab/app selection or pattern match.
   - Capture method override (auto, applescript, extension, ax, ocr).
-  - Agent skill manifests (MCP tool definitions / Claude Code skill) bundled with the CLI.
+  - Agent-facing docs for CLI invocation patterns.
   - Diagnostics command for permission and extension health.
 - Proposed CLI surface:
-  - `context-grabber list tabs` — enumerate open browser tabs (Safari + Chrome).
-  - `context-grabber list apps` — enumerate running desktop apps with windows.
-  - `context-grabber capture --focused` — grab current foreground context (same as menu bar capture).
-  - `context-grabber capture --tab <id|--url-match|--title-match>` — capture a specific browser tab.
-  - `context-grabber capture --app <id|--name-match>` — capture a specific desktop app.
-  - `context-grabber capture ... --method auto|applescript|extension|ocr|ax` — override capture method.
-  - `context-grabber doctor` — permission status, extension connectivity, transport health.
+  - `cgrab list tabs` — enumerate open browser tabs (Safari + Chrome).
+  - `cgrab list apps` — enumerate running desktop apps with windows.
+  - `cgrab capture --focused` — grab current foreground context (same as menu bar capture).
+  - `cgrab capture --tab <id|--url-match|--title-match>` — capture a specific browser tab.
+  - `cgrab capture --app <id|--name-match>` — capture a specific desktop app.
+  - `cgrab capture ... --method auto|applescript|extension|ocr|ax` — override capture method.
+  - `cgrab doctor` — permission status, extension connectivity, transport health.
   - Output: markdown to stdout by default (pipe-friendly); `--file` and `--clipboard` flags for current behavior.
 - Design constraints:
   - Single capture engine shared with the menu bar host — CLI is a trigger surface, not a reimplementation.
@@ -619,7 +619,7 @@ Lightweight settings popover or small window accessible from the menu:
   - Agent skill definitions should allow discovery and invocation by Claude Code, Cursor, and similar tools.
 - Suggested timing: after Milestone B (Safari end-to-end) is stable.
 - Stack recommendation: **Go** (primary) with osascript/shell-out for macOS framework access.
-  - Rationale: single static binary, excellent CLI ecosystem (cobra), fast compile times for iteration, straightforward MCP server implementation (JSON-RPC over stdio), goroutines map well to concurrent enumeration + health checks.
+  - Rationale: single static binary, excellent CLI ecosystem (cobra), fast compile times for iteration, and straightforward subprocess orchestration with goroutines for concurrent enumeration + health checks.
   - macOS integration approach: shell out to `osascript` for tab/app enumeration and AppleScript-based capture; invoke existing Swift host or Bun bridge binaries for extension-based and AX/OCR capture paths. Avoids CGo complexity.
   - Alternatives considered:
     - **Rust**: better direct macOS framework access via `objc2`, but steeper learning curve and longer time-to-working-CLI.
@@ -627,18 +627,18 @@ Lightweight settings popover or small window accessible from the menu:
     - **Bun/TS**: fastest to ship (pipeline already exists in TS, `bun build --compile` for single binary), but no new language learning. Viable fallback if Go introduces too much friction.
 - Exit criteria:
   - `list` + `capture --focused` + `capture --tab` + `capture --app` work end-to-end.
-  - At least one agent skill manifest (MCP or Claude Code) is functional and discoverable.
+  - CLI usage docs are sufficient for agent and shell automation.
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Milestone G capture commands — add `capture --focused`, `capture --tab`, and `capture --app` wiring in Go (Bun + `ContextGrabberHost --capture` subprocesses).
-2. Milestone G agent integration — add MCP tool server (`serve`) and skill manifests/docs for discoverable invocation.
-3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
-4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
+1. Milestone G agent integration closeout — add skill manifests/docs for CLI-first workflows.
+2. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
+3. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
+4. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
 
 ## Progress Notes (Milestone G CLI Rebuild)
 56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
-  - Go binary handles CLI framework (cobra), MCP server (mcp-go), osascript enumeration, and subprocess orchestration
+  - Go binary handles CLI framework (cobra), osascript enumeration, and subprocess orchestration
   - Bun/TS pipeline retained for browser extension capture (spawned as subprocess, optional dependency)
   - Full implementation plan at `docs/plans/cli-expansion-plan.md`
 57. Architecture decision: single-binary CLI mode instead of separate Swift CLI target:
@@ -663,3 +663,9 @@ Lightweight settings popover or small window accessible from the menu:
   - `list tabs` and `list apps` now enumerate via osascript using ASCII RS/US delimiters and JSON/markdown output modes
   - `doctor` now reports osascript/bun/host-binary capabilities and Safari/Chrome bridge ping readiness
   - Go coverage added for osascript parsing/partial-failure behavior and doctor capability resolution (`go test ./...`)
+62. Milestone G Phase 3 is now implemented:
+  - `capture` command now supports focused/tab/app capture flows (`--focused`, `--tab`, `--url-match`, `--title-match`, `--app`, `--name-match`, `--bundle-id`)
+  - browser capture now routes through Bun bridge helper (`requestBrowserCapture`) with markdown generation owned by Bun
+  - desktop capture now shells into `ContextGrabberHost --capture ...` with method/format routing
+  - command trigger is now `cgrab` (with `context-grabber` retained as a compatibility alias in command metadata)
+  - validation passed: `go test ./...`, `go build ./...`, `swift test`

@@ -20,3 +20,32 @@ func TestDefaultGlobalOptionsReturnsIndependentInstances(t *testing.T) {
 		t.Fatalf("expected second clipboard to remain false")
 	}
 }
+
+func TestRootCommandRegistersCaptureCommands(t *testing.T) {
+	root := newRootCommand()
+	if root == nil {
+		t.Fatalf("expected root command")
+	}
+
+	commandNames := map[string]bool{}
+	for _, command := range root.Commands() {
+		commandNames[command.Name()] = true
+	}
+
+	for _, expected := range []string{"list", "capture", "doctor"} {
+		if !commandNames[expected] {
+			t.Fatalf("expected root command to register %q", expected)
+		}
+	}
+}
+
+func TestRootCommandUseIsCgrab(t *testing.T) {
+	root := newRootCommand()
+	if root == nil {
+		t.Fatalf("expected root command")
+	}
+
+	if root.Use != "cgrab" {
+		t.Fatalf("expected root Use to be cgrab, got %q", root.Use)
+	}
+}

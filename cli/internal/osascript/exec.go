@@ -44,8 +44,14 @@ func setRunnerForTesting(mock scriptRunner) func() {
 }
 
 func runAppleScript(ctx context.Context, script string) (string, error) {
+	return runAppleScriptWithArgs(ctx, script)
+}
+
+func runAppleScriptWithArgs(ctx context.Context, script string, scriptArgs ...string) (string, error) {
 	osaPath := resolveOsaScriptPath()
-	stdout, stderr, err := runner.Run(ctx, osaPath, "-e", script)
+	args := []string{"-e", script}
+	args = append(args, scriptArgs...)
+	stdout, stderr, err := runner.Run(ctx, osaPath, args...)
 	if err != nil {
 		message := strings.TrimSpace(stderr)
 		if message == "" {

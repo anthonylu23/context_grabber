@@ -2,14 +2,14 @@
 
 ## Overview
 
-Rebuild the Context Grabber companion CLI as a Go binary that orchestrates capture via subprocess calls to the existing `ContextGrabberHost` Swift binary (desktop AX/OCR capture, running in headless CLI mode) and Bun/TS pipeline (browser capture). The Go binary also hosts an MCP server for agent integration.
+Rebuild the Context Grabber companion CLI as a Go binary that orchestrates capture via subprocess calls to the existing `ContextGrabberHost` Swift binary (desktop AX/OCR capture, running in headless CLI mode) and Bun/TS pipeline (browser capture).
 
 The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI is a clean reimplementation that reuses the same underlying capture infrastructure without duplicating capture logic.
 
 ## Status Update
 
 - Phase 1 complete: `ContextGrabberHost` now supports headless CLI mode via `--capture`.
-- Phase 2 partial complete: `cli/` Go scaffold is implemented with:
+- Phase 2 complete: `cli/` Go scaffold is implemented with:
   - `list tabs`
   - `list apps`
   - `doctor`
@@ -19,7 +19,14 @@ The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI 
   - root command options are now per-invocation (no package-level mutable flag state bleed)
   - Swift CLI parser now treats flag-like values as missing values (clearer argument errors)
   - Swift CLI target activation now waits for frontmost handoff and fails fast on activation timeout
-- Remaining Milestone G work: capture commands (`capture --focused/--tab/--app`) and MCP server (`serve`).
+- Phase 3 complete: capture commands are implemented in Go:
+  - `capture --focused`
+  - `capture --tab <window:tab>`
+  - `capture --tab --url-match/--title-match`
+  - `capture --app <name|--name-match|--bundle-id>`
+  - method routing for browser (`auto|applescript|extension`) and desktop (`auto|applescript|ax|ocr`)
+- Phase 4 deferred: MCP server support has been removed from the CLI for now.
+- Remaining Milestone G work: packaging polish, CLI UX hardening, and docs closeout.
 
 ### Single-Binary CLI Mode (Key Architecture Decision)
 
@@ -36,7 +43,7 @@ Instead of creating a separate `ContextGrabberDesktopCLI` executable, the existi
 
 ```
 Distribution artifacts:
-  context-grabber              (Go, ~12MB)    CLI + MCP server
+  cgrab                        (Go, ~12MB)    CLI
   ContextGrabberHost           (Swift, ~2MB)  GUI app + headless CLI mode
   + existing Bun bridge CLIs   (TS)           browser extension capture (optional)
 
@@ -61,7 +68,7 @@ Each subprocess owns its own markdown rendering. Go never renders markdown — i
 
 ### Bun as Optional Dependency
 
-The Go CLI works without Bun installed for: `list tabs`, `list apps`, `capture --app`, `doctor`, MCP server. Bun is only required for browser extension-based capture (`capture --focused`, `capture --tab`). The `doctor` command reports which capabilities are available.
+The Go CLI works without Bun installed for: `list tabs`, `list apps`, `capture --app`, and `doctor`. Bun is only required for browser extension-based capture (`capture --focused`, `capture --tab`). The `doctor` command reports which capabilities are available.
 
 ## Go CLI Structure
 
@@ -75,7 +82,6 @@ cli/
     list.go              list tabs, list apps
     capture.go           capture --focused, --tab, --app
     doctor.go            diagnostics
-    serve.go             MCP stdio server
   internal/
     osascript/
       tabs.go            AppleScript for tab enumeration + parsing
@@ -85,9 +91,7 @@ cli/
       bun.go             Bun subprocess: spawn, read stdout, error handling
       swift.go           ContextGrabberHost --capture subprocess: spawn, read stdout, error handling
       detect.go          Capability detection (Bun available? ContextGrabberHost built?)
-    mcp/
-      server.go          MCP server setup, stdio transport
-      tools.go           Tool definitions (list_tabs, list_apps, capture_*, doctor)
+    bridge/browser_capture.ts  Bun helper script that runs requestBrowserCapture + markdown rendering
     output/
       writer.go          stdout / --file / --clipboard routing
 ```
@@ -95,23 +99,21 @@ cli/
 ### Dependencies
 
 - `github.com/spf13/cobra` — CLI framework
-- `github.com/mark3labs/mcp-go` — MCP server (stdio transport, tool definitions)
 - Standard library for everything else (`os/exec`, `encoding/json`, `strings`, `fmt`)
 
 ### CLI Surface
 
 ```
-context-grabber list tabs [--browser safari|chrome]
-context-grabber list apps
-context-grabber capture --focused [--method auto|applescript|extension]
-context-grabber capture --tab <windowIndex:tabIndex> [--method auto|applescript|extension]
-context-grabber capture --tab --url-match <pattern> [--method auto|applescript|extension]
-context-grabber capture --tab --title-match <pattern> [--method auto|applescript|extension]
-context-grabber capture --app <name> [--method auto|applescript|ax|ocr]
-context-grabber capture --app --name-match <pattern> [--method auto|applescript|ax|ocr]
-context-grabber capture --app --bundle-id <id> [--method auto|applescript|ax|ocr]
-context-grabber doctor
-context-grabber serve [--transport stdio]
+cgrab list tabs [--browser safari|chrome]
+cgrab list apps
+cgrab capture --focused [--method auto|applescript|extension]
+cgrab capture --tab <windowIndex:tabIndex> [--method auto|applescript|extension]
+cgrab capture --tab --url-match <pattern> [--method auto|applescript|extension]
+cgrab capture --tab --title-match <pattern> [--method auto|applescript|extension]
+cgrab capture --app <name> [--method auto|applescript|ax|ocr]
+cgrab capture --app --name-match <pattern> [--method auto|applescript|ax|ocr]
+cgrab capture --app --bundle-id <id> [--method auto|applescript|ax|ocr]
+cgrab doctor
 
 Global flags:
   --file <path>             Write output to file instead of stdout
@@ -145,18 +147,9 @@ Note: Tab activation briefly switches the user's active tab. This is a known tra
 5. Swift binary renders markdown, writes to stdout
 6. Go reads markdown, passes through to output
 
-### MCP Tool Definitions
+### Agent Integration Status
 
-The MCP server (started via `context-grabber serve`) exposes tools that map 1:1 to CLI commands:
-
-| Tool              | Description                              | Key Inputs                                         |
-| ----------------- | ---------------------------------------- | -------------------------------------------------- |
-| `list_tabs`       | Enumerate open browser tabs              | `browser?: "safari" \| "chrome"`                   |
-| `list_apps`       | Enumerate running desktop apps           | (none)                                             |
-| `capture_focused` | Capture the currently focused tab        | `method?: string`                                  |
-| `capture_tab`     | Capture a specific browser tab           | `tab?, url_match?, title_match?, method?`          |
-| `capture_app`     | Capture a specific desktop app           | `app?, name_match?, bundle_id?, method?`           |
-| `doctor`          | Check system capabilities and health     | (none)                                             |
+MCP server support is currently deferred. The CLI remains automation-friendly via JSON output (`--format json`) on `list` and `doctor`, and structured JSON mode for capture.
 
 ## Swift Library Extraction + CLI Mode
 
@@ -269,7 +262,7 @@ Tasks:
 
 ### Phase 2: Go CLI Scaffold
 
-**Goal:** `go build` produces a `context-grabber` binary with `list tabs`, `list apps`, and `doctor`.
+**Goal:** `go build` produces a `cgrab` binary with `list tabs`, `list apps`, and `doctor`.
 
 Tasks:
 1. Initialize `cli/` with `go mod init`, add cobra dependency
@@ -285,13 +278,13 @@ Tasks:
 
 **Estimated effort:** 2-3 sessions
 
-### Phase 3: Go Capture Commands
+### Phase 3: Go Capture Commands ✅
 
 **Goal:** `capture --focused`, `capture --tab`, and `capture --app` work end-to-end.
 
 Tasks:
 1. Implement `internal/bridge/bun.go` — spawn Bun native-messaging CLIs, read stdout
-2. Implement `internal/bridge/swift.go` — spawn `context-grabber-desktop`, read stdout
+2. Implement `internal/bridge/swift.go` — spawn `ContextGrabberHost --capture`, read stdout
 3. Implement `internal/osascript/activate.go` — activate specific tab or app via AppleScript
 4. Implement `cmd/capture.go`:
    - `capture --focused` — spawn Bun bridge, read markdown
@@ -305,21 +298,11 @@ Tasks:
 
 **Estimated effort:** 2-3 sessions
 
-### Phase 4: MCP Server
+### Phase 4: MCP Server (Deferred)
 
-**Goal:** `context-grabber serve` starts an MCP stdio server with all tools registered.
+MCP server implementation was removed from the active CLI surface. Reintroduce only if/when agent tooling needs an embedded server again.
 
-Tasks:
-1. Add `github.com/mark3labs/mcp-go` dependency
-2. Implement `internal/mcp/tools.go` — tool definitions with JSON Schema inputs
-3. Implement `internal/mcp/server.go` — register tools, wire handlers to command logic
-4. Implement `cmd/serve.go` — `serve` subcommand, stdio transport
-5. Test with MCP Inspector or JSON-RPC client
-6. Write tool schema documentation
-
-**Estimated effort:** 1-2 sessions
-
-### Phase 5: Testing, Docs, and Integration
+### Phase 5: Testing, Docs, and Integration (in progress)
 
 **Goal:** Full test coverage, updated documentation, agent-ready.
 
@@ -376,7 +359,6 @@ The following behaviors from the TS CLI should be preserved in the Go reimplemen
 
 From the project plan:
 - `list` + `capture --focused` + `capture --tab` + `capture --app` work end-to-end
-- At least one agent skill manifest (MCP) is functional and discoverable
 - CLI reuses the same pipeline code as the host app with no duplicated capture logic
 
 Additional:
@@ -385,7 +367,6 @@ Additional:
 - `go test` and `swift test` pass
 - `ContextGrabberHost --capture --app <name>` works headlessly
 - `doctor` reports capability status accurately
-- MCP server responds correctly to tool calls via stdio
 
 ## Risks and Mitigations
 
@@ -394,7 +375,6 @@ Additional:
 | Swift library extraction breaks existing tests | High | Run `swift test` after each refactoring step |
 | AppKit import in library target causes CLI mode issues | Medium | AppKit links fine without UI on macOS; CLI mode skips SwiftUI init |
 | CLI mode argument detection must happen before @main | High | Use `@main` static `main()` override to check args before SwiftUI launches |
-| mcp-go is pre-1.0, may have breaking changes | Low | Pin specific version in `go.mod` |
 | Tab activation is disruptive (switches user's active tab) | Medium | Document behavior; consider `--no-activate` flag for metadata-only |
 | Go osascript parsing diverges from TS implementation | Medium | Port exact delimiter constants; use TS tests as behavioral reference |
 | Bun startup latency for browser capture | Low | ~100ms overhead is acceptable for a CLI tool |
