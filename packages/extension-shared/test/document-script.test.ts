@@ -27,4 +27,28 @@ describe("shared document script builder", () => {
     expect(script.includes("headings")).toBe(true);
     expect(script.includes("links")).toBe(true);
   });
+
+  it("does not serialize null selection as the string null", () => {
+    const script = buildDocumentScript(true);
+    const runScript = new Function("document", "window", `return ${script};`) as (
+      document: Document,
+      window: Window,
+    ) => string;
+
+    const serialized = runScript(
+      {
+        querySelector: () => null,
+        querySelectorAll: () => [] as unknown as NodeListOf<Element>,
+        location: { href: "https://example.com" } as Location,
+        title: "Example",
+        body: { innerText: "Body" } as HTMLElement,
+        documentElement: { lang: "en" } as HTMLElement,
+      } as unknown as Document,
+      { getSelection: () => null } as unknown as Window,
+    );
+    const parsed = JSON.parse(serialized) as { selectionText?: string };
+
+    expect(parsed.selectionText).toBe("");
+    expect(parsed.selectionText === "null").toBe(false);
+  });
 });

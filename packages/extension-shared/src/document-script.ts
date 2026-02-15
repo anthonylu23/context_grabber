@@ -51,8 +51,9 @@ export const buildDocumentScript = (includeSelectionText: boolean): string => {
     href: normalize(link.href || ""),
   })).filter((link) => link.text.length > 0 && link.href.length > 0).slice(0, 200);
 
+  const selection = window.getSelection ? window.getSelection() : null;
   const selectionText = ${includeSelectionLiteral}
-    ? normalize(String(window.getSelection ? window.getSelection() : ""))
+    ? normalize(selection ? selection.toString() : "")
     : undefined;
 
   return JSON.stringify({
