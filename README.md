@@ -41,6 +41,10 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - Desktop OCR image capture now uses ScreenCaptureKit (window-first, display fallback), replacing deprecated `CGWindowListCreateImage`.
 - Host menu now includes one-click permission remediation actions for missing desktop permissions.
 - Swift host integration tests now cover desktop AX/OCR branches and resolver-level timeout/unavailable mapping.
+- Swift host internals are now split into focused modules:
+  - `DesktopCapturePipeline.swift`
+  - `MenuBarPresentation.swift`
+  - `MarkdownRendering.swift`
 
 ### Packages
 - `packages/shared-types`: shared contracts and message envelope types.
@@ -110,6 +114,8 @@ Browser live extraction requirements:
 ## Documentation
 - Docs index: `docs/README.md`
 - Product plan: `docs/plans/context-grabber-project-plan.md`
-- Architecture: `docs/codebase/architecture.md`
-- Usage: `docs/codebase/usage.md`
-- Codebase details: `docs/codebase/details.md`
+- Codebase handbook index: `docs/codebase/README.md`
+- Architecture overview: `docs/codebase/architecture/overview.md`
+- Local dev usage: `docs/codebase/usage/local-dev.md`
+- Testing strategy: `docs/codebase/operations/testing.md`
+- Limits/defaults reference: `docs/codebase/reference/limits-and-defaults.md`

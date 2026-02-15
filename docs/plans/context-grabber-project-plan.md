@@ -435,9 +435,54 @@ interface NormalizedContext {
 - recent captures submenu (direct file-open actions)
 - copy-last-capture action
 - menu-bar icon indicator states for success/failure/disconnected extension diagnostics
+37. Host codebase refactor pass completed for core separation of concerns:
+- extracted desktop capture pipeline into `DesktopCapturePipeline.swift`
+- extracted menu indicator/label helpers into `MenuBarPresentation.swift`
+- extracted markdown rendering helpers into `MarkdownRendering.swift`
+38. Documentation has been reorganized into a multi-file handbook under `docs/codebase/`:
+- architecture deep-dive pages
+- component-level docs
+- operations (permissions/diagnostics/testing)
+- usage and reference sections
+
+7. Milestone G: Companion CLI + Agent Integration
+- Deliverables:
+  - Standalone CLI that reuses the existing capture pipeline (bridge, normalization, markdown engine).
+  - Tab and app enumeration commands.
+  - Targeted capture by tab/app selection or pattern match.
+  - Capture method override (auto, applescript, extension, ax, ocr).
+  - Agent skill manifests (MCP tool definitions / Claude Code skill) bundled with the CLI.
+  - Diagnostics command for permission and extension health.
+- Proposed CLI surface:
+  - `context-grabber list tabs` — enumerate open browser tabs (Safari + Chrome).
+  - `context-grabber list apps` — enumerate running desktop apps with windows.
+  - `context-grabber capture --focused` — grab current foreground context (same as menu bar capture).
+  - `context-grabber capture --tab <id|--url-match|--title-match>` — capture a specific browser tab.
+  - `context-grabber capture --app <id|--name-match>` — capture a specific desktop app.
+  - `context-grabber capture ... --method auto|applescript|extension|ocr|ax` — override capture method.
+  - `context-grabber doctor` — permission status, extension connectivity, transport health.
+  - Output: markdown to stdout by default (pipe-friendly); `--file` and `--clipboard` flags for current behavior.
+- Design constraints:
+  - Single capture engine shared with the menu bar host — CLI is a trigger surface, not a reimplementation.
+  - Tab/app IDs are ephemeral; prefer `--url-match` / `--title-match` / `--name-match` filters over numeric IDs for agent reliability.
+  - Agent skill definitions should allow discovery and invocation by Claude Code, Cursor, and similar tools.
+- Suggested timing: after Milestone B (Safari end-to-end) is stable.
+- Stack recommendation: **Go** (primary) with osascript/shell-out for macOS framework access.
+  - Rationale: single static binary, excellent CLI ecosystem (cobra), fast compile times for iteration, straightforward MCP server implementation (JSON-RPC over stdio), goroutines map well to concurrent enumeration + health checks.
+  - macOS integration approach: shell out to `osascript` for tab/app enumeration and AppleScript-based capture; invoke existing Swift host or Bun bridge binaries for extension-based and AX/OCR capture paths. Avoids CGo complexity.
+  - Alternatives considered:
+    - **Rust**: better direct macOS framework access via `objc2`, but steeper learning curve and longer time-to-working-CLI.
+    - **Zig**: macOS framework interop is immature; no CLI or MCP ecosystem. Better suited to lower-level projects.
+    - **Bun/TS**: fastest to ship (pipeline already exists in TS, `bun build --compile` for single binary), but no new language learning. Viable fallback if Go introduces too much friction.
+- Exit criteria:
+  - `list` + `capture --focused` + `capture --tab` + `capture --app` work end-to-end.
+  - At least one agent skill manifest (MCP or Claude Code) is functional and discoverable.
+  - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
 1. Integrate the packaged Safari runtime manifest/bootstraps into a concrete Safari app-extension container project for signed local installs.
 2. Complete Milestone F functional additions: preferences surface (output directory + retention config), pause/resume placeholder, and richer diagnostics submenu.
 3. Improve desktop extraction fidelity (deeper AX traversal, app-specific attribute handling, threshold tuning).
-4. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+4. Continue host decomposition: move browser transport and diagnostics/status formatting into dedicated modules (leave app scene + model orchestration in app file).
+5. Down the line, shift to browser-extension-first capture (Safari/Chrome extension messaging as primary) and keep AppleScript capture as fallback/dev mode.
+6. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.

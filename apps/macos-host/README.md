@@ -54,8 +54,14 @@ swift run
 - Desktop capture uses Accessibility focused-element extraction with Vision OCR fallback.
 - OCR image capture now uses ScreenCaptureKit (`SCScreenshotManager`) with window-first targeting and display fallback.
 - Permission remediation is available directly from the host menu via `Open Accessibility Settings` and `Open Screen Recording Settings`.
+- Host source is split across focused modules:
+  - `ContextGrabberHostApp.swift` (app + orchestration)
+  - `DesktopCapturePipeline.swift` (desktop AX/OCR capture path)
+  - `MenuBarPresentation.swift` (menu indicator/label helpers)
+  - `MarkdownRendering.swift` (deterministic markdown rendering)
 
 ## Related Docs
 - Project plan: `docs/plans/context-grabber-project-plan.md`
-- Architecture: `docs/codebase/architecture.md`
-- Usage: `docs/codebase/usage.md`
+- Codebase handbook: `docs/codebase/README.md`
+- Architecture overview: `docs/codebase/architecture/overview.md`
+- Usage (local dev): `docs/codebase/usage/local-dev.md`

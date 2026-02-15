@@ -1,0 +1,19 @@
+# Repository Map
+
+## Top-Level
+- `apps/macos-host`: native macOS host (SwiftUI/AppKit).
+- `packages/shared-types`: protocol contracts and validators.
+- `packages/extension-safari`: Safari bridge + runtime modules.
+- `packages/extension-chrome`: Chrome bridge + extraction helpers.
+- `packages/native-host-bridge`: normalization and markdown helpers (TS side).
+- `docs`: plans + handbook.
+
+## macOS Host Source Modules
+- `ContextGrabberHostApp.swift`: app scene, host model, transport wiring, diagnostics.
+- `DesktopCapturePipeline.swift`: desktop AX/OCR extraction and resolver.
+- `MenuBarPresentation.swift`: menu icon state and capture label formatting helpers.
+- `MarkdownRendering.swift`: deterministic markdown renderer and related text helpers.
+
+## Test Locations
+- Swift host tests: `apps/macos-host/Tests/ContextGrabberHostTests/CapturePipelineTests.swift`
+- TS package tests: `packages/*/test/**/*.test.ts`

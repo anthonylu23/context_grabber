@@ -1,11 +1,11 @@
 # Documentation
 
 ## Structure
-- `plans/`: project plans and milestone roadmaps.
-- `codebase/`: implementation documentation for architecture, usage, and operational details.
+- `plans/`: product plan and milestone roadmap.
+- `codebase/`: technical handbook for architecture, components, operations, usage, and reference.
 
-## Entry Points
+## Primary Entry Points
 - Project plan: `docs/plans/context-grabber-project-plan.md`
-- Architecture: `docs/codebase/architecture.md`
-- Usage: `docs/codebase/usage.md`
-- Codebase details: `docs/codebase/details.md`
+- Codebase handbook: `docs/codebase/README.md`
+- Architecture overview: `docs/codebase/architecture/overview.md`
+- Local development: `docs/codebase/usage/local-dev.md`
