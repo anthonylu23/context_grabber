@@ -34,3 +34,8 @@ jobs:
         run: |
           cd apps/macos-host
           swift build
+
+      - name: Run macOS host tests
+        run: |
+          cd apps/macos-host
+          swift test
