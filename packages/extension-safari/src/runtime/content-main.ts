@@ -1,5 +1,7 @@
 import { registerSafariContentCaptureListener } from "./content-entrypoint.js";
 
+type ContentBridgeBrowser = Parameters<typeof registerSafariContentCaptureListener>[0];
+
 interface RuntimeBrowserLike {
   runtime?: {
     onMessage?: {
@@ -9,6 +11,12 @@ interface RuntimeBrowserLike {
     };
   };
 }
+
+const isRuntimeContentBrowser = (
+  value: RuntimeBrowserLike | undefined,
+): value is ContentBridgeBrowser => {
+  return Boolean(value && typeof value.runtime?.onMessage?.addListener === "function");
+};
 
 const resolveRuntimeBrowser = (): RuntimeBrowserLike | undefined => {
   const maybeBrowser = (globalThis as { browser?: RuntimeBrowserLike }).browser;
@@ -21,11 +29,11 @@ const resolveRuntimeBrowser = (): RuntimeBrowserLike | undefined => {
 
 export const bootstrapSafariRuntimeContent = (browserOverride?: RuntimeBrowserLike): boolean => {
   const runtimeBrowser = browserOverride ?? resolveRuntimeBrowser();
-  if (!runtimeBrowser?.runtime?.onMessage?.addListener) {
+  if (!isRuntimeContentBrowser(runtimeBrowser)) {
     return false;
   }
 
-  registerSafariContentCaptureListener(runtimeBrowser as never);
+  registerSafariContentCaptureListener(runtimeBrowser);
   return true;
 };
 
