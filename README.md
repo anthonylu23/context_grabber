@@ -121,7 +121,7 @@ Browser live extraction requirements:
 - macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
 
 ## Next Steps
-- milestone F2 polish: capture feedback popup, custom menu bar icon, and lightweight settings surface polish.
+- milestone F2 polish (in progress): finalize settings/about UX polish and optional interaction refinements after the new inline capture feedback panel + lifecycle indicator states.
 - milestone G: companion CLI + agent integration using the shared capture pipeline.
 
 ## Documentation

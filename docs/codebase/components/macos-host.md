@@ -23,6 +23,7 @@
 
 2. `MenuBarPresentation.swift`
 - Indicator state-to-symbol mapping.
+- Capture feedback panel presentation models and formatting helpers.
 - Last-capture relative label formatting.
 - Disconnected-state heuristics.
 
@@ -50,7 +51,8 @@
 - Capture lock prevents concurrent runs (`captureInFlight`).
 - Successful capture updates:
   - status line
-  - menu icon indicator
+  - menu icon indicator (`idle`, `capturing`, `success`, `error`, `disconnected`)
+  - transient inline feedback panel (auto-dismissed)
   - recent captures list
   - clipboard and history file
 - Failures preserve explicit warnings and error codes in status/markdown metadata.
@@ -65,4 +67,5 @@
   - retention max files
   - retention max age
   - pause/resume capture placeholder toggle
+- Output directory changes are validated for writability before persistence.
 - Diagnostics state is also surfaced inline in menu (`Diagnostics Status`) for Safari, Chrome, Accessibility, and Screen Recording.
