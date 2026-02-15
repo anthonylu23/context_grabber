@@ -942,12 +942,21 @@ final class ContextGrabberModel: ObservableObject {
   @Published private(set) var menuBarSymbolName: String = menuBarSymbolNameForIndicatorState(.neutral)
   @Published private(set) var lastCaptureLabel: String = "Last capture: never"
   @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
+  @Published private(set) var outputDirectoryLabel: String = "Default"
+  @Published private(set) var retentionMaxFileCount: Int = HostSettings.defaultRetentionMaxFileCount
+  @Published private(set) var retentionMaxAgeDays: Int = HostSettings.defaultRetentionMaxAgeDays
+  @Published private(set) var capturesPausedPlaceholder = false
+  @Published private(set) var safariDiagnosticsLabel: String = "unknown"
+  @Published private(set) var chromeDiagnosticsLabel: String = "unknown"
+  @Published private(set) var desktopAccessibilityDiagnosticsLabel: String = "unknown"
+  @Published private(set) var desktopScreenDiagnosticsLabel: String = "unknown"
 
   private let logger = HostLogger()
   private let safariTransport = SafariNativeMessagingTransport()
   private let chromeTransport = ChromeNativeMessagingTransport()
   private let hostProcessIdentifier = ProcessInfo.processInfo.processIdentifier
   private let notificationsEnabled: Bool
+  private var settings: HostSettings
   private var hotkeyMonitorRegistration: HotkeyMonitorRegistration?
   private var appActivationObserverRegistration: AppActivationObserverRegistration?
   private var lastNonHostFrontmostApp: FrontmostAppInfo?
@@ -961,6 +970,7 @@ final class ContextGrabberModel: ObservableObject {
   private var indicatorResetTask: Task<Void, Never>?
 
   init() {
+    settings = loadHostSettings()
     notificationsEnabled = Self.canUseUserNotifications()
     if notificationsEnabled {
       requestNotificationAuthorization()
@@ -970,6 +980,7 @@ final class ContextGrabberModel: ObservableObject {
 
     registerHotkeyMonitors()
     registerFrontmostAppObserver()
+    applySettingsToPublishedState()
     refreshRecentCaptures()
     updateLastCaptureLabel()
   }
@@ -979,6 +990,11 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private func triggerCapture(mode: String) {
+    if capturesPausedPlaceholder {
+      statusLine = "Captures paused (placeholder)"
+      return
+    }
+
     if captureInFlight {
       statusLine = "Capture already in progress"
       return
@@ -1025,6 +1041,7 @@ final class ContextGrabberModel: ObservableObject {
         capturedAt: timestamp
       )
       try writeMarkdown(output)
+      applyRetentionPolicy()
       try copyToClipboard(output.markdown)
       refreshRecentCaptures()
       setMenuBarIndicator(.success, autoResetAfter: 1.5)
@@ -1050,7 +1067,7 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   func openRecentCaptures() {
-    let historyURL = Self.historyDirectoryURL()
+    let historyURL = resolvedHistoryDirectoryURL()
     do {
       try FileManager.default.createDirectory(at: historyURL, withIntermediateDirectories: true)
       NSWorkspace.shared.open(historyURL)
@@ -1090,6 +1107,59 @@ final class ContextGrabberModel: ObservableObject {
     }
   }
 
+  func chooseCustomOutputDirectory() {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = true
+    panel.prompt = "Use Folder"
+    panel.message = "Choose a folder for saved captures."
+
+    guard panel.runModal() == .OK, let selectedURL = panel.url else {
+      return
+    }
+
+    updateSettings { current in
+      current.outputDirectoryPath = selectedURL.path
+    }
+    refreshRecentCaptures()
+    statusLine = "Output directory updated"
+  }
+
+  func useDefaultOutputDirectory() {
+    updateSettings { current in
+      current.outputDirectoryPath = nil
+    }
+    refreshRecentCaptures()
+    statusLine = "Using default output directory"
+  }
+
+  func setRetentionMaxFileCountPreference(_ count: Int) {
+    updateSettings { current in
+      current.retentionMaxFileCount = count
+    }
+    applyRetentionPolicy()
+    refreshRecentCaptures()
+    statusLine = "Retention max files: \(retentionMaxFileCountLabel(count))"
+  }
+
+  func setRetentionMaxAgeDaysPreference(_ days: Int) {
+    updateSettings { current in
+      current.retentionMaxAgeDays = days
+    }
+    applyRetentionPolicy()
+    refreshRecentCaptures()
+    statusLine = "Retention max age: \(retentionMaxAgeDaysLabel(days))"
+  }
+
+  func toggleCapturePausedPlaceholder() {
+    updateSettings { current in
+      current.capturesPausedPlaceholder.toggle()
+    }
+    statusLine = capturesPausedPlaceholder ? "Captures paused (placeholder)" : "Captures resumed"
+  }
+
   func openAccessibilitySettings() {
     openDesktopPermissionSettings(.accessibility)
   }
@@ -1099,8 +1169,8 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   func runDiagnostics() {
-    let historyURL = Self.historyDirectoryURL()
-    let writable = FileManager.default.isWritableFile(atPath: Self.appSupportBaseURL().path)
+    let historyURL = resolvedHistoryDirectoryURL()
+    let writable = isDirectoryWritable(historyURL)
     let frontmostApp = effectiveFrontmostAppInfo()
     let target = detectBrowserTarget(
       frontmostBundleIdentifier: frontmostApp.bundleIdentifier,
@@ -1112,6 +1182,10 @@ final class ContextGrabberModel: ObservableObject {
     let desktopReadiness = desktopPermissionReadiness()
     let accessibilityLabel = desktopReadiness.accessibilityTrusted ? "granted" : "missing"
     let screenLabel = desktopReadiness.screenRecordingGranted.map { $0 ? "granted" : "missing" } ?? "unknown"
+    safariDiagnosticsLabel = safariStatus.label
+    chromeDiagnosticsLabel = chromeStatus.label
+    desktopAccessibilityDiagnosticsLabel = accessibilityLabel
+    desktopScreenDiagnosticsLabel = screenLabel
 
     switch target {
     case .chrome:
@@ -1337,8 +1411,79 @@ final class ContextGrabberModel: ObservableObject {
     lastCaptureLabel = formatRelativeLastCaptureLabel(isoTimestamp: lastCaptureAt)
   }
 
+  private func updateSettings(_ change: (inout HostSettings) -> Void) {
+    change(&settings)
+    saveHostSettings(settings)
+    applySettingsToPublishedState()
+  }
+
+  private func applySettingsToPublishedState() {
+    retentionMaxFileCount = settings.retentionMaxFileCount
+    retentionMaxAgeDays = settings.retentionMaxAgeDays
+    capturesPausedPlaceholder = settings.capturesPausedPlaceholder
+    outputDirectoryLabel = settings.outputDirectoryURL?.path ?? "Default"
+  }
+
+  private func resolvedHistoryDirectoryURL() -> URL {
+    if let outputDirectoryURL = settings.outputDirectoryURL {
+      return outputDirectoryURL
+    }
+    return Self.historyDirectoryURL()
+  }
+
+  private func ensureHistoryDirectoryExists(_ historyURL: URL) -> Bool {
+    do {
+      try FileManager.default.createDirectory(at: historyURL, withIntermediateDirectories: true)
+      return true
+    } catch {
+      logger.error("Failed creating history directory: \(historyURL.path) | \(error.localizedDescription)")
+      return false
+    }
+  }
+
+  private func applyRetentionPolicy() {
+    let historyURL = resolvedHistoryDirectoryURL()
+    guard ensureHistoryDirectoryExists(historyURL) else {
+      return
+    }
+
+    let files = (try? FileManager.default.contentsOfDirectory(
+      at: historyURL,
+      includingPropertiesForKeys: nil
+    )) ?? []
+
+    let markdownFiles = filterHostGeneratedCaptureFiles(files)
+    guard !markdownFiles.isEmpty else {
+      return
+    }
+
+    let policy = HostRetentionPolicy(
+      maxFileCount: retentionMaxFileCount,
+      maxFileAgeDays: retentionMaxAgeDays
+    )
+
+    let candidates = retentionPruneCandidates(
+      files: markdownFiles,
+      policy: policy
+    ) { fileURL in
+      let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+      return attributes?[.modificationDate] as? Date
+    }
+
+    for fileURL in candidates {
+      do {
+        try FileManager.default.removeItem(at: fileURL)
+      } catch {
+        logger.error("Failed pruning history file: \(fileURL.path) | \(error.localizedDescription)")
+      }
+    }
+  }
+
   private func refreshRecentCaptures(limit: Int = 5) {
-    recentCaptures = Self.loadRecentCaptureEntries(limit: limit)
+    recentCaptures = Self.loadRecentCaptureEntries(
+      historyURL: resolvedHistoryDirectoryURL(),
+      limit: limit
+    )
     if lastCaptureAt == nil, let capturedAt = recentCaptures.first?.capturedAt {
       lastCaptureAt = ISO8601DateFormatter().string(from: capturedAt)
       updateLastCaptureLabel()
@@ -1346,19 +1491,16 @@ final class ContextGrabberModel: ObservableObject {
   }
 
   private static func loadRecentCaptureEntries(
+    historyURL: URL,
     limit: Int,
     fileManager: FileManager = .default
   ) -> [CaptureHistoryEntry] {
-    let historyURL = historyDirectoryURL()
     let files = (try? fileManager.contentsOfDirectory(
       at: historyURL,
       includingPropertiesForKeys: nil
     )) ?? []
 
-    return files
-      .filter { $0.pathExtension == "md" }
-      .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
-      .prefix(max(1, limit))
+    return recentHostCaptureFiles(files, limit: limit)
       .map { fileURL in
         let title = captureTitleFromMarkdown(at: fileURL)
           ?? fileURL.deletingPathExtension().lastPathComponent
@@ -1434,13 +1576,13 @@ final class ContextGrabberModel: ObservableObject {
     let filePrefix = dateFormatter.string(from: Date())
 
     let filename = "\(filePrefix)-\(requestID.prefix(8)).md"
-    let fileURL = Self.historyDirectoryURL().appendingPathComponent(filename, isDirectory: false)
+    let fileURL = resolvedHistoryDirectoryURL().appendingPathComponent(filename, isDirectory: false)
 
     return MarkdownCaptureOutput(requestID: requestID, markdown: markdown, fileURL: fileURL)
   }
 
   private func writeMarkdown(_ output: MarkdownCaptureOutput) throws {
-    let historyURL = Self.historyDirectoryURL()
+    let historyURL = resolvedHistoryDirectoryURL()
     try FileManager.default.createDirectory(at: historyURL, withIntermediateDirectories: true)
     try output.markdown.write(to: output.fileURL, atomically: true, encoding: .utf8)
   }
@@ -1555,12 +1697,71 @@ struct ContextGrabberHostApp: App {
         model.runDiagnostics()
       }
 
+      Menu("Diagnostics Status") {
+        Text("Safari: \(model.safariDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Chrome: \(model.chromeDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Desktop AX: \(model.desktopAccessibilityDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+
+        Divider()
+        Button("Refresh Diagnostics") {
+          model.runDiagnostics()
+        }
+      }
+
       Button("Open Accessibility Settings") {
         model.openAccessibilitySettings()
       }
 
       Button("Open Screen Recording Settings") {
         model.openScreenRecordingSettings()
+      }
+
+      Divider()
+      Menu("Preferences") {
+        Text("Output: \(model.outputDirectoryLabel)")
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+
+        Button("Use Default Output Directory") {
+          model.useDefaultOutputDirectory()
+        }
+
+        Button("Choose Custom Output Directory...") {
+          model.chooseCustomOutputDirectory()
+        }
+
+        Divider()
+        Menu("Retention Max Files") {
+          ForEach(retentionMaxFileCountOptions, id: \.self) { option in
+            Button(retentionMenuOptionLabel(
+              valueLabel: retentionMaxFileCountLabel(option),
+              isSelected: model.retentionMaxFileCount == option
+            )) {
+              model.setRetentionMaxFileCountPreference(option)
+            }
+          }
+        }
+
+        Menu("Retention Max Age") {
+          ForEach(retentionMaxAgeDaysOptions, id: \.self) { option in
+            Button(retentionMenuOptionLabel(
+              valueLabel: retentionMaxAgeDaysLabel(option),
+              isSelected: model.retentionMaxAgeDays == option
+            )) {
+              model.setRetentionMaxAgeDaysPreference(option)
+            }
+          }
+        }
+
+        Divider()
+        Button(model.capturesPausedPlaceholder ? "Resume Captures (Placeholder)" : "Pause Captures (Placeholder)") {
+          model.toggleCapturePausedPlaceholder()
+        }
       }
 
       Divider()
@@ -1576,4 +1777,8 @@ struct ContextGrabberHostApp: App {
     }
     .menuBarExtraStyle(.window)
   }
+}
+
+private func retentionMenuOptionLabel(valueLabel: String, isSelected: Bool) -> String {
+  return isSelected ? "✓ \(valueLabel)" : valueLabel
 }

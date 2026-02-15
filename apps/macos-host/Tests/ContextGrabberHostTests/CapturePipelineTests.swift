@@ -18,6 +18,42 @@ final class CapturePipelineTests: XCTestCase {
     }
   }
 
+  private func withTemporaryDirectory(_ body: (URL) throws -> Void) throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("context-grabber-tests-\(UUID().uuidString.lowercased())", isDirectory: true)
+    try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: directoryURL)
+    }
+    try body(directoryURL)
+  }
+
+  private func sampleCaptureMarkdown(requestID: String = "ad3fdb24-5a1c-49d0-bfae-144f3bf96149") -> String {
+    let payload = BrowserContextPayload(
+      source: "browser",
+      browser: "safari",
+      url: "https://example.com/sample",
+      title: "Sample Capture",
+      fullText: "This is sample capture content.",
+      headings: [],
+      links: [],
+      metaDescription: nil,
+      siteName: "Example",
+      language: "en",
+      author: nil,
+      publishedTime: nil,
+      selectionText: nil,
+      extractionWarnings: []
+    )
+
+    return renderMarkdown(
+      requestID: requestID,
+      capturedAt: "2026-02-14T23:11:51Z",
+      extractionMethod: "browser_extension",
+      payload: payload
+    )
+  }
+
   func testDetectBrowserTargetSelectsChromeAndSafari() {
     let safariTarget = detectBrowserTarget(
       frontmostBundleIdentifier: "com.apple.Safari",
@@ -118,6 +154,129 @@ final class CapturePipelineTests: XCTestCase {
       formatRelativeLastCaptureLabel(isoTimestamp: "invalid", now: now),
       "Last capture: unknown"
     )
+  }
+
+  func testRetentionLabelFormatting() {
+    XCTAssertEqual(retentionMaxFileCountLabel(0), "Unlimited")
+    XCTAssertEqual(retentionMaxFileCountLabel(100), "100")
+    XCTAssertEqual(retentionMaxAgeDaysLabel(0), "Unlimited")
+    XCTAssertEqual(retentionMaxAgeDaysLabel(30), "30 days")
+  }
+
+  func testRetentionPruneCandidatesAppliesAgeThenCount() {
+    let now = Date(timeIntervalSince1970: 2_000_000_000)
+    let newest = URL(fileURLWithPath: "/tmp/newest.md")
+    let middle = URL(fileURLWithPath: "/tmp/middle.md")
+    let oldest = URL(fileURLWithPath: "/tmp/oldest.md")
+
+    let fileDates: [URL: Date] = [
+      newest: Date(timeIntervalSince1970: 2_000_000_000 - 60),
+      middle: Date(timeIntervalSince1970: 2_000_000_000 - 86_400 * 10),
+      oldest: Date(timeIntervalSince1970: 2_000_000_000 - 86_400 * 120),
+    ]
+
+    let candidates = retentionPruneCandidates(
+      files: [oldest, newest, middle],
+      policy: HostRetentionPolicy(maxFileCount: 1, maxFileAgeDays: 90),
+      now: now
+    ) { url in
+      fileDates[url]
+    }
+
+    XCTAssertEqual(Set(candidates), Set([middle, oldest]))
+  }
+
+  func testHostGeneratedCaptureFilenameRequiresTimestampAndSuffix() {
+    XCTAssertTrue(isHostGeneratedCaptureFilename("20260214-231151-ad3fdb24.md"))
+    XCTAssertFalse(isHostGeneratedCaptureFilename("notes.md"))
+    XCTAssertFalse(isHostGeneratedCaptureFilename("20260214-231151.md"))
+    XCTAssertFalse(isHostGeneratedCaptureFilename("invalid-231151-ad3fdb24.md"))
+  }
+
+  func testHasRequiredCaptureFrontmatterRequiresExpectedKeys() {
+    let valid = sampleCaptureMarkdown()
+    XCTAssertTrue(hasRequiredCaptureFrontmatter(valid))
+
+    let invalid = """
+    ---
+    id: "123"
+    captured_at: "2026-02-14T23:11:51Z"
+    ---
+    Content
+    """
+    XCTAssertFalse(hasRequiredCaptureFrontmatter(invalid))
+  }
+
+  func testFilterHostGeneratedCaptureFilesExcludesUnrelatedMarkdown() throws {
+    try withTemporaryDirectory { directoryURL in
+      let validCaptureURL = directoryURL.appendingPathComponent("20260214-231151-ad3fdb24.md", isDirectory: false)
+      try sampleCaptureMarkdown().write(to: validCaptureURL, atomically: true, encoding: .utf8)
+
+      let unrelatedNotesURL = directoryURL.appendingPathComponent("notes.md", isDirectory: false)
+      try "# Notes\nUnrelated text.".write(to: unrelatedNotesURL, atomically: true, encoding: .utf8)
+
+      let lookalikeURL = directoryURL.appendingPathComponent("20260214-231152-notes123.md", isDirectory: false)
+      try "# Looks like capture filename but no frontmatter".write(to: lookalikeURL, atomically: true, encoding: .utf8)
+
+      let filtered = filterHostGeneratedCaptureFiles([validCaptureURL, unrelatedNotesURL, lookalikeURL])
+      XCTAssertEqual(filtered, [validCaptureURL])
+    }
+  }
+
+  func testRecentHostCaptureFilesExcludeUnrelatedMarkdownFiles() throws {
+    try withTemporaryDirectory { directoryURL in
+      let oldestCaptureURL = directoryURL.appendingPathComponent("20260214-231151-ad3fdb24.md", isDirectory: false)
+      let newestCaptureURL = directoryURL.appendingPathComponent("20260214-231152-bb9af51a.md", isDirectory: false)
+      try sampleCaptureMarkdown(requestID: "ad3fdb24-5a1c-49d0-bfae-144f3bf96149")
+        .write(to: oldestCaptureURL, atomically: true, encoding: .utf8)
+      try sampleCaptureMarkdown(requestID: "bb9af51a-5a1c-49d0-bfae-144f3bf96149")
+        .write(to: newestCaptureURL, atomically: true, encoding: .utf8)
+
+      let unrelatedURL = directoryURL.appendingPathComponent("notes.md", isDirectory: false)
+      try "# Notes\nUnrelated text.".write(to: unrelatedURL, atomically: true, encoding: .utf8)
+
+      let files = [oldestCaptureURL, newestCaptureURL, unrelatedURL]
+      let entries = recentHostCaptureFiles(files, limit: 5)
+      XCTAssertEqual(entries, [newestCaptureURL, oldestCaptureURL])
+    }
+  }
+
+  func testIsDirectoryWritableRequiresSuccessfulProbeWrite() throws {
+    try withTemporaryDirectory { directoryURL in
+      XCTAssertTrue(isDirectoryWritable(directoryURL))
+    }
+
+    let notWritable = isDirectoryWritable(
+      URL(fileURLWithPath: "/tmp/context-grabber-unused-test"),
+      ensureDirectory: { _ in },
+      writeProbe: { _, _ in
+        throw NSError(domain: "CapturePipelineTests", code: 1)
+      },
+      removeProbe: { _ in }
+    )
+    XCTAssertFalse(notWritable)
+  }
+
+  func testLoadHostSettingsSanitizesNegativeRetentionValues() {
+    let suiteName = "context-grabber-tests-\(UUID().uuidString.lowercased())"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      XCTFail("Expected ephemeral test UserDefaults suite.")
+      return
+    }
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    defaults.set(-42, forKey: "context_grabber.retention_max_file_count")
+    defaults.set(-9, forKey: "context_grabber.retention_max_age_days")
+    defaults.set("", forKey: "context_grabber.output_directory_path")
+    defaults.set(true, forKey: "context_grabber.captures_paused_placeholder")
+
+    let settings = loadHostSettings(userDefaults: defaults)
+    XCTAssertEqual(settings.retentionMaxFileCount, HostSettings.defaultRetentionMaxFileCount)
+    XCTAssertEqual(settings.retentionMaxAgeDays, HostSettings.defaultRetentionMaxAgeDays)
+    XCTAssertNil(settings.outputDirectoryURL)
+    XCTAssertEqual(settings.capturesPausedPlaceholder, true)
   }
 
   func testFrontmostWindowIDFromWindowListPrefersFrontmostAppLayerZeroWindow() {
