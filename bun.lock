@@ -14,11 +14,20 @@
       "name": "@context-grabber/extension-chrome",
       "version": "0.1.0",
       "dependencies": {
+        "@context-grabber/extension-shared": "workspace:*",
         "@context-grabber/shared-types": "workspace:*",
       },
     },
     "packages/extension-safari": {
       "name": "@context-grabber/extension-safari",
+      "version": "0.1.0",
+      "dependencies": {
+        "@context-grabber/extension-shared": "workspace:*",
+        "@context-grabber/shared-types": "workspace:*",
+      },
+    },
+    "packages/extension-shared": {
+      "name": "@context-grabber/extension-shared",
       "version": "0.1.0",
       "dependencies": {
         "@context-grabber/shared-types": "workspace:*",
@@ -58,6 +67,8 @@
     "@context-grabber/extension-chrome": ["@context-grabber/extension-chrome@workspace:packages/extension-chrome"],
 
     "@context-grabber/extension-safari": ["@context-grabber/extension-safari@workspace:packages/extension-safari"],
+
+    "@context-grabber/extension-shared": ["@context-grabber/extension-shared@workspace:packages/extension-shared"],
 
     "@context-grabber/native-host-bridge": ["@context-grabber/native-host-bridge@workspace:packages/native-host-bridge"],
 
