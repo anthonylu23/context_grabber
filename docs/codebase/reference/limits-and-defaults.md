@@ -29,7 +29,7 @@
 - Retention max file count menu options: `50`, `100`, `200`, `500`, `Unlimited`
 - Retention max age menu options: `7`, `30`, `90`, `Unlimited`
 - Clipboard copy mode default: `Markdown File`
-- Output format preset default: `Brief`
+- Output format preset default: `Full`
 - Product context line default: `On`
 - Summarization mode default: `Heuristic`
 - Summarization provider default: `Not Set`

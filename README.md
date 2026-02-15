@@ -18,6 +18,7 @@ swift run
 Trigger captures via the menu bar icon or the global hotkey `⌃⌥⌘C`.
 
 Browser live extraction requires JavaScript from Apple Events enabled in Safari (`Settings > Developer`) or Chrome (`View > Developer`), plus Automation permission for the calling app in `System Settings > Privacy & Security > Automation`.
+Native bridge `auto` source mode now defaults to live extraction. Runtime payload env vars are only required for explicit `runtime` mode (or optional runtime fallback in `auto`).
 
 ### Companion CLI
 
@@ -70,7 +71,7 @@ Configurable via the menu bar Settings submenu and Advanced Settings window:
 | Setting | Options | Default |
 |---------|---------|---------|
 | Output directory | Default or custom path | `~/Documents/ContextGrabber` |
-| Output format | Brief, Full | Brief |
+| Output format | Brief, Full | Full |
 | Clipboard copy mode | Markdown file, Plain text | Markdown file |
 | Product context line | On, Off | On |
 | Retention max files | 0 (unlimited) – N | 200 |

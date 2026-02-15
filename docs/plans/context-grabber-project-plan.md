@@ -634,6 +634,7 @@ Lightweight settings popover or small window accessible from the menu:
 1. Milestone G CLI rebuild — Go + Bun/Swift hybrid CLI with MCP server. See `docs/plans/cli-expansion-plan.md`.
 2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
 3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
+4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 
 ## Progress Notes (Milestone G CLI Rebuild)
 56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
@@ -651,3 +652,4 @@ Lightweight settings popover or small window accessible from the menu:
   - Types to extract from monolith: transport classes (Safari/Chrome, ~490 lines), protocol types (~100 lines), browser detection (~50 lines), core types (~60 lines)
   - Unify duplicated `ProcessExecutionResult`, promote `GenericEnvelope`
   - No separate `ContextGrabberDesktopCLI` executable — single binary serves both GUI and CLI
+59. Native messaging bridge `auto` source behavior now prefers live extraction first (Safari/Chrome), with runtime fallback only when runtime payload env vars are explicitly configured. This avoids runtime-env error noise for normal live-capture workflows.
