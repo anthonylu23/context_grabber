@@ -6,6 +6,143 @@ import Foundation
 import Vision
 
 let minimumAccessibilityTextChars = 400
+let defaultAccessibilityTraversalDepth = 2
+let defaultAccessibilityTraversalMaxElements = 96
+
+private let defaultAccessibilityTextAttributes: [String] = [
+  kAXSelectedTextAttribute as String,
+  kAXValueAttribute as String,
+  kAXDescriptionAttribute as String,
+  kAXTitleAttribute as String,
+  kAXHelpAttribute as String,
+  "AXPlaceholderValue",
+  "AXLabelValue",
+]
+
+private let defaultAccessibilityChildAttributes: [String] = [
+  kAXChildrenAttribute as String,
+  "AXVisibleChildren",
+  "AXRows",
+  "AXColumns",
+  "AXContents",
+]
+
+private let denseEditorBundlePrefixes: [String] = [
+  "com.apple.dt.xcode",
+  "com.jetbrains.",
+  "com.microsoft.vscode",
+  "com.microsoft.vscodeinsiders",
+  "org.gnu.emacs",
+]
+
+private let terminalBundleIdentifiers: Set<String> = [
+  "com.apple.terminal",
+  "com.googlecode.iterm2",
+  "dev.warp.warp-stable",
+]
+
+struct DesktopAccessibilityExtractionConfig {
+  let minimumTextChars: Int
+  let textAttributes: [String]
+  let childAttributes: [String]
+  let traversalDepth: Int
+  let traversalMaxElements: Int
+}
+
+private func deduplicatedStrings(_ values: [String]) -> [String] {
+  var seen = Set<String>()
+  var result: [String] = []
+  result.reserveCapacity(values.count)
+
+  for value in values {
+    if seen.contains(value) {
+      continue
+    }
+
+    seen.insert(value)
+    result.append(value)
+  }
+
+  return result
+}
+
+struct CFEqualitySet {
+  private var buckets: [CFHashCode: [CFTypeRef]] = [:]
+
+  func contains(_ value: CFTypeRef) -> Bool {
+    let hash = CFHash(value)
+    guard let bucket = buckets[hash] else {
+      return false
+    }
+
+    return bucket.contains { existing in
+      return CFEqual(existing, value)
+    }
+  }
+
+  @discardableResult
+  mutating func insert(_ value: CFTypeRef) -> Bool {
+    let hash = CFHash(value)
+    var bucket = buckets[hash] ?? []
+    if bucket.contains(where: { existing in CFEqual(existing, value) }) {
+      return false
+    }
+
+    bucket.append(value)
+    buckets[hash] = bucket
+    return true
+  }
+}
+
+func desktopAccessibilityExtractionConfig(
+  bundleIdentifier: String?,
+  appName: String?
+) -> DesktopAccessibilityExtractionConfig {
+  let normalizedBundleIdentifier = bundleIdentifier?.lowercased() ?? ""
+  let normalizedAppName = appName?.lowercased() ?? ""
+  var minimumTextChars = minimumAccessibilityTextChars
+  var traversalDepth = defaultAccessibilityTraversalDepth
+  var traversalMaxElements = defaultAccessibilityTraversalMaxElements
+  var textAttributes = defaultAccessibilityTextAttributes
+
+  let isDenseTextEditor = denseEditorBundlePrefixes.contains(where: {
+    normalizedBundleIdentifier.hasPrefix($0)
+  })
+  let isTerminal =
+    terminalBundleIdentifiers.contains(normalizedBundleIdentifier)
+    || normalizedAppName.contains("terminal")
+    || normalizedAppName.contains("iterm")
+    || normalizedAppName.contains("warp")
+
+  if isDenseTextEditor {
+    minimumTextChars = 220
+    traversalDepth = 3
+    traversalMaxElements = 160
+    textAttributes.append(contentsOf: ["AXDocument", "AXFilename", "AXURL", "AXRoleDescription"])
+  }
+
+  if isTerminal {
+    minimumTextChars = 180
+    traversalDepth = 3
+    traversalMaxElements = max(traversalMaxElements, 128)
+    textAttributes.append(contentsOf: ["AXDocument", "AXRoleDescription"])
+  }
+
+  return DesktopAccessibilityExtractionConfig(
+    minimumTextChars: minimumTextChars,
+    textAttributes: deduplicatedStrings(textAttributes),
+    childAttributes: defaultAccessibilityChildAttributes,
+    traversalDepth: traversalDepth,
+    traversalMaxElements: traversalMaxElements
+  )
+}
+
+func desktopMinimumAccessibilityTextChars(context: DesktopCaptureContext) -> Int {
+  return desktopAccessibilityExtractionConfig(
+    bundleIdentifier: context.bundleIdentifier,
+    appName: context.appName
+  ).minimumTextChars
+}
 
 struct DesktopCaptureContext {
   let appName: String?
@@ -134,21 +271,50 @@ final class SynchronousResultBox<Value>: @unchecked Sendable {
   }
 }
 
-func copyAXStringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+func copyAXAttributeValue(_ element: AXUIElement, _ attribute: CFString) -> CFTypeRef? {
   var value: CFTypeRef?
   let result = AXUIElementCopyAttributeValue(element, attribute, &value)
-  guard result == .success, let value else {
+  guard result == .success else {
     return nil
   }
 
-  if let stringValue = value as? String {
-    return stringValue
-  }
-  if let attributedValue = value as? NSAttributedString {
-    return attributedValue.string
+  return value
+}
+
+func extractAXStringValues(_ value: CFTypeRef?) -> [String] {
+  guard let value else {
+    return []
   }
 
-  return nil
+  if let stringValue = value as? String {
+    return [stringValue]
+  }
+  if let attributedValue = value as? NSAttributedString {
+    return [attributedValue.string]
+  }
+  if let urlValue = value as? URL {
+    return [urlValue.absoluteString]
+  }
+  if let urlStringValue = value as? NSURL, let absoluteString = urlStringValue.absoluteString {
+    return [absoluteString]
+  }
+  if let values = value as? [Any] {
+    return values.flatMap { extractAXStringValues($0 as CFTypeRef) }
+  }
+
+  return []
+}
+
+func copyAXElementAttribute(_ element: AXUIElement, _ attribute: CFString) -> AXUIElement? {
+  return asAXUIElement(copyAXAttributeValue(element, attribute))
+}
+
+func copyAXElementArrayAttribute(_ element: AXUIElement, _ attribute: CFString) -> [AXUIElement] {
+  guard let value = copyAXAttributeValue(element, attribute), let values = value as? [Any] else {
+    return []
+  }
+
+  return values.compactMap { asAXUIElement($0 as CFTypeRef) }
 }
 
 func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
@@ -164,32 +330,93 @@ func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
   return unsafeDowncast(value as AnyObject, to: AXUIElement.self)
 }
 
-func collectAccessibilityTextFromElement(_ element: AXUIElement) -> String? {
-  let attributes: [CFString] = [
-    kAXSelectedTextAttribute as CFString,
-    kAXValueAttribute as CFString,
-    kAXDescriptionAttribute as CFString,
-    kAXTitleAttribute as CFString,
-    kAXHelpAttribute as CFString,
-  ]
-
+func collectAccessibilityTextFromElement(_ element: AXUIElement, attributes: [String]) -> String? {
   var segments: [String] = []
   var seen = Set<String>()
   for attribute in attributes {
-    guard let value = copyAXStringAttribute(element, attribute) else {
+    let stringValues = extractAXStringValues(
+      copyAXAttributeValue(element, attribute as CFString)
+    )
+    for stringValue in stringValues {
+      let normalized = normalizeDesktopText(stringValue)
+      guard !normalized.isEmpty else {
+        continue
+      }
+      if seen.contains(normalized) {
+        continue
+      }
+
+      seen.insert(normalized)
+      segments.append(normalized)
+    }
+  }
+
+  if segments.isEmpty {
+    return nil
+  }
+
+  return segments.joined(separator: "\n\n")
+}
+
+func collectAccessibilityTextByTraversingElementTree(
+  rootElement: AXUIElement,
+  config: DesktopAccessibilityExtractionConfig
+) -> String? {
+  typealias QueuedElement = (element: AXUIElement, depth: Int)
+  var queue: [QueuedElement] = [(rootElement, 0)]
+  var queueIndex = 0
+
+  var visited = CFEqualitySet()
+  var segments: [String] = []
+  var seenSegments = Set<String>()
+  var visitedElements = 0
+
+  while queueIndex < queue.count && visitedElements < config.traversalMaxElements {
+    let queued = queue[queueIndex]
+    queueIndex += 1
+
+    if !visited.insert(queued.element) {
+      continue
+    }
+    visitedElements += 1
+
+    if let elementText = collectAccessibilityTextFromElement(
+      queued.element,
+      attributes: config.textAttributes
+    ) {
+      let normalized = normalizeDesktopText(elementText)
+      if !normalized.isEmpty && !seenSegments.contains(normalized) {
+        seenSegments.insert(normalized)
+        segments.append(normalized)
+      }
+    }
+
+    guard queued.depth < config.traversalDepth else {
       continue
     }
 
-    let normalized = normalizeDesktopText(value)
-    guard !normalized.isEmpty else {
-      continue
-    }
-    if seen.contains(normalized) {
-      continue
+    for attribute in config.childAttributes {
+      let childElements = copyAXElementArrayAttribute(queued.element, attribute as CFString)
+      for childElement in childElements {
+        if visited.contains(childElement) {
+          continue
+        }
+
+        queue.append((childElement, queued.depth + 1))
+      }
     }
 
-    seen.insert(normalized)
-    segments.append(normalized)
+    // Parent/title-linked elements often carry richer text when focused fields are sparse.
+    if let parent = copyAXElementAttribute(queued.element, kAXParentAttribute as CFString) {
+      if !visited.contains(parent) {
+        queue.append((parent, queued.depth + 1))
+      }
+    }
+    if let titleElement = copyAXElementAttribute(queued.element, "AXTitleUIElement" as CFString) {
+      if !visited.contains(titleElement) {
+        queue.append((titleElement, queued.depth + 1))
+      }
+    }
   }
 
   if segments.isEmpty {
@@ -205,6 +432,14 @@ func extractAccessibilityTextFromFocusedElement(
   guard AXIsProcessTrusted() else {
     return nil
   }
+
+  let frontmostApplication = frontmostProcessIdentifier.flatMap {
+    NSRunningApplication(processIdentifier: $0)
+  }
+  let extractionConfig = desktopAccessibilityExtractionConfig(
+    bundleIdentifier: frontmostApplication?.bundleIdentifier,
+    appName: frontmostApplication?.localizedName
+  )
 
   var segments: [String] = []
   var seen = Set<String>()
@@ -234,7 +469,12 @@ func extractAccessibilityTextFromFocusedElement(
   ) == .success,
     let focusedElement = asAXUIElement(focusedValue)
   {
-    appendUnique(collectAccessibilityTextFromElement(focusedElement))
+    appendUnique(
+      collectAccessibilityTextByTraversingElementTree(
+        rootElement: focusedElement,
+        config: extractionConfig
+      )
+    )
   }
 
   if let frontmostProcessIdentifier {
@@ -248,7 +488,12 @@ func extractAccessibilityTextFromFocusedElement(
     ) == .success,
       let appFocusedElement = asAXUIElement(appFocusedValue)
     {
-      appendUnique(collectAccessibilityTextFromElement(appFocusedElement))
+      appendUnique(
+        collectAccessibilityTextByTraversingElementTree(
+          rootElement: appFocusedElement,
+          config: extractionConfig
+        )
+      )
     }
 
     var focusedWindowValue: CFTypeRef?
@@ -259,7 +504,12 @@ func extractAccessibilityTextFromFocusedElement(
     ) == .success,
       let focusedWindowElement = asAXUIElement(focusedWindowValue)
     {
-      appendUnique(collectAccessibilityTextFromElement(focusedWindowElement))
+      appendUnique(
+        collectAccessibilityTextByTraversingElementTree(
+          rootElement: focusedWindowElement,
+          config: extractionConfig
+        )
+      )
     }
   }
 
@@ -495,12 +745,13 @@ func resolveDesktopCapture(
   dependencies: DesktopCaptureDependencies = .live()
 ) async -> DesktopCaptureResolution {
   let appName = context.appName ?? "Desktop App"
+  let minimumTextChars = desktopMinimumAccessibilityTextChars(context: context)
   let originURL = buildDesktopOriginURL(bundleIdentifier: context.bundleIdentifier)
   let accessibilityText = normalizeDesktopText(
     accessibilityTextOverride ?? dependencies.accessibilityExtractor(frontmostProcessIdentifier)
   )
 
-  if accessibilityText.count >= minimumAccessibilityTextChars {
+  if accessibilityText.count >= minimumTextChars {
     let payload = BrowserContextPayload(
       source: "desktop",
       browser: "desktop",
@@ -530,7 +781,7 @@ func resolveDesktopCapture(
   let axFallbackWarning: String = if accessibilityText.isEmpty {
     "AX extraction unavailable; used OCR fallback text."
   } else {
-    "AX extraction below threshold (\(accessibilityText.count) chars); used OCR fallback text."
+    "AX extraction below threshold (\(accessibilityText.count)/\(minimumTextChars) chars); used OCR fallback text."
   }
 
   let extractedOcr = await dependencies.ocrExtractor(frontmostProcessIdentifier)
@@ -565,7 +816,7 @@ func resolveDesktopCapture(
   let fallbackWarning: String = if accessibilityText.isEmpty {
     "AX and OCR extraction unavailable."
   } else {
-    "AX extraction below threshold (\(accessibilityText.count) chars) and OCR extraction unavailable."
+    "AX extraction below threshold (\(accessibilityText.count)/\(minimumTextChars) chars) and OCR extraction unavailable."
   }
   let fallbackWarnings: [String] = if accessibilityText.isEmpty {
     [fallbackWarning]

@@ -104,11 +104,22 @@ final class CapturePipelineTests: XCTestCase {
     )
   }
 
-  func testMenuBarSymbolNameMapping() {
-    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.neutral), "text.viewfinder")
-    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.success), "checkmark.circle.fill")
-    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.failure), "exclamationmark.triangle.fill")
-    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.disconnected), "smallcircle.filled.circle")
+  func testMenuBarIconMapping() {
+    let neutral = menuBarIconForIndicatorState(.neutral)
+    XCTAssertEqual(neutral.name, "MenuBarIcon")
+    XCTAssertFalse(neutral.isSystemSymbol)
+
+    let success = menuBarIconForIndicatorState(.success)
+    XCTAssertEqual(success.name, "checkmark.circle.fill")
+    XCTAssertTrue(success.isSystemSymbol)
+
+    let failure = menuBarIconForIndicatorState(.failure)
+    XCTAssertEqual(failure.name, "exclamationmark.triangle.fill")
+    XCTAssertTrue(failure.isSystemSymbol)
+
+    let disconnected = menuBarIconForIndicatorState(.disconnected)
+    XCTAssertEqual(disconnected.name, "smallcircle.filled.circle")
+    XCTAssertTrue(disconnected.isSystemSymbol)
   }
 
   func testDisconnectedIndicatorRequiresBothChannelsNotConnected() {
@@ -154,6 +165,17 @@ final class CapturePipelineTests: XCTestCase {
       formatRelativeLastCaptureLabel(isoTimestamp: "invalid", now: now),
       "Last capture: unknown"
     )
+  }
+
+  func testCFEqualitySetDeduplicatesDistinctButEqualCFValues() {
+    let first: CFTypeRef = NSString(string: "same-value")
+    let second: CFTypeRef = NSString(string: "same-value")
+    XCTAssertFalse((first as AnyObject) === (second as AnyObject))
+
+    var visited = CFEqualitySet()
+    XCTAssertTrue(visited.insert(first))
+    XCTAssertFalse(visited.insert(second))
+    XCTAssertTrue(visited.contains(second))
   }
 
   func testRetentionLabelFormatting() {
@@ -493,16 +515,59 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertEqual(resolution.extractionMethod, "metadata_only")
     XCTAssertEqual(
       resolution.warning,
-      "AX extraction below threshold (\(minimumAccessibilityTextChars - 1) chars) and OCR extraction unavailable."
+      "AX extraction below threshold (\(minimumAccessibilityTextChars - 1)/\(minimumAccessibilityTextChars) chars) and OCR extraction unavailable."
     )
     XCTAssertEqual(
       resolution.payload.extractionWarnings,
       [
-        "AX extraction below threshold (\(minimumAccessibilityTextChars - 1) chars); used OCR fallback text.",
+        "AX extraction below threshold (\(minimumAccessibilityTextChars - 1)/\(minimumAccessibilityTextChars) chars); used OCR fallback text.",
         "OCR extraction unavailable.",
       ]
     )
     XCTAssertEqual(resolution.payload.fullText, accessibilityText)
+  }
+
+  func testResolveDesktopCaptureUsesEditorThresholdTuning() async {
+    let accessibilityText = String(repeating: "a", count: 260)
+    let resolution = await resolveDesktopCapture(
+      context: DesktopCaptureContext(appName: "Visual Studio Code", bundleIdentifier: "com.microsoft.VSCode"),
+      accessibilityTextOverride: accessibilityText,
+      ocrTextOverride: nil,
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
+    )
+
+    XCTAssertEqual(desktopMinimumAccessibilityTextChars(
+      context: DesktopCaptureContext(
+        appName: "Visual Studio Code",
+        bundleIdentifier: "com.microsoft.VSCode"
+      )
+    ), 220)
+    XCTAssertEqual(resolution.extractionMethod, "accessibility")
+    XCTAssertEqual(resolution.payload.fullText, accessibilityText)
+  }
+
+  func testResolveDesktopCaptureUsesDefaultThresholdForUntunedApps() async {
+    let accessibilityText = String(repeating: "a", count: 260)
+    let resolution = await resolveDesktopCapture(
+      context: DesktopCaptureContext(appName: "Notes", bundleIdentifier: "com.apple.Notes"),
+      accessibilityTextOverride: accessibilityText,
+      ocrTextOverride: nil,
+      accessibilityExtractor: { nil },
+      ocrExtractor: { nil }
+    )
+
+    XCTAssertEqual(desktopMinimumAccessibilityTextChars(
+      context: DesktopCaptureContext(
+        appName: "Notes",
+        bundleIdentifier: "com.apple.Notes"
+      )
+    ), minimumAccessibilityTextChars)
+    XCTAssertEqual(resolution.extractionMethod, "metadata_only")
+    XCTAssertEqual(
+      resolution.warning,
+      "AX extraction below threshold (\(accessibilityText.count)/\(minimumAccessibilityTextChars) chars) and OCR extraction unavailable."
+    )
   }
 
   func testResolveDesktopCaptureUsesServiceDependencies() async {
