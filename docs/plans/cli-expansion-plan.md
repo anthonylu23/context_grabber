@@ -1,17 +1,28 @@
-# CLI Expansion Plan: Go + Bun/Swift Hybrid
+# CLI Expansion Plan: Go + Swift Hybrid
 
 ## Overview
 
-Rebuild the Context Grabber companion CLI as a Go binary that orchestrates capture via subprocess calls to the existing Bun/TS pipeline (browser capture) and a new lightweight Swift CLI target (desktop AX/OCR capture). The Go binary also hosts an MCP server for agent integration.
+Rebuild the Context Grabber companion CLI as a Go binary that orchestrates capture via subprocess calls to the existing `ContextGrabberHost` Swift binary (desktop AX/OCR capture, running in headless CLI mode) and Bun/TS pipeline (browser capture). The Go binary also hosts an MCP server for agent integration.
 
-The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI is a clean reimplementation that reuses the same underlying capture infrastructure (native-messaging bridge CLIs, Swift desktop pipeline) without duplicating capture logic.
+The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI is a clean reimplementation that reuses the same underlying capture infrastructure without duplicating capture logic.
+
+### Single-Binary CLI Mode (Key Architecture Decision)
+
+Instead of creating a separate `ContextGrabberDesktopCLI` executable, the existing `ContextGrabberHost` binary gains a **CLI mode**. When invoked with capture flags (e.g. `--capture`, `--list-apps`), it skips SwiftUI initialization entirely and runs the capture pipeline headlessly, outputting results to stdout and exiting.
+
+**Rationale:** macOS grants Accessibility and Screen Recording permissions **per-binary path**. A separate CLI binary would require its own permission grants — the user would have to approve it independently in System Settings. By reusing the same binary, the CLI inherits the GUI app's already-granted permissions with zero extra setup.
+
+**How it works:**
+- `ContextGrabberHost` (no args) → launches SwiftUI menu bar app as usual
+- `ContextGrabberHost --capture --app Finder` → runs desktop capture headlessly, prints markdown to stdout, exits
+- The Go CLI spawns `ContextGrabberHost --capture ...` as a subprocess
 
 ## Architecture
 
 ```
 Distribution artifacts:
   context-grabber              (Go, ~12MB)    CLI + MCP server
-  context-grabber-desktop      (Swift, ~2MB)  AX/OCR desktop capture
+  ContextGrabberHost           (Swift, ~2MB)  GUI app + headless CLI mode
   + existing Bun bridge CLIs   (TS)           browser extension capture (optional)
 
 Required:  osascript (ships with macOS)
@@ -20,11 +31,11 @@ Optional:  bun + browser extensions (for rich browser capture)
 
 ### Subprocess Boundaries
 
-| Boundary         | Used by                                              | Latency          |
-| ---------------- | ---------------------------------------------------- | ---------------- |
-| Go → osascript   | `list tabs`, `list apps`, tab/app activation         | ~150-300ms       |
-| Go → Bun         | Browser extension capture (`capture --focused/--tab`)| ~400-700ms       |
-| Go → Swift CLI   | Desktop capture (`capture --app`)                    | ~200-2200ms      |
+| Boundary                      | Used by                                              | Latency          |
+| ----------------------------- | ---------------------------------------------------- | ---------------- |
+| Go → osascript                | `list tabs`, `list apps`, tab/app activation         | ~150-300ms       |
+| Go → Bun                      | Browser extension capture (`capture --focused/--tab`)| ~400-700ms       |
+| Go → ContextGrabberHost --cli | Desktop capture (`capture --app`)                    | ~200-2200ms      |
 
 ### Rendering Ownership
 
@@ -57,8 +68,8 @@ cli/
       activate.go        Tab/app activation via AppleScript
     bridge/
       bun.go             Bun subprocess: spawn, read stdout, error handling
-      swift.go           Swift CLI subprocess: spawn, read stdout, error handling
-      detect.go          Capability detection (Bun available? Swift CLI built?)
+      swift.go           ContextGrabberHost --capture subprocess: spawn, read stdout, error handling
+      detect.go          Capability detection (Bun available? ContextGrabberHost built?)
     mcp/
       server.go          MCP server setup, stdio transport
       tools.go           Tool definitions (list_tabs, list_apps, capture_*, doctor)
@@ -98,7 +109,7 @@ Environment variables:
   CONTEXT_GRABBER_REPO_ROOT        Override repo root for locating Bun bridge CLIs
   CONTEXT_GRABBER_BUN_BIN          Override Bun binary path
   CONTEXT_GRABBER_BROWSER_TARGET   Force browser target (safari|chrome)
-  CONTEXT_GRABBER_DESKTOP_BIN      Override Swift desktop capture binary path
+  CONTEXT_GRABBER_HOST_BIN         Override ContextGrabberHost binary path (for CLI mode capture)
 ```
 
 ### Capture Flow: `capture --tab`
@@ -114,9 +125,9 @@ Note: Tab activation briefly switches the user's active tab. This is a known tra
 
 1. If `--name-match` provided: run `list apps` internally, find first match
 2. Activate the matched app via AppleScript (`tell application X to activate`)
-3. Spawn the Swift desktop CLI: `context-grabber-desktop --app <name> --method auto`
-4. Swift CLI runs AX extraction → OCR fallback → metadata-only fallback
-5. Swift CLI renders markdown, writes to stdout
+3. Spawn `ContextGrabberHost --capture --app <name> --method auto`
+4. Swift binary runs in CLI mode: AX extraction → OCR fallback → metadata-only fallback
+5. Swift binary renders markdown, writes to stdout
 6. Go reads markdown, passes through to output
 
 ### MCP Tool Definitions
@@ -132,11 +143,11 @@ The MCP server (started via `context-grabber serve`) exposes tools that map 1:1 
 | `capture_app`     | Capture a specific desktop app           | `app?, name_match?, bundle_id?, method?`           |
 | `doctor`          | Check system capabilities and health     | (none)                                             |
 
-## Swift Desktop CLI Target
+## Swift Library Extraction + CLI Mode
 
 ### Package.swift Changes
 
-The existing monolithic `ContextGrabberHost` executable target must be split into a shared library and two executable targets.
+The existing monolithic `ContextGrabberHost` executable target must be split into a shared library and a single executable target that supports both GUI and headless CLI modes.
 
 Current structure:
 ```
@@ -146,7 +157,7 @@ Sources/ContextGrabberHost/    (all .swift files in one executable target)
 New structure:
 ```
 Sources/
-  ContextGrabberHostLib/              shared library target
+  ContextGrabberCore/                 shared library target
     DesktopCapturePipeline.swift       imports AppKit, Vision, etc.
     MarkdownRendering.swift            Foundation only
     HostSettings.swift                 Foundation only
@@ -154,38 +165,66 @@ Sources/
     Summarization.swift                Foundation only
     MenuBarPresentation.swift
     DiagnosticsPresentation.swift
-  ContextGrabberHost/                 menu bar app executable
-    ContextGrabberHostApp.swift        SwiftUI app entry point
+    TransportLayer.swift               extracted from monolith (~490 lines)
+    ProtocolTypes.swift                extracted from monolith (~100 lines)
+    BrowserDetection.swift             extracted from monolith (~50 lines)
+    CoreTypes.swift                    extracted from monolith (~60 lines)
+  ContextGrabberHost/                 single executable (GUI + CLI modes)
+    ContextGrabberHostApp.swift        SwiftUI app entry point (trimmed to ~900 lines)
     AdvancedSettingsView.swift         SwiftUI settings view
     CaptureResultPopup.swift           NSPanel popup
+    CLIEntryPoint.swift                CLI mode argument detection + headless capture
     Resources/                         xcassets, icons, sample data
-  ContextGrabberDesktopCLI/           desktop capture CLI executable
-    main.swift                         ~50-80 lines, arg parsing + capture + stdout
 ```
 
-### CLI Behavior
+### CLI Mode Behavior
+
+The `ContextGrabberHost` binary detects CLI flags in `CommandLine.arguments` before SwiftUI initialization:
 
 ```
-context-grabber-desktop --app "Xcode"
-context-grabber-desktop --bundle-id "com.apple.dt.Xcode"
-context-grabber-desktop --method ax|ocr|auto
-context-grabber-desktop --format markdown|json
+# Desktop capture (headless, prints markdown to stdout)
+ContextGrabberHost --capture --app "Xcode"
+ContextGrabberHost --capture --bundle-id "com.apple.dt.Xcode"
+ContextGrabberHost --capture --method ax|ocr|auto
+ContextGrabberHost --capture --format markdown|json
+
+# Default (no flags) — launches SwiftUI menu bar app
+ContextGrabberHost
 ```
 
-- Activates target app via `NSWorkspace`
-- Runs `DesktopCapturePipeline.resolveDesktopCapture()`
-- Renders markdown via `MarkdownRendering.swift` or outputs structured JSON
+CLI mode behavior:
+- Detects `--capture` flag before `@main` SwiftUI app initializes
+- Skips SwiftUI, AppDelegate, window management entirely
+- Runs `resolveDesktopCapture()` from `ContextGrabberCore`
+- Renders markdown via `renderMarkdown()` from `ContextGrabberCore`
 - Writes capture output to stdout, diagnostics to stderr
 - Exit 0 on success, 1 on failure
+- **Inherits the GUI app's existing macOS permission grants** (Accessibility, Screen Recording) since it's the same binary path
+
+### Permission Sharing (Why Single Binary)
+
+macOS grants Accessibility and Screen Recording permissions per-binary path:
+- GUI app at `~/.../ContextGrabberHost` already has user-granted permissions
+- CLI mode uses the same binary path → same permissions → zero extra setup
+- A separate CLI binary would require the user to grant permissions again independently
+- This is the primary reason for the single-binary architecture
 
 ### Access Control Changes
 
-Files moving to `ContextGrabberHostLib` will need `public` access control on types and functions consumed by both executable targets. Key APIs:
+Files moving to `ContextGrabberCore` will need `public` access control on types and functions consumed by the executable target. Key APIs:
 - `resolveDesktopCapture()`
 - `renderMarkdown()`
 - `BrowserContextPayload` / `DesktopContextPayload` types
+- `BrowserTarget` enum
+- `SafariNativeMessagingTransport` / `ChromeNativeMessagingTransport`
+- `ExtensionBridgeMessage` / `NativeMessagingPingResponse`
 - `HostSettings` defaults
 - `OutputFormatPreset` enum
+- `HostLogger` / `FrontmostAppInfo` / `MarkdownCaptureOutput`
+- Free functions: `detectBrowserTarget()`, `resolveEffectiveFrontmostApp()`
+- Constants: `protocolVersion`, `maxBrowserFullTextChars`, `maxRawExcerptChars`
+
+During extraction, duplicated types like `ProcessExecutionResult` (defined identically in both transport classes) will be unified, and `GenericEnvelope` will be promoted from `private` to library-internal.
 
 ## Implementation Phases
 
@@ -193,19 +232,23 @@ Files moving to `ContextGrabberHostLib` will need `public` access control on typ
 
 Delete `packages/companion-cli/` and update all references (README, docs, bun.lock). The `check-workspace.ts` script auto-discovers packages so no code change is needed there.
 
-### Phase 1: Swift Desktop CLI Target
+### Phase 1: Swift Library Extraction + CLI Mode
 
-**Goal:** `swift build` produces both `ContextGrabberHost` (menu bar app) and `ContextGrabberDesktopCLI` (headless capture).
+**Goal:** `swift build` produces a single `ContextGrabberHost` binary that works as both the GUI menu bar app (default) and a headless CLI capture tool (when invoked with `--capture` flags). Shared logic lives in a `ContextGrabberCore` library target.
 
 Tasks:
-1. Refactor `Package.swift`: create `ContextGrabberHostLib` library target
-2. Move shared files to `Sources/ContextGrabberHostLib/`
-3. Move GUI-only files to `Sources/ContextGrabberHost/` (stays as executable)
-4. Add `public` access control to library APIs
-5. Create `Sources/ContextGrabberDesktopCLI/main.swift`
-6. Verify `swift build` compiles both targets
-7. Verify `swift test` passes (55 tests)
-8. Manual test: `swift run ContextGrabberDesktopCLI --app Finder`
+1. Create `Sources/ContextGrabberCore/` directory
+2. Move 7 whole-file library candidates into `ContextGrabberCore/`
+3. Extract ~700 lines of types/functions from `ContextGrabberHostApp.swift` monolith into new library files (`TransportLayer.swift`, `ProtocolTypes.swift`, `BrowserDetection.swift`, `CoreTypes.swift`)
+4. Unify duplicated `ProcessExecutionResult`, promote `GenericEnvelope` from private
+5. Add `public` access control to library API surfaces
+6. Refactor `Package.swift`: create `ContextGrabberCore` library target, add as dependency of `ContextGrabberHost`
+7. Add `import ContextGrabberCore` to GUI files + update test target
+8. Create `CLIEntryPoint.swift` — detect `--capture` flags, run headless capture, output to stdout
+9. Verify `swift build` compiles cleanly
+10. Verify `swift test` passes (existing 30+ tests)
+11. Manual test: `swift run ContextGrabberHost --capture --app Finder`
+12. Manual test: `swift run ContextGrabberHost` (GUI mode still works)
 
 **Estimated effort:** 1-2 sessions
 
@@ -322,9 +365,10 @@ From the project plan:
 - CLI reuses the same pipeline code as the host app with no duplicated capture logic
 
 Additional:
-- `swift build` produces both host app and desktop CLI
+- `swift build` produces a single `ContextGrabberHost` binary with both GUI and CLI modes
 - `go build` produces the main CLI binary
 - `go test` and `swift test` pass
+- `ContextGrabberHost --capture --app <name>` works headlessly
 - `doctor` reports capability status accurately
 - MCP server responds correctly to tool calls via stdio
 
@@ -333,7 +377,8 @@ Additional:
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Swift library extraction breaks existing tests | High | Run `swift test` after each refactoring step |
-| AppKit import in library target causes CLI issues | Medium | AppKit links fine without UI on macOS; verify with `swift build` early |
+| AppKit import in library target causes CLI mode issues | Medium | AppKit links fine without UI on macOS; CLI mode skips SwiftUI init |
+| CLI mode argument detection must happen before @main | High | Use `@main` static `main()` override to check args before SwiftUI launches |
 | mcp-go is pre-1.0, may have breaking changes | Low | Pin specific version in `go.mod` |
 | Tab activation is disruptive (switches user's active tab) | Medium | Document behavior; consider `--no-activate` flag for metadata-only |
 | Go osascript parsing diverges from TS implementation | Medium | Port exact delimiter constants; use TS tests as behavioral reference |

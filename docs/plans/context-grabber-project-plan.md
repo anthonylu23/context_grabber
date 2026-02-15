@@ -636,8 +636,18 @@ Lightweight settings popover or small window accessible from the menu:
 3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 
 ## Progress Notes (Milestone G CLI Rebuild)
-56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Bun/Swift hybrid architecture:
+56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
   - Go binary handles CLI framework (cobra), MCP server (mcp-go), osascript enumeration, and subprocess orchestration
   - Bun/TS pipeline retained for browser extension capture (spawned as subprocess, optional dependency)
-  - New Swift CLI target (`ContextGrabberDesktopCLI`) for desktop AX/OCR capture (built from same Package.swift)
   - Full implementation plan at `docs/plans/cli-expansion-plan.md`
+57. Architecture decision: single-binary CLI mode instead of separate Swift CLI target:
+  - `ContextGrabberHost` binary gains headless CLI mode (triggered by `--capture` flags)
+  - CLI mode skips SwiftUI, runs capture pipeline, outputs to stdout, exits
+  - Key rationale: macOS grants Accessibility/Screen Recording permissions per-binary path — single binary means the CLI inherits the GUI app's existing permission grants with zero extra user setup
+  - The Go CLI spawns `ContextGrabberHost --capture ...` as a subprocess for desktop capture
+58. Phase 1 revised scope: Swift library extraction (`ContextGrabberCore`) + CLI mode in existing binary:
+  - Extract 7 files wholesale + ~700 lines from monolith into `ContextGrabberCore` library target
+  - Add `CLIEntryPoint.swift` for headless capture mode
+  - Types to extract from monolith: transport classes (Safari/Chrome, ~490 lines), protocol types (~100 lines), browser detection (~50 lines), core types (~60 lines)
+  - Unify duplicated `ProcessExecutionResult`, promote `GenericEnvelope`
+  - No separate `ContextGrabberDesktopCLI` executable — single binary serves both GUI and CLI
