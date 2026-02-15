@@ -9,6 +9,7 @@
     "native-messaging": "bun src/native-messaging-cli.ts"
   },
   "dependencies": {
+    "@context-grabber/extension-shared": "workspace:*",
     "@context-grabber/shared-types": "workspace:*"
   }
 }
