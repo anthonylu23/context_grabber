@@ -52,6 +52,58 @@ final class CapturePipelineTests: XCTestCase {
     )
   }
 
+  func testMenuBarSymbolNameMapping() {
+    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.neutral), "text.viewfinder")
+    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.success), "checkmark.circle.fill")
+    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.failure), "exclamationmark.triangle.fill")
+    XCTAssertEqual(menuBarSymbolNameForIndicatorState(.disconnected), "smallcircle.filled.circle")
+  }
+
+  func testDisconnectedIndicatorRequiresBothChannelsNotConnected() {
+    XCTAssertEqual(
+      shouldShowDisconnectedIndicator(
+        safariTransportStatus: "safari_extension_unreachable",
+        chromeTransportStatus: "chrome_extension_unreachable"
+      ),
+      true
+    )
+
+    XCTAssertEqual(
+      shouldShowDisconnectedIndicator(
+        safariTransportStatus: "safari_extension_ok",
+        chromeTransportStatus: "chrome_extension_unreachable"
+      ),
+      false
+    )
+  }
+
+  func testFormatRelativeLastCaptureLabel() {
+    XCTAssertEqual(formatRelativeLastCaptureLabel(isoTimestamp: nil), "Last capture: never")
+
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let formatter = ISO8601DateFormatter()
+    let thirtySecondsAgo = formatter.string(from: Date(timeIntervalSince1970: 1_700_000_000 - 30))
+    let fiveMinutesAgo = formatter.string(from: Date(timeIntervalSince1970: 1_700_000_000 - 300))
+    let threeHoursAgo = formatter.string(from: Date(timeIntervalSince1970: 1_700_000_000 - 10_800))
+
+    XCTAssertEqual(
+      formatRelativeLastCaptureLabel(isoTimestamp: thirtySecondsAgo, now: now),
+      "Last capture: just now"
+    )
+    XCTAssertEqual(
+      formatRelativeLastCaptureLabel(isoTimestamp: fiveMinutesAgo, now: now),
+      "Last capture: 5m ago"
+    )
+    XCTAssertEqual(
+      formatRelativeLastCaptureLabel(isoTimestamp: threeHoursAgo, now: now),
+      "Last capture: 3h ago"
+    )
+    XCTAssertEqual(
+      formatRelativeLastCaptureLabel(isoTimestamp: "invalid", now: now),
+      "Last capture: unknown"
+    )
+  }
+
   func testFrontmostWindowIDFromWindowListPrefersFrontmostAppLayerZeroWindow() {
     let windowList: [[String: Any]] = [
       [

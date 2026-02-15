@@ -270,6 +270,34 @@ struct DesktopPermissionReadiness {
   let screenRecordingGranted: Bool?
 }
 
+enum MenuBarIndicatorState {
+  case neutral
+  case success
+  case failure
+  case disconnected
+}
+
+struct CaptureHistoryEntry: Identifiable {
+  let fileURL: URL
+  let title: String
+  let capturedAt: Date?
+
+  var id: String {
+    return fileURL.path
+  }
+
+  var timestampLabel: String {
+    guard let capturedAt else {
+      return "Unknown time"
+    }
+    return menuTimestampFormatter.string(from: capturedAt)
+  }
+
+  var menuLabel: String {
+    return "\(timestampLabel) - \(title)"
+  }
+}
+
 final class SynchronousResultBox<Value>: @unchecked Sendable {
   private let lock = NSLock()
   private var value: Value?
@@ -285,6 +313,62 @@ final class SynchronousResultBox<Value>: @unchecked Sendable {
     defer { lock.unlock() }
     return value
   }
+}
+
+private let menuTimestampFormatter: DateFormatter = {
+  let formatter = DateFormatter()
+  formatter.locale = Locale(identifier: "en_US_POSIX")
+  formatter.dateFormat = "MMM d, HH:mm"
+  return formatter
+}()
+
+func menuBarSymbolNameForIndicatorState(_ state: MenuBarIndicatorState) -> String {
+  switch state {
+  case .neutral:
+    return "text.viewfinder"
+  case .success:
+    return "checkmark.circle.fill"
+  case .failure:
+    return "exclamationmark.triangle.fill"
+  case .disconnected:
+    return "smallcircle.filled.circle"
+  }
+}
+
+func shouldShowDisconnectedIndicator(
+  safariTransportStatus: String,
+  chromeTransportStatus: String
+) -> Bool {
+  let connectedSuffix = "_ok"
+  let safariConnected = safariTransportStatus.hasSuffix(connectedSuffix)
+  let chromeConnected = chromeTransportStatus.hasSuffix(connectedSuffix)
+  return !(safariConnected || chromeConnected)
+}
+
+func formatRelativeLastCaptureLabel(
+  isoTimestamp: String?,
+  now: Date = Date()
+) -> String {
+  guard let isoTimestamp else {
+    return "Last capture: never"
+  }
+
+  let formatter = ISO8601DateFormatter()
+  guard let date = formatter.date(from: isoTimestamp) else {
+    return "Last capture: unknown"
+  }
+
+  let delta = max(0, Int(now.timeIntervalSince(date)))
+  if delta < 45 {
+    return "Last capture: just now"
+  }
+  if delta < 3600 {
+    return "Last capture: \(max(1, delta / 60))m ago"
+  }
+  if delta < 86_400 {
+    return "Last capture: \(max(1, delta / 3600))h ago"
+  }
+  return "Last capture: \(max(1, delta / 86_400))d ago"
 }
 
 enum DesktopPermissionPane {
@@ -497,39 +581,64 @@ func frontmostWindowIDFromWindowList(
 
 func shareableDesktopContent(
   excludeDesktopWindows: Bool = true,
-  onScreenWindowsOnly: Bool = true
+  onScreenWindowsOnly: Bool = true,
+  timeoutSeconds: TimeInterval = 1.5
 ) async -> SCShareableContent? {
-  let resultBox = SynchronousResultBox<SCShareableContent>()
-  await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-    SCShareableContent.getExcludingDesktopWindows(
-      excludeDesktopWindows,
-      onScreenWindowsOnly: onScreenWindowsOnly
-    ) { shareableContent, _ in
-      resultBox.set(shareableContent)
-      continuation.resume()
+  await withCheckedContinuation { (continuation: CheckedContinuation<SCShareableContent?, Never>) in
+    DispatchQueue.global(qos: .userInitiated).async {
+      let semaphore = DispatchSemaphore(value: 0)
+      let resultBox = SynchronousResultBox<SCShareableContent>()
+
+      SCShareableContent.getExcludingDesktopWindows(
+        excludeDesktopWindows,
+        onScreenWindowsOnly: onScreenWindowsOnly
+      ) { shareableContent, _ in
+        resultBox.set(shareableContent)
+        semaphore.signal()
+      }
+
+      if semaphore.wait(timeout: .now() + timeoutSeconds) == .timedOut {
+        continuation.resume(returning: nil)
+        return
+      }
+
+      continuation.resume(returning: resultBox.get())
     }
   }
-  return resultBox.get()
 }
 
 func captureImageWithScreenCaptureKit(
   contentFilter: SCContentFilter,
   pixelWidth: Int,
-  pixelHeight: Int
+  pixelHeight: Int,
+  timeoutSeconds: TimeInterval = 1.5
 ) async -> CGImage? {
   let configuration = SCStreamConfiguration()
   configuration.width = max(1, pixelWidth)
   configuration.height = max(1, pixelHeight)
   configuration.showsCursor = false
 
-  let resultBox = SynchronousResultBox<CGImage>()
-  await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-    SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: configuration) { image, _ in
-      resultBox.set(image)
-      continuation.resume()
+  return await withCheckedContinuation { (continuation: CheckedContinuation<CGImage?, Never>) in
+    DispatchQueue.global(qos: .userInitiated).async {
+      let semaphore = DispatchSemaphore(value: 0)
+      let resultBox = SynchronousResultBox<CGImage>()
+
+      SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: configuration) {
+        image,
+        _
+        in
+        resultBox.set(image)
+        semaphore.signal()
+      }
+
+      if semaphore.wait(timeout: .now() + timeoutSeconds) == .timedOut {
+        continuation.resume(returning: nil)
+        return
+      }
+
+      continuation.resume(returning: resultBox.get())
     }
   }
-  return resultBox.get()
 }
 
 func captureFrontmostWindowImage(
@@ -1465,6 +1574,9 @@ private final class AppActivationObserverRegistration {
 @MainActor
 final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
+  @Published private(set) var menuBarSymbolName: String = menuBarSymbolNameForIndicatorState(.neutral)
+  @Published private(set) var lastCaptureLabel: String = "Last capture: never"
+  @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
 
   private let logger = HostLogger()
   private let safariTransport = SafariNativeMessagingTransport()
@@ -1481,6 +1593,7 @@ final class ContextGrabberModel: ObservableObject {
   private var lastTransportLatencyMs: Int?
   private var lastTransportStatus: String = "unknown"
   private var captureInFlight = false
+  private var indicatorResetTask: Task<Void, Never>?
 
   init() {
     notificationsEnabled = Self.canUseUserNotifications()
@@ -1492,6 +1605,8 @@ final class ContextGrabberModel: ObservableObject {
 
     registerHotkeyMonitors()
     registerFrontmostAppObserver()
+    refreshRecentCaptures()
+    updateLastCaptureLabel()
   }
 
   func captureNow() {
@@ -1536,6 +1651,7 @@ final class ContextGrabberModel: ObservableObject {
       let resolution = try await resolveCapture(request: request)
       lastTransportLatencyMs = Int(Date().timeIntervalSince(transportStart) * 1000.0)
       lastCaptureAt = timestamp
+      updateLastCaptureLabel()
 
       let output = try createCaptureOutput(
         from: resolution.payload,
@@ -1545,6 +1661,8 @@ final class ContextGrabberModel: ObservableObject {
       )
       try writeMarkdown(output)
       try copyToClipboard(output.markdown)
+      refreshRecentCaptures()
+      setMenuBarIndicator(.success, autoResetAfter: 1.5)
 
       let triggerLabel = mode == "manual_hotkey" ? "hotkey" : "menu"
       let warningCount = resolution.payload.extractionWarnings?.count ?? 0
@@ -1562,6 +1680,7 @@ final class ContextGrabberModel: ObservableObject {
       statusLine = "Capture failed"
       logger.error("Capture failed: \(error.localizedDescription)")
       postUserNotification(title: "Capture Failed", subtitle: error.localizedDescription)
+      setMenuBarIndicator(.failure, autoResetAfter: 2.0)
     }
   }
 
@@ -1575,6 +1694,34 @@ final class ContextGrabberModel: ObservableObject {
     } catch {
       statusLine = "Unable to open history folder"
       logger.error("Failed to open history folder: \(error.localizedDescription)")
+    }
+  }
+
+  func openCaptureFile(_ fileURL: URL) {
+    if NSWorkspace.shared.open(fileURL) {
+      statusLine = "Opened \(fileURL.lastPathComponent)"
+      logger.info("Opened capture file: \(fileURL.path)")
+      return
+    }
+
+    statusLine = "Unable to open capture file"
+    logger.error("Failed to open capture file: \(fileURL.path)")
+  }
+
+  func copyLastCaptureToClipboard() {
+    guard let latest = recentCaptures.first else {
+      statusLine = "No recent capture to copy"
+      return
+    }
+
+    do {
+      let content = try String(contentsOf: latest.fileURL, encoding: .utf8)
+      try copyToClipboard(content)
+      statusLine = "Copied last capture"
+      logger.info("Copied last capture from: \(latest.fileURL.path)")
+    } catch {
+      statusLine = "Unable to copy last capture"
+      logger.error("Failed copying last capture: \(error.localizedDescription)")
     }
   }
 
@@ -1619,6 +1766,14 @@ final class ContextGrabberModel: ObservableObject {
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
+    if shouldShowDisconnectedIndicator(
+      safariTransportStatus: safariStatus.transportStatus,
+      chromeTransportStatus: chromeStatus.transportStatus
+    ) {
+      setMenuBarIndicator(.disconnected)
+    } else {
+      setMenuBarIndicator(.neutral)
+    }
     if !desktopReadiness.accessibilityTrusted {
       logger.error("Accessibility permission is missing. Enable System Settings -> Privacy & Security -> Accessibility for ContextGrabberHost.")
       logger.info("Use menu action: Open Accessibility Settings")
@@ -1793,6 +1948,92 @@ final class ContextGrabberModel: ObservableObject {
     }
   }
 
+  private func setMenuBarIndicator(
+    _ state: MenuBarIndicatorState,
+    autoResetAfter seconds: TimeInterval? = nil
+  ) {
+    indicatorResetTask?.cancel()
+    menuBarSymbolName = menuBarSymbolNameForIndicatorState(state)
+
+    guard let seconds else {
+      return
+    }
+
+    indicatorResetTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+      guard !Task.isCancelled else {
+        return
+      }
+      self?.menuBarSymbolName = menuBarSymbolNameForIndicatorState(.neutral)
+    }
+  }
+
+  private func updateLastCaptureLabel() {
+    lastCaptureLabel = formatRelativeLastCaptureLabel(isoTimestamp: lastCaptureAt)
+  }
+
+  private func refreshRecentCaptures(limit: Int = 5) {
+    recentCaptures = Self.loadRecentCaptureEntries(limit: limit)
+    if lastCaptureAt == nil, let capturedAt = recentCaptures.first?.capturedAt {
+      lastCaptureAt = ISO8601DateFormatter().string(from: capturedAt)
+      updateLastCaptureLabel()
+    }
+  }
+
+  private static func loadRecentCaptureEntries(
+    limit: Int,
+    fileManager: FileManager = .default
+  ) -> [CaptureHistoryEntry] {
+    let historyURL = historyDirectoryURL()
+    let files = (try? fileManager.contentsOfDirectory(
+      at: historyURL,
+      includingPropertiesForKeys: nil
+    )) ?? []
+
+    return files
+      .filter { $0.pathExtension == "md" }
+      .sorted(by: { $0.lastPathComponent > $1.lastPathComponent })
+      .prefix(max(1, limit))
+      .map { fileURL in
+        let title = captureTitleFromMarkdown(at: fileURL)
+          ?? fileURL.deletingPathExtension().lastPathComponent
+        return CaptureHistoryEntry(
+          fileURL: fileURL,
+          title: title,
+          capturedAt: captureDateFromFilename(fileURL.lastPathComponent)
+        )
+      }
+  }
+
+  private static func captureTitleFromMarkdown(at fileURL: URL) -> String? {
+    guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+      return nil
+    }
+
+    for line in content.split(separator: "\n", omittingEmptySubsequences: false).prefix(40) {
+      let rawLine = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+      guard rawLine.hasPrefix("title:") else {
+        continue
+      }
+      let value = rawLine.dropFirst("title:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+      return value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+
+    return nil
+  }
+
+  private static func captureDateFromFilename(_ filename: String) -> Date? {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+
+    let stem = filename.split(separator: "-").prefix(2).joined(separator: "-")
+    guard !stem.isEmpty else {
+      return nil
+    }
+    return formatter.date(from: stem)
+  }
+
   private func openDesktopPermissionSettings(_ pane: DesktopPermissionPane) {
     guard let url = desktopPermissionSettingsURL(for: pane) else {
       statusLine = "Invalid \(pane.displayName) settings URL"
@@ -1911,15 +2152,40 @@ struct ContextGrabberHostApp: App {
   @StateObject private var model = ContextGrabberModel()
 
   var body: some Scene {
-    MenuBarExtra("Context Grabber", systemImage: "text.viewfinder") {
+    MenuBarExtra("Context Grabber", systemImage: model.menuBarSymbolName) {
+      Text(model.lastCaptureLabel)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      Divider()
       Button("Capture Now (⌃⌥⌘C)") {
         model.captureNow()
       }
 
-      Button("Open Recent Captures") {
+      Divider()
+      Menu("Recent Captures") {
+        if model.recentCaptures.isEmpty {
+          Text("No captures yet")
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(model.recentCaptures) { entry in
+            Button(entry.menuLabel) {
+              model.openCaptureFile(entry.fileURL)
+            }
+          }
+        }
+      }
+
+      Button("Copy Last Capture") {
+        model.copyLastCaptureToClipboard()
+      }
+      .disabled(model.recentCaptures.isEmpty)
+
+      Button("Open History Folder") {
         model.openRecentCaptures()
       }
 
+      Divider()
       Button("Run Diagnostics") {
         model.runDiagnostics()
       }
