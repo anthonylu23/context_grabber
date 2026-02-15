@@ -106,7 +106,7 @@ final class CapturePipelineTests: XCTestCase {
 
   func testMenuBarIconMapping() {
     let idle = menuBarIconForIndicatorState(.idle)
-    XCTAssertEqual(idle.name, "MenuBarIcon")
+    XCTAssertEqual(idle.name, "\u{1F90F}")
     XCTAssertFalse(idle.isSystemSymbol)
 
     let capturing = menuBarIconForIndicatorState(.capturing)
@@ -464,12 +464,39 @@ final class CapturePipelineTests: XCTestCase {
     defaults.set(-9, forKey: "context_grabber.retention_max_age_days")
     defaults.set("", forKey: "context_grabber.output_directory_path")
     defaults.set(true, forKey: "context_grabber.captures_paused_placeholder")
+    defaults.set("invalid_mode", forKey: "context_grabber.clipboard_copy_mode")
 
     let settings = loadHostSettings(userDefaults: defaults)
     XCTAssertEqual(settings.retentionMaxFileCount, HostSettings.defaultRetentionMaxFileCount)
     XCTAssertEqual(settings.retentionMaxAgeDays, HostSettings.defaultRetentionMaxAgeDays)
     XCTAssertNil(settings.outputDirectoryURL)
     XCTAssertEqual(settings.capturesPausedPlaceholder, true)
+    XCTAssertEqual(settings.clipboardCopyMode, HostSettings.defaultClipboardCopyMode)
+  }
+
+  func testSaveHostSettingsPersistsClipboardCopyMode() {
+    let suiteName = "context-grabber-tests-\(UUID().uuidString.lowercased())"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      XCTFail("Expected ephemeral test UserDefaults suite.")
+      return
+    }
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    let settings = HostSettings(
+      outputDirectoryPath: nil,
+      retentionMaxFileCount: HostSettings.defaultRetentionMaxFileCount,
+      retentionMaxAgeDays: HostSettings.defaultRetentionMaxAgeDays,
+      capturesPausedPlaceholder: false,
+      clipboardCopyMode: .text
+    )
+    saveHostSettings(settings, userDefaults: defaults)
+
+    XCTAssertEqual(
+      defaults.string(forKey: "context_grabber.clipboard_copy_mode"),
+      ClipboardCopyMode.text.rawValue
+    )
   }
 
   func testFrontmostWindowIDFromWindowListPrefersFrontmostAppLayerZeroWindow() {
@@ -670,7 +697,38 @@ final class CapturePipelineTests: XCTestCase {
     XCTAssertEqual(resolution.extractionMethod, "metadata_only")
     XCTAssertEqual(resolution.transportStatus, "desktop_capture_metadata_only")
     XCTAssertEqual(resolution.warning, "AX and OCR extraction unavailable.")
+    XCTAssertTrue(resolution.payload.fullText.contains("No extractable text captured."))
     XCTAssertEqual(resolution.errorCode, "ERR_EXTENSION_UNAVAILABLE")
+  }
+
+  func testResolveDesktopCaptureRetriesOCRBeforeMetadataFallback() async {
+    actor OCRAttemptTracker {
+      private(set) var count = 0
+
+      func next() -> Int {
+        count += 1
+        return count
+      }
+    }
+
+    let tracker = OCRAttemptTracker()
+    let resolution = await resolveDesktopCapture(
+      context: DesktopCaptureContext(appName: "Ghostty", bundleIdentifier: "com.mitchellh.ghostty"),
+      accessibilityTextOverride: nil,
+      ocrTextOverride: nil,
+      accessibilityExtractor: { nil },
+      ocrExtractor: {
+        let attempt = await tracker.next()
+        if attempt == 1 {
+          return nil
+        }
+        return OCRCaptureResult(text: "Recovered OCR text", confidence: 0.91)
+      }
+    )
+
+    XCTAssertEqual(resolution.extractionMethod, "ocr")
+    XCTAssertEqual(resolution.payload.fullText, "Recovered OCR text")
+    XCTAssertNil(resolution.errorCode)
   }
 
   func testResolveDesktopCaptureMetadataWarningWhenAxBelowThresholdAndOcrUnavailable() async {

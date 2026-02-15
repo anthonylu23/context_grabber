@@ -23,6 +23,7 @@ The menu `Diagnostics Status` submenu mirrors the latest diagnostics snapshot wi
 3. Desktop metadata-only fallback
 - AX below threshold and OCR unavailable.
 - Check Accessibility and Screen Recording permissions.
+- Metadata-only captures now include a non-empty diagnostic excerpt in markdown `Raw Excerpt` to avoid blank files.
 
 4. Captures paused placeholder
 - Capture trigger intentionally no-ops while pause placeholder is enabled in `Preferences`.

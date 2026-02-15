@@ -25,5 +25,6 @@
 - Default retention max file age: `30` days
 - Retention max file count menu options: `50`, `100`, `200`, `500`, `Unlimited`
 - Retention max age menu options: `7`, `30`, `90`, `Unlimited`
-- Output directory default: `~/Library/Application Support/ContextGrabber/history`
+- Clipboard copy mode default: `Markdown File`
+- Output directory default: `~/Documents/ContextGrabber/history`
 - Capture filename shape: `yyyyMMdd-HHmmss-<requestPrefix>.md` (used to scope retention/recent-history filtering)

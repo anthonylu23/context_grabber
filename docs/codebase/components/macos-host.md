@@ -56,8 +56,9 @@
   - recent captures list
   - clipboard and history file
 - Failures preserve explicit warnings and error codes in status/markdown metadata.
+- Desktop metadata-only fallbacks include a diagnostic excerpt when no extractable text is available.
 - History storage resolves from settings:
-  - default: `~/Library/Application Support/ContextGrabber/history`
+  - default: `~/Documents/ContextGrabber/history`
   - custom: user-selected folder from menu preferences
 - Post-write retention pruning is applied on each successful capture:
   - max file count
@@ -66,6 +67,7 @@
   - output directory selection/reset
   - retention max files
   - retention max age
+  - clipboard copy mode (`Markdown File` or `Text`)
   - pause/resume capture placeholder toggle
 - Menu also includes an About section with version/build labeling and handbook shortcut.
 - Handbook shortcut resolves repo root through multiple runtime candidates (`CONTEXT_GRABBER_REPO_ROOT`, cwd, source path, bundle, executable path) to work from Finder/Xcode launches.

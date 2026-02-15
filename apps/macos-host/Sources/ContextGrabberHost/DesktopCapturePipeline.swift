@@ -8,6 +8,7 @@ import Vision
 let minimumAccessibilityTextChars = 400
 let defaultAccessibilityTraversalDepth = 2
 let defaultAccessibilityTraversalMaxElements = 96
+private let desktopOCRRetryAttempts = 2
 
 private let defaultAccessibilityTextAttributes: [String] = [
   kAXSelectedTextAttribute as String,
@@ -784,9 +785,35 @@ func resolveDesktopCapture(
     "AX extraction below threshold (\(accessibilityText.count)/\(minimumTextChars) chars); used OCR fallback text."
   }
 
-  let extractedOcr = await dependencies.ocrExtractor(frontmostProcessIdentifier)
-  let ocrText = normalizeDesktopText(ocrTextOverride ?? extractedOcr?.text)
+  let ocrText: String
+  let ocrConfidence: Double?
+  if let ocrTextOverride {
+    ocrText = normalizeDesktopText(ocrTextOverride)
+    ocrConfidence = nil
+  } else {
+    var latestConfidence: Double?
+    var resolved = ""
+
+    for _ in 0..<desktopOCRRetryAttempts {
+      let extracted = await dependencies.ocrExtractor(frontmostProcessIdentifier)
+      latestConfidence = extracted?.confidence
+      let normalized = normalizeDesktopText(extracted?.text)
+      if !normalized.isEmpty {
+        resolved = normalized
+        break
+      }
+    }
+
+    ocrText = resolved
+    ocrConfidence = latestConfidence
+  }
+
   if !ocrText.isEmpty {
+    let ocrWarning: String = if let ocrConfidence {
+      "OCR confidence: \(String(format: "%.2f", ocrConfidence))."
+    } else {
+      "OCR confidence unavailable."
+    }
     let payload = BrowserContextPayload(
       source: "desktop",
       browser: "desktop",
@@ -801,7 +828,7 @@ func resolveDesktopCapture(
       author: nil,
       publishedTime: nil,
       selectionText: nil,
-      extractionWarnings: [axFallbackWarning]
+      extractionWarnings: [axFallbackWarning, ocrWarning]
     )
 
     return DesktopCaptureResolution(
@@ -823,12 +850,21 @@ func resolveDesktopCapture(
   } else {
     [axFallbackWarning, "OCR extraction unavailable."]
   }
+  let fallbackExcerpt: String = if accessibilityText.isEmpty {
+    [
+      "No extractable text captured.",
+      fallbackWarning,
+      "Open Accessibility and Screen Recording settings from the menu and retry.",
+    ].joined(separator: " ")
+  } else {
+    accessibilityText
+  }
   let payload = BrowserContextPayload(
     source: "desktop",
     browser: "desktop",
     url: originURL,
     title: appName,
-    fullText: accessibilityText,
+    fullText: fallbackExcerpt,
     headings: [],
     links: [],
     metaDescription: nil,

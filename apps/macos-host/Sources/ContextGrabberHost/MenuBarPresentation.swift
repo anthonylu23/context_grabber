@@ -19,6 +19,7 @@ struct CaptureFeedbackState: Identifiable {
   let title: String
   let detail: String
   let fileName: String?
+  let tokenCount: Int?
   let shownAt: Date
   let autoDismissAfter: TimeInterval
 }
@@ -59,7 +60,7 @@ struct MenuBarIcon {
 func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon {
   switch state {
   case .idle:
-    return MenuBarIcon(name: "MenuBarIcon", isSystemSymbol: false)
+    return MenuBarIcon(name: "\u{1F90F}", isSystemSymbol: false)
   case .capturing:
     return MenuBarIcon(name: "arrow.triangle.2.circlepath.circle.fill", isSystemSymbol: true)
   case .success:

@@ -5,16 +5,24 @@ private enum HostSettingsKeys {
   static let retentionMaxFileCount = "context_grabber.retention_max_file_count"
   static let retentionMaxAgeDays = "context_grabber.retention_max_age_days"
   static let capturesPausedPlaceholder = "context_grabber.captures_paused_placeholder"
+  static let clipboardCopyMode = "context_grabber.clipboard_copy_mode"
+}
+
+enum ClipboardCopyMode: String, CaseIterable {
+  case markdownFile = "markdown_file"
+  case text = "text"
 }
 
 struct HostSettings {
   static let defaultRetentionMaxFileCount = 200
   static let defaultRetentionMaxAgeDays = 30
+  static let defaultClipboardCopyMode: ClipboardCopyMode = .markdownFile
 
   var outputDirectoryPath: String?
   var retentionMaxFileCount: Int
   var retentionMaxAgeDays: Int
   var capturesPausedPlaceholder: Bool
+  var clipboardCopyMode: ClipboardCopyMode
 
   var outputDirectoryURL: URL? {
     guard let outputDirectoryPath else {
@@ -63,6 +71,7 @@ func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
   let storedAge = userDefaults.object(forKey: HostSettingsKeys.retentionMaxAgeDays) as? Int
   let outputDirectoryPath = userDefaults.string(forKey: HostSettingsKeys.outputDirectoryPath)
   let capturesPaused = userDefaults.bool(forKey: HostSettingsKeys.capturesPausedPlaceholder)
+  let storedClipboardCopyMode = userDefaults.string(forKey: HostSettingsKeys.clipboardCopyMode)
 
   let retentionMaxFileCount = sanitizeRetentionValue(
     storedCount,
@@ -72,12 +81,15 @@ func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
     storedAge,
     fallback: HostSettings.defaultRetentionMaxAgeDays
   )
+  let clipboardCopyMode = ClipboardCopyMode(rawValue: storedClipboardCopyMode ?? "")
+    ?? HostSettings.defaultClipboardCopyMode
 
   return HostSettings(
     outputDirectoryPath: outputDirectoryPath,
     retentionMaxFileCount: retentionMaxFileCount,
     retentionMaxAgeDays: retentionMaxAgeDays,
-    capturesPausedPlaceholder: capturesPaused
+    capturesPausedPlaceholder: capturesPaused,
+    clipboardCopyMode: clipboardCopyMode
   )
 }
 
@@ -96,6 +108,16 @@ func saveHostSettings(
   userDefaults.set(settings.retentionMaxFileCount, forKey: HostSettingsKeys.retentionMaxFileCount)
   userDefaults.set(settings.retentionMaxAgeDays, forKey: HostSettingsKeys.retentionMaxAgeDays)
   userDefaults.set(settings.capturesPausedPlaceholder, forKey: HostSettingsKeys.capturesPausedPlaceholder)
+  userDefaults.set(settings.clipboardCopyMode.rawValue, forKey: HostSettingsKeys.clipboardCopyMode)
+}
+
+func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
+  switch mode {
+  case .markdownFile:
+    return "Markdown File"
+  case .text:
+    return "Text"
+  }
 }
 
 func retentionPruneCandidates(

@@ -22,8 +22,8 @@ SwiftUI/AppKit menu bar host scaffold for Milestone A.
 - Uses desktop AX->OCR capture when the front app is not Safari/Chrome.
 - Bridge path performs live Safari active-tab extraction by default.
 - Generates deterministic markdown and writes to:
-  - `~/Library/Application Support/ContextGrabber/history/`
-- Copies markdown output to clipboard.
+  - `~/Documents/ContextGrabber/history/`
+- Auto-copies each capture to clipboard (default: markdown file reference; configurable to text in Settings).
 - Supports optional custom output directory + retention pruning policy (`max file count`, `max file age`) persisted via user defaults.
 - Writes local logs to:
   - `~/Library/Application Support/ContextGrabber/logs/host.log`

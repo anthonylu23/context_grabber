@@ -16,8 +16,9 @@
 
 ## Reviewing Output
 - Recent captures submenu shows latest host-generated capture entries only.
-- `Copy Last Capture` re-copies latest markdown without recapturing.
-- History defaults to: `~/Library/Application Support/ContextGrabber/history/`.
+- `Copy Last Capture` copies the latest capture using your configured clipboard mode.
+- Clipboard mode can be set in `Settings -> Clipboard Copy Mode` (`Markdown File` or `Text`).
+- History defaults to: `~/Documents/ContextGrabber/history/`.
 - You can override output location via `Preferences -> Choose Custom Output Directory...`.
 
 ## Retention and Pause Controls

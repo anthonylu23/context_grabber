@@ -822,6 +822,8 @@ final class ContextGrabberModel: ObservableObject {
   @Published private(set) var retentionMaxFileCount: Int = HostSettings.defaultRetentionMaxFileCount
   @Published private(set) var retentionMaxAgeDays: Int = HostSettings.defaultRetentionMaxAgeDays
   @Published private(set) var capturesPausedPlaceholder = false
+  @Published private(set) var clipboardCopyMode: ClipboardCopyMode =
+    HostSettings.defaultClipboardCopyMode
   @Published private(set) var safariDiagnosticsLabel: String = "unknown"
   @Published private(set) var chromeDiagnosticsLabel: String = "unknown"
   @Published private(set) var desktopAccessibilityDiagnosticsLabel: String = "unknown"
@@ -873,7 +875,7 @@ final class ContextGrabberModel: ObservableObject {
 
   private func triggerCapture(mode: String) {
     if capturesPausedPlaceholder {
-      statusLine = "Captures paused (placeholder)"
+      statusLine = "Captures paused"
       return
     }
 
@@ -926,9 +928,25 @@ final class ContextGrabberModel: ObservableObject {
       )
       try writeMarkdown(output)
       applyRetentionPolicy()
-      try copyToClipboard(output.markdown)
+      var captureWarning = resolution.warning
+      var clipboardCopyFailed = false
+      do {
+        try copyCaptureOutputToClipboard(output)
+      } catch {
+        clipboardCopyFailed = true
+        let clipboardWarning = "Clipboard copy failed: \(error.localizedDescription)"
+        if let existingWarning = captureWarning, !existingWarning.isEmpty {
+          captureWarning = "\(existingWarning) | \(clipboardWarning)"
+        } else {
+          captureWarning = clipboardWarning
+        }
+        logger.error(
+          "Capture saved but clipboard copy failed: \(error.localizedDescription) | file=\(output.fileURL.path)"
+        )
+      }
       refreshRecentCaptures()
 
+      let tokenCount = max(1, Int(ceil(Double(output.markdown.count) / 4.0)))
       presentCaptureFeedback(
         kind: .success,
         detail: formatCaptureSuccessFeedbackDetail(
@@ -936,24 +954,25 @@ final class ContextGrabberModel: ObservableObject {
           targetLabel: payloadTargetLabel(for: resolution.payload),
           extractionMethod: resolution.extractionMethod,
           transportStatus: resolution.transportStatus,
-          warning: resolution.warning
+          warning: captureWarning
         ),
         fileName: output.fileURL.lastPathComponent,
+        tokenCount: tokenCount,
         autoDismissAfter: 4.0
       )
       setMenuBarIndicator(.success, autoResetAfter: 1.5)
 
       let triggerLabel = mode == "manual_hotkey" ? "hotkey" : "menu"
-      let warningCount = resolution.payload.extractionWarnings?.count ?? 0
+      let warningCount = (resolution.payload.extractionWarnings?.count ?? 0) + (clipboardCopyFailed ? 1 : 0)
       statusLine =
         "Captured \(triggerLabel) via \(resolution.extractionMethod) (\(output.requestID.prefix(8))) | \(resolution.transportStatus) | warnings: \(warningCount)"
       logger.info(
         "Capture complete: \(output.fileURL.path) | mode=\(mode) | transport=\(resolution.transportStatus) | latency_ms=\(lastTransportLatencyMs ?? -1)"
       )
 
-      let subtitle = resolution.warning == nil
+      let subtitle = captureWarning == nil
         ? output.fileURL.lastPathComponent
-        : "\(output.fileURL.lastPathComponent) | \(resolution.warning ?? "")"
+        : "\(output.fileURL.lastPathComponent) | \(captureWarning ?? "")"
       postUserNotification(title: "Context Captured", subtitle: subtitle)
     } catch {
       statusLine = "Capture failed"
@@ -1000,9 +1019,8 @@ final class ContextGrabberModel: ObservableObject {
     }
 
     do {
-      let content = try String(contentsOf: latest.fileURL, encoding: .utf8)
-      try copyToClipboard(content)
-      statusLine = "Copied last capture"
+      try copyCaptureEntryToClipboard(latest)
+      statusLine = "Copied last capture (\(clipboardCopyModeLabel(clipboardCopyMode)))"
       logger.info("Copied last capture from: \(latest.fileURL.path)")
     } catch {
       statusLine = "Unable to copy last capture"
@@ -1067,7 +1085,14 @@ final class ContextGrabberModel: ObservableObject {
     updateSettings { current in
       current.capturesPausedPlaceholder.toggle()
     }
-    statusLine = capturesPausedPlaceholder ? "Captures paused (placeholder)" : "Captures resumed"
+    statusLine = capturesPausedPlaceholder ? "Captures paused" : "Captures resumed"
+  }
+
+  func setClipboardCopyModePreference(_ mode: ClipboardCopyMode) {
+    updateSettings { current in
+      current.clipboardCopyMode = mode
+    }
+    statusLine = "Clipboard copy mode: \(clipboardCopyModeLabel(mode))"
   }
 
   func openAccessibilitySettings() {
@@ -1367,6 +1392,7 @@ final class ContextGrabberModel: ObservableObject {
     kind: CaptureFeedbackKind,
     detail: String,
     fileName: String?,
+    tokenCount: Int? = nil,
     autoDismissAfter: TimeInterval
   ) {
     let state = CaptureFeedbackState(
@@ -1375,6 +1401,7 @@ final class ContextGrabberModel: ObservableObject {
       title: formatCaptureFeedbackTitle(kind: kind),
       detail: detail,
       fileName: fileName,
+      tokenCount: tokenCount,
       shownAt: Date(),
       autoDismissAfter: autoDismissAfter
     )
@@ -1409,6 +1436,7 @@ final class ContextGrabberModel: ObservableObject {
     retentionMaxFileCount = settings.retentionMaxFileCount
     retentionMaxAgeDays = settings.retentionMaxAgeDays
     capturesPausedPlaceholder = settings.capturesPausedPlaceholder
+    clipboardCopyMode = settings.clipboardCopyMode
     outputDirectoryLabel = settings.outputDirectoryURL?.path ?? "Default"
   }
 
@@ -1575,7 +1603,26 @@ final class ContextGrabberModel: ObservableObject {
     try output.markdown.write(to: output.fileURL, atomically: true, encoding: .utf8)
   }
 
-  private func copyToClipboard(_ text: String) throws {
+  private func copyCaptureOutputToClipboard(_ output: MarkdownCaptureOutput) throws {
+    switch settings.clipboardCopyMode {
+    case .markdownFile:
+      try copyFileToClipboard(output.fileURL)
+    case .text:
+      try copyTextToClipboard(output.markdown)
+    }
+  }
+
+  private func copyCaptureEntryToClipboard(_ entry: CaptureHistoryEntry) throws {
+    switch settings.clipboardCopyMode {
+    case .markdownFile:
+      try copyFileToClipboard(entry.fileURL)
+    case .text:
+      let content = try String(contentsOf: entry.fileURL, encoding: .utf8)
+      try copyTextToClipboard(content)
+    }
+  }
+
+  private func copyTextToClipboard(_ text: String) throws {
     let pasteboard = NSPasteboard.general
     pasteboard.clearContents()
     let wrote = pasteboard.setString(text, forType: .string)
@@ -1584,6 +1631,19 @@ final class ContextGrabberModel: ObservableObject {
         domain: "ContextGrabberHost",
         code: 1002,
         userInfo: [NSLocalizedDescriptionKey: "Failed to write capture to clipboard."]
+      )
+    }
+  }
+
+  private func copyFileToClipboard(_ fileURL: URL) throws {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    let wrote = pasteboard.writeObjects([fileURL as NSURL])
+    if !wrote {
+      throw NSError(
+        domain: "ContextGrabberHost",
+        code: 1003,
+        userInfo: [NSLocalizedDescriptionKey: "Failed to write capture file to clipboard."]
       )
     }
   }
@@ -1700,14 +1760,14 @@ final class ContextGrabberModel: ObservableObject {
     return nil
   }
 
-  private static func appSupportBaseURL() -> URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? URL(fileURLWithPath: NSHomeDirectory())
+  private static func documentsBaseURL() -> URL {
+    let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+      ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent("Documents", isDirectory: true)
     return base.appendingPathComponent("ContextGrabber", isDirectory: true)
   }
 
   private static func historyDirectoryURL() -> URL {
-    return appSupportBaseURL().appendingPathComponent("history", isDirectory: true)
+    return documentsBaseURL().appendingPathComponent("history", isDirectory: true)
   }
 }
 
@@ -1718,6 +1778,11 @@ struct ContextGrabberHostApp: App {
   var body: some Scene {
     MenuBarExtra {
       VStack(alignment: .leading, spacing: 6) {
+        Text("Context Grabber 🤏")
+          .font(.headline)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.bottom, 2)
+
         Text(model.lastCaptureLabel)
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -1767,11 +1832,6 @@ struct ContextGrabberHostApp: App {
         Divider()
           .padding(.vertical, 4)
 
-        Button("Refresh Diagnostics") {
-          model.runDiagnostics()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
         Menu("System Readiness") {
           Text("Safari Extension: \(model.safariDiagnosticsLabel)")
             .foregroundStyle(.secondary)
@@ -1806,6 +1866,9 @@ struct ContextGrabberHostApp: App {
           Text("Output: \(model.outputDirectoryLabel)")
             .foregroundStyle(.secondary)
             .lineLimit(1)
+          Text("Clipboard: \(clipboardCopyModeLabel(model.clipboardCopyMode))")
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
 
           Button("Use Default Output Directory") {
             model.useDefaultOutputDirectory()
@@ -1838,8 +1901,19 @@ struct ContextGrabberHostApp: App {
             }
           }
 
+          Menu("Clipboard Copy Mode") {
+            ForEach(ClipboardCopyMode.allCases, id: \.self) { mode in
+              Button(retentionMenuOptionLabel(
+                valueLabel: clipboardCopyModeLabel(mode),
+                isSelected: model.clipboardCopyMode == mode
+              )) {
+                model.setClipboardCopyModePreference(mode)
+              }
+            }
+          }
+
           Divider()
-          Button(model.capturesPausedPlaceholder ? "Resume Captures (Placeholder)" : "Pause Captures (Placeholder)") {
+          Button(model.capturesPausedPlaceholder ? "Resume Captures" : "Pause Captures") {
             model.toggleCapturePausedPlaceholder()
           }
         }
@@ -1866,8 +1940,8 @@ struct ContextGrabberHostApp: App {
             .foregroundStyle(.secondary)
 
           Divider()
-          Button("Open Codebase Handbook") {
-            model.openCodebaseHandbook()
+          Button("Open Project on GitHub") {
+            NSWorkspace.shared.open(URL(string: "https://github.com/anthonylu23/context_grabber")!)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1887,7 +1961,7 @@ struct ContextGrabberHostApp: App {
       if model.menuBarIcon.isSystemSymbol {
         Label("Context Grabber", systemImage: model.menuBarIcon.name)
       } else {
-        Image(nsImage: Self.menuBarNSImage(named: model.menuBarIcon.name))
+        Text(model.menuBarIcon.name)
       }
     }
     .menuBarExtraStyle(.window)
@@ -1912,6 +1986,16 @@ struct ContextGrabberHostApp: App {
           .lineLimit(3)
         if let fileName = feedback.fileName {
           Text(fileName)
+            .font(.caption2)
+            .foregroundStyle(accent)
+            .lineLimit(1)
+        }
+        if let tokenCount = feedback.tokenCount {
+          let formatter = NumberFormatter()
+          let _ = formatter.numberStyle = .decimal
+          let _ = formatter.groupingSeparator = ","
+          let formatted = formatter.string(from: NSNumber(value: tokenCount)) ?? "\(tokenCount)"
+          Text("~\(formatted) tokens")
             .font(.caption2)
             .foregroundStyle(accent)
             .lineLimit(1)
