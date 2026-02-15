@@ -47,23 +47,11 @@ cd apps/macos-host && swift test
 # package tests
 bun test --cwd packages/extension-safari
 bun test --cwd packages/extension-chrome
-bun test --cwd packages/companion-cli
 ```
 
-## Companion CLI (Milestone G)
-```bash
-# diagnostics
-bun run --cwd packages/companion-cli start doctor
+## Companion CLI
 
-# list browser tabs (both browsers by default)
-bun run --cwd packages/companion-cli start list tabs
-
-# list desktop apps with windows
-bun run --cwd packages/companion-cli start list apps
-
-# focused browser capture markdown -> stdout
-bun run --cwd packages/companion-cli start capture --focused
-```
+The TS companion CLI has been removed. It is being rebuilt as a Go binary with MCP server support. See `docs/plans/cli-expansion-plan.md` for the implementation plan.
 
 ## Browser Source Defaults
 - Safari and Chrome CLI source `auto` now prefer runtime payload input first, then fall back to AppleScript live extraction.

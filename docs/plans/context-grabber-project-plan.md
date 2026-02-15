@@ -631,6 +631,13 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Milestone G CLI expansion — add targeted capture selectors (`capture --tab` / `capture --app`) and method overrides.
+1. Milestone G CLI rebuild — Go + Bun/Swift hybrid CLI with MCP server. See `docs/plans/cli-expansion-plan.md`.
 2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
 3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
+
+## Progress Notes (Milestone G CLI Rebuild)
+56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Bun/Swift hybrid architecture:
+  - Go binary handles CLI framework (cobra), MCP server (mcp-go), osascript enumeration, and subprocess orchestration
+  - Bun/TS pipeline retained for browser extension capture (spawned as subprocess, optional dependency)
+  - New Swift CLI target (`ContextGrabberDesktopCLI`) for desktop AX/OCR capture (built from same Package.swift)
+  - Full implementation plan at `docs/plans/cli-expansion-plan.md`

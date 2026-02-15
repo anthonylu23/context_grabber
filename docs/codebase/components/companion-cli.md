@@ -1,33 +1,31 @@
 # Component: Companion CLI
 
-Path: `packages/companion-cli`
+> **Status:** The Bun/TS companion CLI (`packages/companion-cli`) has been removed. It is being rebuilt as a Go binary with an MCP server. See `docs/plans/cli-expansion-plan.md` for the full implementation plan.
 
-## Responsibilities
-1. Provide agent-friendly command-line entrypoints that reuse existing bridge contracts.
-2. Surface extension health diagnostics (`doctor`) for Safari and Chrome native-messaging paths.
-3. Trigger focused browser capture (`capture --focused`) and print deterministic markdown to stdout.
+## Architecture (planned)
 
-## Current Commands
-- `doctor`
-  - Pings Safari and Chrome bridge CLIs.
-  - Reports per-channel readiness and an overall status.
-- `list tabs [--browser safari|chrome]`
-  - Enumerates open tabs via AppleScript for Safari and/or Chrome.
-  - Returns JSON array with browser, window/tab indices, active flag, title, and URL.
-- `list apps`
-  - Enumerates visible desktop app processes with window counts via System Events.
-  - Returns JSON array with app name, bundle identifier, and window count.
-- `capture --focused`
-  - Uses browser target override when set (`CONTEXT_GRABBER_BROWSER_TARGET`).
-  - Otherwise attempts Safari first, then Chrome.
-  - Prints markdown to stdout on success.
+The new CLI is a Go binary (`cli/`) that orchestrates capture via subprocesses:
 
-## Implementation Notes
-- Reuses `@context-grabber/native-host-bridge` for host-request framing, envelope validation, fallback handling, and deterministic markdown generation.
-- Calls existing bridge CLIs (`packages/extension-safari/src/native-messaging-cli.ts`, `packages/extension-chrome/src/native-messaging-cli.ts`) through Bun rather than duplicating extraction logic.
-- Maps bridge process timeouts to `ERR_TIMEOUT` so timeout behavior is handled as capture timeout (not extension-unavailable transport failure).
-- Honors existing host environment conventions:
-  - `CONTEXT_GRABBER_REPO_ROOT`
-  - `CONTEXT_GRABBER_BUN_BIN`
-  - `CONTEXT_GRABBER_BROWSER_TARGET`
-- Supports `CONTEXT_GRABBER_OSASCRIPT_BIN` override for tab/app enumeration commands.
+- **Go → osascript** for tab/app enumeration and activation
+- **Go → Bun** for browser extension-based capture (optional, requires Bun + extensions)
+- **Go → Swift CLI** for desktop AX/OCR capture (`context-grabber-desktop` built from same `Package.swift`)
+- **Go MCP server** for agent integration via JSON-RPC over stdio
+
+## Planned Commands
+
+| Command | Description |
+| --- | --- |
+| `list tabs [--browser safari\|chrome]` | Enumerate open browser tabs |
+| `list apps` | Enumerate running desktop apps with windows |
+| `capture --focused` | Capture currently focused browser tab |
+| `capture --tab <index\|--url-match\|--title-match>` | Capture a specific browser tab |
+| `capture --app <name\|--name-match\|--bundle-id>` | Capture a specific desktop app |
+| `doctor` | System capability and health check |
+| `serve` | Start MCP stdio server |
+
+## Dependencies
+
+- `github.com/spf13/cobra` — CLI framework
+- `github.com/mark3labs/mcp-go` — MCP server
+- Existing Bun native-messaging bridge CLIs (for browser capture)
+- New Swift CLI target (for desktop capture)

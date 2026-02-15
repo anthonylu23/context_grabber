@@ -7,7 +7,7 @@
 - `packages/extension-safari`: Safari bridge + runtime modules.
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
-- `packages/companion-cli`: companion terminal interface (`doctor`, `capture --focused`).
+- `packages/companion-cli`: removed — being rebuilt as Go CLI under `cli/` (see `docs/plans/cli-expansion-plan.md`).
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules

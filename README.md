@@ -20,12 +20,8 @@ Trigger captures via the menu bar icon or the global hotkey `⌃⌥⌘C`.
 Browser live extraction requires JavaScript from Apple Events enabled in Safari (`Settings > Developer`) or Chrome (`View > Developer`), plus Automation permission for the calling app in `System Settings > Privacy & Security > Automation`.
 
 ### Companion CLI
-```bash
-bun run --cwd packages/companion-cli start doctor
-bun run --cwd packages/companion-cli start list tabs
-bun run --cwd packages/companion-cli start list apps
-bun run --cwd packages/companion-cli start capture --focused
-```
+
+The CLI is being rebuilt as a Go binary with MCP server support. See `docs/plans/cli-expansion-plan.md` for details.
 
 ### Scripts
 | Command | Description |
@@ -49,7 +45,7 @@ bun run --cwd packages/companion-cli start capture --focused
 - **Output format presets** — brief (capped key points/links) or full output
 - **Retention management** — configurable max file count and max age with safe pruning
 - **Diagnostics** — transport reachability, permission status, and storage writability checks
-- **Companion CLI** — `doctor`, `list tabs`, `list apps`, `capture --focused`
+- **Companion CLI** — Go-based CLI with MCP server (in progress, see `docs/plans/cli-expansion-plan.md`)
 
 ## Architecture & Docs
 
@@ -103,8 +99,8 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 ├── docs
 │   ├── plans               # Project plans
 │   └── codebase            # Technical handbook
+├── cli                     # Go CLI + MCP server (planned)
 ├── packages
-│   ├── companion-cli       # CLI tool (doctor, list, capture)
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension
 │   ├── native-host-bridge  # Native messaging bridge
