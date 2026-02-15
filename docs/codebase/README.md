@@ -16,6 +16,7 @@ This handbook is the canonical technical reference for Context Grabber.
 - macOS host app: `docs/codebase/components/macos-host.md`
 - Browser extensions: `docs/codebase/components/browser-extensions.md`
 - Safari container app-extension project: `docs/codebase/components/safari-container.md`
+- Companion CLI: `docs/codebase/components/companion-cli.md`
 - Shared contracts and bridge: `docs/codebase/components/contracts-and-bridge.md`
 
 ## Operations

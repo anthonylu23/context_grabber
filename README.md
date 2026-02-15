@@ -56,6 +56,7 @@ The initial Bun + TypeScript monorepo scaffold is set up with strict typing and 
 - `packages/extension-chrome`: Chrome extension TypeScript scaffold.
 - `packages/extension-safari`: Safari extension TypeScript scaffold.
 - `packages/native-host-bridge`: native-host bridge TypeScript scaffold.
+- `packages/companion-cli`: companion CLI (`doctor`, `capture --focused`).
 - `apps/macos-host`: SwiftUI/AppKit menu bar host scaffold with mock capture flow.
 - `apps/safari-container`: generated macOS Safari app-extension container project.
 
@@ -84,6 +85,7 @@ bun run check
 │   ├── plans
 │   └── codebase
 ├── packages
+│   ├── companion-cli
 │   ├── extension-chrome
 │   ├── extension-safari
 │   ├── native-host-bridge
@@ -110,6 +112,7 @@ Current host capabilities:
 - preferences-backed output controls for custom output directory and retention policy (max files, max age)
 - retention/recent-history operations are scoped to host-generated capture files only (safe with mixed markdown folders)
 - pause/resume capture placeholder toggle in menu
+- about menu section with app version/build label and handbook link
 - global hotkey capture (`⌃⌥⌘C`) with parity to menu capture flow
 - deterministic markdown generation from browser and desktop (AX/OCR) capture responses
 - local markdown persistence + clipboard copy
@@ -120,9 +123,20 @@ Browser live extraction requirements:
 - Chrome: enable `View -> Developer -> Allow JavaScript from Apple Events` for AppleScript-based `execute javascript`.
 - macOS Automation: allow the calling app (`Terminal`/host app) to control Safari/Chrome in `System Settings -> Privacy & Security -> Automation`.
 
+## Companion CLI (Milestone G Scaffold)
+```bash
+bun run --cwd packages/companion-cli start doctor
+bun run --cwd packages/companion-cli start capture --focused
+```
+
+Current companion CLI capabilities:
+- `doctor`: reports Safari/Chrome extension bridge readiness.
+- `capture --focused`: captures focused browser context and writes markdown to stdout.
+- honors `CONTEXT_GRABBER_BROWSER_TARGET` override (`safari` / `chrome`).
+
 ## Next Steps
-- milestone F2 polish (in progress): finalize settings/about UX polish and optional interaction refinements after the new inline capture feedback panel + lifecycle indicator states.
-- milestone G: companion CLI + agent integration using the shared capture pipeline.
+- milestone G: expand companion CLI surface (`list tabs/apps`, targeted capture, method overrides).
+- milestone G: add agent integration manifests (MCP/Claude Code skill wiring) on top of the CLI.
 
 ## Documentation
 - Docs index: `docs/README.md`

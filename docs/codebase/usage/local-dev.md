@@ -47,6 +47,16 @@ cd apps/macos-host && swift test
 # package tests
 bun test --cwd packages/extension-safari
 bun test --cwd packages/extension-chrome
+bun test --cwd packages/companion-cli
+```
+
+## Companion CLI (Milestone G)
+```bash
+# diagnostics
+bun run --cwd packages/companion-cli start doctor
+
+# focused browser capture markdown -> stdout
+bun run --cwd packages/companion-cli start capture --focused
 ```
 
 ## Browser Source Defaults

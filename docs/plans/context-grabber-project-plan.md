@@ -479,6 +479,17 @@ interface NormalizedContext {
 - successful/failed captures now render a transient inline feedback panel in the menu (auto-dismiss)
 - output-directory selection now validates writability before persisting settings
 - host tests now cover feedback formatting helpers, updated indicator mapping, and output-directory validation
+46. Milestone F2 core polish pass is now completed:
+- host menu now includes About metadata (`version/build`) and handbook shortcut action
+- menu copy was tightened for diagnostics/settings/readiness labels
+- host tests now include app-version label formatting coverage
+- documentation updated for host About/readiness behavior
+47. Milestone G companion CLI scaffold is now implemented:
+- new package `packages/companion-cli` with commands `doctor` and `capture --focused`
+- `doctor` pings Safari/Chrome native-messaging bridges and reports readiness
+- `capture --focused` uses shared request/validation/markdown pipeline from `@context-grabber/native-host-bridge`
+- auto target order defaults to Safari then Chrome, with `CONTEXT_GRABBER_BROWSER_TARGET` override
+- companion CLI tests cover command parsing, doctor status behavior, and capture fallback behavior
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 
@@ -487,10 +498,10 @@ interface NormalizedContext {
   - inline capture feedback panel (success/failure) with auto-dismiss behavior
   - capture lifecycle indicator states with stale-reset guard for timed indicator resets
   - output directory writability validation in settings flow
-- Remaining for F2:
-  - settings surface polish (about/version polish and final menu copy refinement)
-  - optional interaction polish items (animation/haptics/sound) if still desired for this milestone
-  - end-to-end UX pass and screenshot/docs refresh
+  - settings/about menu copy polish and handbook shortcut action
+- Deferred from F2:
+  - optional interaction polish items (animation/haptics/sound)
+  - expanded popup interactions (copy/open/dismiss controls)
 
 ### Capture Summary Popup
 After each capture, show a transient floating panel (SwiftUI `.popover` or lightweight `NSPanel`) with:
@@ -583,5 +594,6 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Complete Milestone F2 polish pass — finalize settings/about UX copy, optional interaction polish, and perform final UX validation/docs refresh.
-2. Companion CLI + agent integration (Milestone G) — after Safari end-to-end path is stable.
+1. Milestone G CLI expansion — add `list tabs`, `list apps`, and targeted capture selectors.
+2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
+3. Optional post-F2 UX polish backlog — interaction effects (haptics/sound/animation) if still desired.
