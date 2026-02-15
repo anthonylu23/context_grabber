@@ -1,10 +1,26 @@
 import Foundation
 
 enum MenuBarIndicatorState {
-  case neutral
+  case idle
+  case capturing
+  case success
+  case error
+  case disconnected
+}
+
+enum CaptureFeedbackKind {
   case success
   case failure
-  case disconnected
+}
+
+struct CaptureFeedbackState: Identifiable {
+  let id: UUID
+  let kind: CaptureFeedbackKind
+  let title: String
+  let detail: String
+  let fileName: String?
+  let shownAt: Date
+  let autoDismissAfter: TimeInterval
 }
 
 struct CaptureHistoryEntry: Identifiable {
@@ -42,15 +58,44 @@ struct MenuBarIcon {
 
 func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon {
   switch state {
-  case .neutral:
-    return MenuBarIcon(name: "\u{1F90F}", isSystemSymbol: false)
+  case .idle:
+    return MenuBarIcon(name: "MenuBarIcon", isSystemSymbol: false)
+  case .capturing:
+    return MenuBarIcon(name: "arrow.triangle.2.circlepath.circle.fill", isSystemSymbol: true)
   case .success:
     return MenuBarIcon(name: "checkmark.circle.fill", isSystemSymbol: true)
-  case .failure:
+  case .error:
     return MenuBarIcon(name: "exclamationmark.triangle.fill", isSystemSymbol: true)
   case .disconnected:
     return MenuBarIcon(name: "smallcircle.filled.circle", isSystemSymbol: true)
   }
+}
+
+func formatCaptureFeedbackTitle(kind: CaptureFeedbackKind) -> String {
+  switch kind {
+  case .success:
+    return "Capture saved"
+  case .failure:
+    return "Capture failed"
+  }
+}
+
+func formatCaptureSuccessFeedbackDetail(
+  sourceLabel: String,
+  targetLabel: String,
+  extractionMethod: String,
+  transportStatus: String,
+  warning: String?
+) -> String {
+  var detail = "\(sourceLabel): \(targetLabel) | method: \(extractionMethod) | transport: \(transportStatus)"
+  if let warning, !warning.isEmpty {
+    detail += " | warning: \(warning)"
+  }
+  return detail
+}
+
+func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {
+  return "Error: \(errorDescription)"
 }
 
 func shouldShowDisconnectedIndicator(
@@ -61,6 +106,34 @@ func shouldShowDisconnectedIndicator(
   let safariConnected = safariTransportStatus.hasSuffix(connectedSuffix)
   let chromeConnected = chromeTransportStatus.hasSuffix(connectedSuffix)
   return !(safariConnected || chromeConnected)
+}
+
+func steadyMenuBarIndicatorState(
+  safariDiagnosticsTransportStatus: String,
+  chromeDiagnosticsTransportStatus: String,
+  latestTransportStatus: String
+) -> MenuBarIndicatorState {
+  var safariStatus = safariDiagnosticsTransportStatus
+  var chromeStatus = chromeDiagnosticsTransportStatus
+
+  if latestTransportStatus.hasPrefix("safari_extension_") {
+    safariStatus = latestTransportStatus
+  } else if latestTransportStatus.hasPrefix("chrome_extension_") {
+    chromeStatus = latestTransportStatus
+  }
+
+  if safariStatus == "unknown" && chromeStatus == "unknown" {
+    return .idle
+  }
+
+  if shouldShowDisconnectedIndicator(
+    safariTransportStatus: safariStatus,
+    chromeTransportStatus: chromeStatus
+  ) {
+    return .disconnected
+  }
+
+  return .idle
 }
 
 func formatRelativeLastCaptureLabel(

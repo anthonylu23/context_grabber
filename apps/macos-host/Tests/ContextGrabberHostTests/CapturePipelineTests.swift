@@ -105,21 +105,57 @@ final class CapturePipelineTests: XCTestCase {
   }
 
   func testMenuBarIconMapping() {
-    let neutral = menuBarIconForIndicatorState(.neutral)
-    XCTAssertEqual(neutral.name, "\u{1F90F}")
-    XCTAssertFalse(neutral.isSystemSymbol)
+    let idle = menuBarIconForIndicatorState(.idle)
+    XCTAssertEqual(idle.name, "MenuBarIcon")
+    XCTAssertFalse(idle.isSystemSymbol)
+
+    let capturing = menuBarIconForIndicatorState(.capturing)
+    XCTAssertEqual(capturing.name, "arrow.triangle.2.circlepath.circle.fill")
+    XCTAssertTrue(capturing.isSystemSymbol)
 
     let success = menuBarIconForIndicatorState(.success)
     XCTAssertEqual(success.name, "checkmark.circle.fill")
     XCTAssertTrue(success.isSystemSymbol)
 
-    let failure = menuBarIconForIndicatorState(.failure)
-    XCTAssertEqual(failure.name, "exclamationmark.triangle.fill")
-    XCTAssertTrue(failure.isSystemSymbol)
+    let error = menuBarIconForIndicatorState(.error)
+    XCTAssertEqual(error.name, "exclamationmark.triangle.fill")
+    XCTAssertTrue(error.isSystemSymbol)
 
     let disconnected = menuBarIconForIndicatorState(.disconnected)
     XCTAssertEqual(disconnected.name, "smallcircle.filled.circle")
     XCTAssertTrue(disconnected.isSystemSymbol)
+  }
+
+  func testCaptureFeedbackFormatting() {
+    XCTAssertEqual(formatCaptureFeedbackTitle(kind: .success), "Capture saved")
+    XCTAssertEqual(formatCaptureFeedbackTitle(kind: .failure), "Capture failed")
+
+    XCTAssertEqual(
+      formatCaptureSuccessFeedbackDetail(
+        sourceLabel: "Safari",
+        targetLabel: "Example title",
+        extractionMethod: "browser_extension",
+        transportStatus: "safari_extension_ok",
+        warning: nil
+      ),
+      "Safari: Example title | method: browser_extension | transport: safari_extension_ok"
+    )
+
+    XCTAssertEqual(
+      formatCaptureSuccessFeedbackDetail(
+        sourceLabel: "Desktop",
+        targetLabel: "Notes",
+        extractionMethod: "desktop_accessibility",
+        transportStatus: "desktop_capture_accessibility",
+        warning: "metadata only"
+      ),
+      "Desktop: Notes | method: desktop_accessibility | transport: desktop_capture_accessibility | warning: metadata only"
+    )
+
+    XCTAssertEqual(
+      formatCaptureFailureFeedbackDetail("Bridge timeout"),
+      "Error: Bridge timeout"
+    )
   }
 
   func testDisconnectedIndicatorRequiresBothChannelsNotConnected() {
@@ -137,6 +173,39 @@ final class CapturePipelineTests: XCTestCase {
         chromeTransportStatus: "chrome_extension_unreachable"
       ),
       false
+    )
+  }
+
+  func testSteadyIndicatorUsesLatestSafariCaptureTransportStatus() {
+    XCTAssertEqual(
+      steadyMenuBarIndicatorState(
+        safariDiagnosticsTransportStatus: "safari_extension_unreachable",
+        chromeDiagnosticsTransportStatus: "chrome_extension_unreachable",
+        latestTransportStatus: "safari_extension_ok"
+      ),
+      .idle
+    )
+  }
+
+  func testSteadyIndicatorUsesLatestChromeCaptureTransportStatus() {
+    XCTAssertEqual(
+      steadyMenuBarIndicatorState(
+        safariDiagnosticsTransportStatus: "safari_extension_unreachable",
+        chromeDiagnosticsTransportStatus: "chrome_extension_unreachable",
+        latestTransportStatus: "chrome_extension_ok"
+      ),
+      .idle
+    )
+  }
+
+  func testSteadyIndicatorFallsBackToDiagnosticsWhenLatestTransportIsUnrelated() {
+    XCTAssertEqual(
+      steadyMenuBarIndicatorState(
+        safariDiagnosticsTransportStatus: "safari_extension_unreachable",
+        chromeDiagnosticsTransportStatus: "chrome_extension_unreachable",
+        latestTransportStatus: "desktop_capture_ready"
+      ),
+      .disconnected
     )
   }
 
@@ -351,6 +420,15 @@ final class CapturePipelineTests: XCTestCase {
       removeProbe: { _ in }
     )
     XCTAssertFalse(notWritable)
+  }
+
+  func testOutputDirectoryValidationErrorReturnsMessageWhenDirectoryIsNotWritable() {
+    let dir = URL(fileURLWithPath: "/tmp/context-grabber-unwritable")
+    XCTAssertEqual(
+      outputDirectoryValidationError(dir, writableCheck: { _ in false }),
+      "Selected output directory is not writable."
+    )
+    XCTAssertNil(outputDirectoryValidationError(dir, writableCheck: { _ in true }))
   }
 
   func testLoadHostSettingsSanitizesNegativeRetentionValues() {

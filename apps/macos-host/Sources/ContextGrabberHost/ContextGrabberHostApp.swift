@@ -5,6 +5,7 @@ import UserNotifications
 
 let protocolVersion = "1"
 private let defaultCaptureTimeoutMs = 1_200
+// Hotkey rebinding is deferred to Milestone G; keep fixed chord for now.
 private let hotkeyKeyCodeC: UInt16 = 8
 private let hotkeyModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
 private let hotkeyDebounceWindowSeconds = 0.25
@@ -811,7 +812,9 @@ private final class AppActivationObserverRegistration {
 @MainActor
 final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
-  @Published private(set) var menuBarIcon: MenuBarIcon = menuBarIconForIndicatorState(.neutral)
+  @Published private(set) var indicatorState: MenuBarIndicatorState = .idle
+  @Published private(set) var menuBarIcon: MenuBarIcon = menuBarIconForIndicatorState(.idle)
+  @Published private(set) var feedbackState: CaptureFeedbackState?
   @Published private(set) var lastCaptureLabel: String = "Last capture: never"
   @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
   @Published private(set) var outputDirectoryLabel: String = "Default"
@@ -838,8 +841,12 @@ final class ContextGrabberModel: ObservableObject {
   private var lastTransportErrorCode: String?
   private var lastTransportLatencyMs: Int?
   private var lastTransportStatus: String = "unknown"
+  private var safariDiagnosticsTransportStatus = "unknown"
+  private var chromeDiagnosticsTransportStatus = "unknown"
   private var captureInFlight = false
   private var indicatorResetTask: Task<Void, Never>?
+  private var indicatorResetToken = UUID()
+  private var feedbackDismissTask: Task<Void, Never>?
 
   init() {
     settings = loadHostSettings()
@@ -874,6 +881,8 @@ final class ContextGrabberModel: ObservableObject {
 
     captureInFlight = true
     statusLine = "Capture in progress..."
+    clearCaptureFeedback()
+    setMenuBarIndicator(.capturing)
     Task { @MainActor [weak self] in
       await self?.performCapture(mode: mode)
     }
@@ -916,6 +925,19 @@ final class ContextGrabberModel: ObservableObject {
       applyRetentionPolicy()
       try copyToClipboard(output.markdown)
       refreshRecentCaptures()
+
+      presentCaptureFeedback(
+        kind: .success,
+        detail: formatCaptureSuccessFeedbackDetail(
+          sourceLabel: payloadSourceLabel(for: resolution.payload),
+          targetLabel: payloadTargetLabel(for: resolution.payload),
+          extractionMethod: resolution.extractionMethod,
+          transportStatus: resolution.transportStatus,
+          warning: resolution.warning
+        ),
+        fileName: output.fileURL.lastPathComponent,
+        autoDismissAfter: 4.0
+      )
       setMenuBarIndicator(.success, autoResetAfter: 1.5)
 
       let triggerLabel = mode == "manual_hotkey" ? "hotkey" : "menu"
@@ -934,7 +956,13 @@ final class ContextGrabberModel: ObservableObject {
       statusLine = "Capture failed"
       logger.error("Capture failed: \(error.localizedDescription)")
       postUserNotification(title: "Capture Failed", subtitle: error.localizedDescription)
-      setMenuBarIndicator(.failure, autoResetAfter: 2.0)
+      presentCaptureFeedback(
+        kind: .failure,
+        detail: formatCaptureFailureFeedbackDetail(error.localizedDescription),
+        fileName: nil,
+        autoDismissAfter: 4.0
+      )
+      setMenuBarIndicator(.error, autoResetAfter: 2.0)
     }
   }
 
@@ -992,8 +1020,15 @@ final class ContextGrabberModel: ObservableObject {
       return
     }
 
+    let normalizedURL = selectedURL.standardizedFileURL
+    if let validationError = outputDirectoryValidationError(normalizedURL) {
+      statusLine = validationError
+      logger.error("Custom output directory rejected: \(normalizedURL.path)")
+      return
+    }
+
     updateSettings { current in
-      current.outputDirectoryPath = selectedURL.path
+      current.outputDirectoryPath = normalizedURL.path
     }
     refreshRecentCaptures()
     statusLine = "Output directory updated"
@@ -1066,6 +1101,8 @@ final class ContextGrabberModel: ObservableObject {
     let screenLabel = desktopReadiness.screenRecordingGranted.map { $0 ? "granted" : "missing" } ?? "unknown"
     safariDiagnosticsLabel = safariStatus.label
     chromeDiagnosticsLabel = chromeStatus.label
+    safariDiagnosticsTransportStatus = safariStatus.transportStatus
+    chromeDiagnosticsTransportStatus = chromeStatus.transportStatus
     desktopAccessibilityDiagnosticsLabel = accessibilityLabel
     desktopScreenDiagnosticsLabel = screenLabel
 
@@ -1096,14 +1133,7 @@ final class ContextGrabberModel: ObservableObject {
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
-    if shouldShowDisconnectedIndicator(
-      safariTransportStatus: safariStatus.transportStatus,
-      chromeTransportStatus: chromeStatus.transportStatus
-    ) {
-      setMenuBarIndicator(.disconnected)
-    } else {
-      setMenuBarIndicator(.neutral)
-    }
+    refreshSteadyMenuBarIndicatorIfNeeded()
     if !desktopReadiness.accessibilityTrusted {
       logger.error("Accessibility permission is missing. Enable System Settings -> Privacy & Security -> Accessibility for ContextGrabberHost.")
       logger.info("Use menu action: Open Accessibility Settings")
@@ -1251,18 +1281,96 @@ final class ContextGrabberModel: ObservableObject {
     autoResetAfter seconds: TimeInterval? = nil
   ) {
     indicatorResetTask?.cancel()
+    indicatorResetToken = UUID()
+    indicatorState = state
     menuBarIcon = menuBarIconForIndicatorState(state)
 
     guard let seconds else {
       return
     }
 
+    let expectedResetToken = indicatorResetToken
     indicatorResetTask = Task { @MainActor [weak self] in
       try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
       guard !Task.isCancelled else {
         return
       }
-      self?.menuBarIcon = menuBarIconForIndicatorState(.neutral)
+      guard let self, self.indicatorResetToken == expectedResetToken else {
+        return
+      }
+      self.setMenuBarIndicator(self.resolveSteadyMenuBarIndicatorState())
+    }
+  }
+
+  private func resolveSteadyMenuBarIndicatorState() -> MenuBarIndicatorState {
+    return steadyMenuBarIndicatorState(
+      safariDiagnosticsTransportStatus: safariDiagnosticsTransportStatus,
+      chromeDiagnosticsTransportStatus: chromeDiagnosticsTransportStatus,
+      latestTransportStatus: lastTransportStatus
+    )
+  }
+
+  private func refreshSteadyMenuBarIndicatorIfNeeded() {
+    switch indicatorState {
+    case .capturing, .success, .error:
+      return
+    case .idle, .disconnected:
+      setMenuBarIndicator(resolveSteadyMenuBarIndicatorState())
+    }
+  }
+
+  private func payloadTargetLabel(for payload: BrowserContextPayload) -> String {
+    let title = payload.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !title.isEmpty {
+      return title
+    }
+    return payload.url
+  }
+
+  private func payloadSourceLabel(for payload: BrowserContextPayload) -> String {
+    if payload.source == "desktop" {
+      return "Desktop"
+    }
+    if payload.browser.isEmpty {
+      return "Browser"
+    }
+    return payload.browser.capitalized
+  }
+
+  private func clearCaptureFeedback() {
+    feedbackDismissTask?.cancel()
+    feedbackState = nil
+  }
+
+  private func presentCaptureFeedback(
+    kind: CaptureFeedbackKind,
+    detail: String,
+    fileName: String?,
+    autoDismissAfter: TimeInterval
+  ) {
+    let state = CaptureFeedbackState(
+      id: UUID(),
+      kind: kind,
+      title: formatCaptureFeedbackTitle(kind: kind),
+      detail: detail,
+      fileName: fileName,
+      shownAt: Date(),
+      autoDismissAfter: autoDismissAfter
+    )
+
+    feedbackDismissTask?.cancel()
+    feedbackState = state
+    let expectedID = state.id
+
+    feedbackDismissTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: UInt64(state.autoDismissAfter * 1_000_000_000))
+      guard !Task.isCancelled else {
+        return
+      }
+      guard let self, self.feedbackState?.id == expectedID else {
+        return
+      }
+      self.feedbackState = nil
     }
   }
 
@@ -1526,6 +1634,10 @@ struct ContextGrabberHostApp: App {
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.bottom, 4)
 
+        if let feedback = model.feedbackState {
+          captureFeedbackView(feedback)
+        }
+
         Divider()
           .padding(.vertical, 4)
 
@@ -1667,10 +1779,44 @@ struct ContextGrabberHostApp: App {
       if model.menuBarIcon.isSystemSymbol {
         Label("Context Grabber", systemImage: model.menuBarIcon.name)
       } else {
-        Text(model.menuBarIcon.name)
+        Image(nsImage: Self.menuBarNSImage(named: model.menuBarIcon.name))
       }
     }
     .menuBarExtraStyle(.window)
+  }
+
+  @ViewBuilder
+  private func captureFeedbackView(_ feedback: CaptureFeedbackState) -> some View {
+    let accent = feedback.kind == .success ? Color.green : Color.orange
+    let symbol = feedback.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: symbol)
+        .foregroundStyle(accent)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(feedback.title)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.primary)
+          .lineLimit(1)
+        Text(feedback.detail)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(3)
+        if let fileName = feedback.fileName {
+          Text(fileName)
+            .font(.caption2)
+            .foregroundStyle(accent)
+            .lineLimit(1)
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 6)
+    .background(
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(accent.opacity(0.12))
+    )
   }
 
   private static func menuBarNSImage(named name: String) -> NSImage {
