@@ -91,13 +91,9 @@ func formatCaptureSuccessFeedbackDetail(
   targetLabel: String,
   extractionMethod: String,
   transportStatus: String,
-  warning: String?
+  warning _: String?
 ) -> String {
-  var detail = "\(sourceLabel): \(targetLabel) | method: \(extractionMethod) | transport: \(transportStatus)"
-  if let warning, !warning.isEmpty {
-    detail += " | warning: \(warning)"
-  }
-  return detail
+  return "\(sourceLabel): \(targetLabel) | method: \(extractionMethod) | transport: \(transportStatus)"
 }
 
 func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {

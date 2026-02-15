@@ -348,7 +348,7 @@ final class CapturePipelineTests: XCTestCase {
         transportStatus: "desktop_capture_accessibility",
         warning: "metadata only"
       ),
-      "Desktop: Notes | method: desktop_accessibility | transport: desktop_capture_accessibility | warning: metadata only"
+      "Desktop: Notes | method: desktop_accessibility | transport: desktop_capture_accessibility"
     )
 
     XCTAssertEqual(
