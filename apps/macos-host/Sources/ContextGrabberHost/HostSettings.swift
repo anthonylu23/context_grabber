@@ -41,7 +41,7 @@ struct HostSettings {
   static let defaultRetentionMaxFileCount = 200
   static let defaultRetentionMaxAgeDays = 30
   static let defaultClipboardCopyMode: ClipboardCopyMode = .markdownFile
-  static let defaultOutputFormatPreset: OutputFormatPreset = .brief
+  static let defaultOutputFormatPreset: OutputFormatPreset = .full
   static let defaultIncludeProductContextLine = true
   static let defaultSummarizationMode: SummarizationMode = .heuristic
   static let defaultSummaryTokenBudget = 120
