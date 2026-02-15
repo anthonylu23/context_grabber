@@ -108,13 +108,23 @@ struct NativeMessagingPingResponse: Codable {
 
 func shouldPromptDesktopPermissionsPopup(
   payload: BrowserContextPayload,
-  extractionMethod: String
+  extractionMethod: String,
+  readiness: DesktopPermissionReadiness = desktopPermissionReadiness()
 ) -> Bool {
   guard payload.source == "desktop" else {
     return false
   }
 
-  return extractionMethod == "metadata_only" || extractionMethod == "ocr"
+  guard extractionMethod == "metadata_only" || extractionMethod == "ocr" else {
+    return false
+  }
+
+  // Only prompt when a permission is actually missing.
+  // Falling back to OCR or metadata_only is normal for apps that don't
+  // expose enough AX text (e.g. Finder, games) — that's not a permissions issue.
+  let missingAccessibility = !readiness.accessibilityTrusted
+  let missingScreenRecording = readiness.screenRecordingGranted == false
+  return missingAccessibility || missingScreenRecording
 }
 
 func desktopPermissionsPopupFallbackDescription(extractionMethod: String) -> String {

@@ -149,16 +149,68 @@ final class CapturePipelineTests: XCTestCase {
       extractionWarnings: ["AX and OCR extraction unavailable."]
     )
 
+    let missingAccessibility = DesktopPermissionReadiness(
+      accessibilityTrusted: false,
+      screenRecordingGranted: true
+    )
+    let missingScreenRecording = DesktopPermissionReadiness(
+      accessibilityTrusted: true,
+      screenRecordingGranted: false
+    )
+    let allGranted = DesktopPermissionReadiness(
+      accessibilityTrusted: true,
+      screenRecordingGranted: true
+    )
+    let bothMissing = DesktopPermissionReadiness(
+      accessibilityTrusted: false,
+      screenRecordingGranted: false
+    )
+
+    // Prompts when a permission is missing
     XCTAssertTrue(
       shouldPromptDesktopPermissionsPopup(
         payload: desktopPayload,
-        extractionMethod: "metadata_only"
+        extractionMethod: "metadata_only",
+        readiness: missingAccessibility
       )
     )
     XCTAssertTrue(
       shouldPromptDesktopPermissionsPopup(
         payload: desktopPayload,
-        extractionMethod: "ocr"
+        extractionMethod: "ocr",
+        readiness: missingScreenRecording
+      )
+    )
+    XCTAssertTrue(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "metadata_only",
+        readiness: bothMissing
+      )
+    )
+
+    // Does NOT prompt when all permissions are granted (fallback is expected behavior)
+    XCTAssertFalse(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "metadata_only",
+        readiness: allGranted
+      )
+    )
+    XCTAssertFalse(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "ocr",
+        readiness: allGranted
+      )
+    )
+
+    // Does NOT prompt for accessibility extraction method even with missing permissions
+    XCTAssertFalse(
+      shouldPromptDesktopPermissionsPopup(
+        payload: desktopPayload,
+        extractionMethod: "accessibility",
+        readiness: missingAccessibility
       )
     )
 
@@ -179,10 +231,12 @@ final class CapturePipelineTests: XCTestCase {
       extractionWarnings: nil
     )
 
+    // Does NOT prompt for browser source
     XCTAssertFalse(
       shouldPromptDesktopPermissionsPopup(
         payload: browserPayload,
-        extractionMethod: "metadata_only"
+        extractionMethod: "metadata_only",
+        readiness: missingAccessibility
       )
     )
   }
