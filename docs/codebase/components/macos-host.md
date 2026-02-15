@@ -95,3 +95,31 @@
 - Handbook shortcut resolves repo root through multiple runtime candidates (`CONTEXT_GRABBER_REPO_ROOT`, cwd, source path, bundle, executable path) to work from Finder/Xcode launches.
 - Output directory changes are validated for writability before persistence.
 - Diagnostics state is also surfaced inline in menu (`System Readiness`) for Safari, Chrome, Accessibility, and Screen Recording.
+
+## Planned: Library Extraction + CLI Mode (Phase 1, Milestone G)
+
+The monolithic executable target will be split into:
+
+### `ContextGrabberCore` (library target)
+Shared logic usable by both the GUI app and CLI mode:
+- All 7 current refactored modules (listed above)
+- Types extracted from `ContextGrabberHostApp.swift` monolith:
+  - `TransportLayer.swift` — Safari/Chrome native messaging transports (~490 lines)
+  - `ProtocolTypes.swift` — `ExtensionBridgeMessage`, `NativeMessagingPingResponse`, error enums (~100 lines)
+  - `BrowserDetection.swift` — `detectBrowserTarget()`, `resolveEffectiveFrontmostApp()` (~50 lines)
+  - `CoreTypes.swift` — `BrowserContextPayload`, `HostLogger`, `FrontmostAppInfo`, constants (~60 lines)
+
+### `ContextGrabberHost` (single executable, dual mode)
+- **GUI mode** (default, no args): SwiftUI menu bar app as current
+- **CLI mode** (`--capture` flags): headless desktop capture, stdout output, no SwiftUI
+- CLI mode inherits GUI app's macOS permission grants (same binary path)
+- New file: `CLIEntryPoint.swift` — argument detection and headless capture orchestration
+
+### Motivation
+macOS Accessibility and Screen Recording permissions are granted per-binary path. A single binary means the CLI mode inherits the GUI app's existing permissions with zero extra user setup. The Go CLI (Phase 2) invokes `ContextGrabberHost --capture --app <name>` as a subprocess for desktop capture.
+
+### Key Extraction Details
+- `ProcessExecutionResult` is duplicated in both transport classes → unified during extraction
+- `GenericEnvelope` is private but shared by both transports → promoted to library-internal
+- ~700 lines extracted from `ContextGrabberHostApp.swift` monolith (currently 2,217 lines → ~900 after)
+- Test target retargeted from `@testable import ContextGrabberHost` to `@testable import ContextGrabberCore`
