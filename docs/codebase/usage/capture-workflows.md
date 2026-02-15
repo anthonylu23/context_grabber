@@ -17,12 +17,13 @@
 ## Reviewing Output
 - Recent captures submenu shows latest host-generated capture entries only.
 - `Copy Last Capture` copies the latest capture using your configured clipboard mode.
+- After each capture, a transient floating summary popup appears with quick actions (`Copy to Clipboard`, `Open File`, `Dismiss`).
 - Clipboard mode can be set in `Settings -> Clipboard Copy Mode` (`Markdown File` or `Text`).
 - History defaults to: `~/Documents/ContextGrabber/history/`.
-- You can override output location via `Preferences -> Choose Custom Output Directory...`.
+- You can override output location via `Settings -> Output Directory -> Custom Output Directory`.
 
 ## Retention and Pause Controls
-- `Preferences -> Retention Max Files` controls file-count pruning (`Unlimited` disables count-based pruning).
-- `Preferences -> Retention Max Age` controls age-based pruning (`Unlimited` disables age-based pruning).
+- `Settings -> Advanced Settings... -> Retention Max Files` controls file-count pruning (`Unlimited` disables count-based pruning).
+- `Settings -> Advanced Settings... -> Retention Max Age` controls age-based pruning (`Unlimited` disables age-based pruning).
 - Pruning runs after each successful capture write and only targets host-generated capture files.
-- `Preferences -> Pause/Resume Captures (Placeholder)` toggles a temporary no-op capture mode.
+- `Settings -> Pause/Resume Captures` toggles a temporary no-op capture mode.

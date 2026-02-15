@@ -506,18 +506,39 @@ interface NormalizedContext {
 51. Desktop permissions popup copy is now fallback-aware:
 - popup message now reports the actual capture fallback mode (`metadata_only` or `ocr`)
 - host tests now cover popup fallback-description mapping for OCR/metadata/default branches
+52. Output format controls are now implemented for paste-efficiency tuning:
+- host settings now persist output preset (`brief` / `full`) and product-context-line toggle
+- menu settings now expose preset and context-line controls
+- markdown renderer now supports compact `brief` output (no chunks/raw excerpt) and richer `full` output
+- host tests now cover settings persistence defaults and brief/full rendering behavior
+53. Hybrid summarization system is now implemented in host capture output:
+- summarization mode now supports `heuristic` (default) and optional `llm`
+- LLM provider architecture supports `openai`, `anthropic`, `gemini`, and `ollama`
+- menu settings now expose `Summarizing` controls (mode, provider, model, summary budget)
+- LLM failures now deterministically fall back to heuristic summarization with explicit warning annotation
+- host tests now cover summarization settings persistence and llm success/fallback behavior
+54. Advanced settings UX split is now implemented:
+- menu `Settings` now keeps core controls and adds `Advanced Settings...` window entrypoint
+- retention and summarization controls moved to Advanced Settings window only
+- advanced window includes all previous setup controls plus advanced controls
+- output directory selection in menu now uses checkmark-selected `Default` vs `Custom` options (no output text line)
+55. Capture summary popup rollout is now implemented:
+- new non-activating floating `NSPanel` shows per-capture summary context
+- popup includes quick actions (`Copy to Clipboard`, `Open File`, `Dismiss`)
+- popup auto-dismisses after ~4s and mirrors the inline menu feedback state
+- host capture flow no longer uses `UNMutableNotificationContent` banners for completion/failure
 
 7. Milestone F2: UI Polish & Capture Feedback Panel
 
 ### Progress Update (2026-02-15)
 - Implemented:
   - inline capture feedback panel (success/failure) with auto-dismiss behavior
+  - floating capture summary popup with quick actions (copy/open/dismiss)
   - capture lifecycle indicator states with stale-reset guard for timed indicator resets
   - output directory writability validation in settings flow
   - settings/about menu copy polish and handbook shortcut action
 - Deferred from F2:
   - optional interaction polish items (animation/haptics/sound)
-  - expanded popup interactions (copy/open/dismiss controls)
 
 ### Capture Summary Popup
 After each capture, show a transient floating panel (SwiftUI `.popover` or lightweight `NSPanel`) with:
@@ -612,4 +633,4 @@ Lightweight settings popover or small window accessible from the menu:
 ## Next Steps (Implementation Queue)
 1. Milestone G CLI expansion — add targeted capture selectors (`capture --tab` / `capture --app`) and method overrides.
 2. Milestone G agent integration — add MCP/skill manifests and docs for discoverable agent invocation.
-3. Optional post-F2 UX polish backlog — interaction effects (haptics/sound/animation) if still desired.
+3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.

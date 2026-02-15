@@ -47,14 +47,21 @@
 - Diagnostics summary-string formatting helpers.
 - Browser-target diagnostics transport status selection helper.
 
+7. `CaptureResultPopup.swift`
+- Non-activating floating popup controller for capture result summaries.
+- Popup UI with quick actions (`Copy to Clipboard`, `Open File`, `Dismiss`).
+- Popup positioning and non-focus-stealing presentation behavior.
+
 ## Current Operational Behavior
 - Capture lock prevents concurrent runs (`captureInFlight`).
 - Successful capture updates:
   - status line
   - menu icon indicator (`idle`, `capturing`, `success`, `error`, `disconnected`)
-  - transient inline feedback panel (auto-dismissed)
+  - transient inline menu feedback panel (auto-dismissed)
+  - transient floating capture-result popup (auto-dismissed) with quick actions
   - recent captures list
   - clipboard and history file
+- Capture completion now uses the host popup surfaces instead of macOS user-notification banners.
 - Failures preserve explicit warnings and error codes in status/markdown metadata.
 - Desktop metadata-only fallbacks include a diagnostic excerpt when no extractable text is available.
 - History storage resolves from settings:
@@ -63,12 +70,24 @@
 - Post-write retention pruning is applied on each successful capture:
   - max file count
   - max file age (days)
-- Menu preferences currently expose:
-  - output directory selection/reset
-  - retention max files
-  - retention max age
+- Menu `Settings` now exposes core controls only:
+  - output directory selector (`Default`/`Custom`) with checkmark-selected state
   - clipboard copy mode (`Markdown File` or `Text`)
+  - output format preset (`Brief` or `Full`)
+  - product context line toggle
   - pause/resume capture placeholder toggle
+  - `Advanced Settings...` action
+- Advanced Settings window now exposes:
+  - all core controls listed above
+  - retention max files + max age controls
+  - summarization controls (mode/provider/model/summary budget)
+- Markdown output presets now control body verbosity:
+  - `Brief`: summary, key points, links, and compact metadata only (chunks/raw excerpt omitted).
+  - `Full`: full structured body including content chunks and raw excerpt.
+- Summarization behavior:
+  - deterministic heuristic summarization is the default path
+  - LLM summarization is opt-in and provider-driven
+  - LLM failures (missing credentials, timeout, invalid response) automatically fall back to heuristic summarization and append a warning in output frontmatter
 - Menu also includes an About section with version/build labeling and handbook shortcut.
 - Handbook shortcut resolves repo root through multiple runtime candidates (`CONTEXT_GRABBER_REPO_ROOT`, cwd, source path, bundle, executable path) to work from Finder/Xcode launches.
 - Output directory changes are validated for writability before persistence.

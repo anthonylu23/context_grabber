@@ -28,3 +28,12 @@
 ## Desktop Testing Overrides
 - `CONTEXT_GRABBER_DESKTOP_AX_TEXT`: force AX text for host-side testing.
 - `CONTEXT_GRABBER_DESKTOP_OCR_TEXT`: force OCR text for host-side testing.
+
+## LLM Summarization
+- `OPENAI_API_KEY`: OpenAI API key for LLM summarization.
+- `OPENAI_BASE_URL`: custom OpenAI-compatible endpoint URL (default: `https://api.openai.com`).
+- `ANTHROPIC_API_KEY`: Anthropic API key for LLM summarization.
+- `ANTHROPIC_BASE_URL`: custom Anthropic-compatible endpoint URL (default: `https://api.anthropic.com`).
+- `GEMINI_API_KEY` / `GOOGLE_API_KEY`: Google Gemini API key for LLM summarization (either variable is accepted).
+- `GEMINI_BASE_URL`: custom Gemini-compatible endpoint URL (default: `https://generativelanguage.googleapis.com`).
+- `OLLAMA_BASE_URL`: Ollama local server endpoint URL (default: `http://localhost:11434`).

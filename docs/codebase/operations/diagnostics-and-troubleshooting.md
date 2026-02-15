@@ -28,14 +28,35 @@ The menu `Diagnostics Status` submenu mirrors the latest diagnostics snapshot wi
 - Popup copy now reflects the actual fallback path (`metadata_only` vs `ocr`) to avoid misleading troubleshooting guidance.
 
 4. Captures paused placeholder
-- Capture trigger intentionally no-ops while pause placeholder is enabled in `Preferences`.
-- Disable `Pause Captures (Placeholder)` to resume normal capture behavior.
+- Capture trigger intentionally no-ops while pause placeholder is enabled in `Settings`.
+- Disable `Pause Captures` to resume normal capture behavior.
 
 ## Quick Remediation Path
 1. Run diagnostics from menu.
 2. Use `Open Accessibility Settings` and `Open Screen Recording Settings` actions.
 3. Re-run capture and verify transport status and warning count.
-4. For paused-state confusion, check `Preferences` and ensure captures are resumed.
+4. For paused-state confusion, check `Settings` and ensure captures are resumed.
+
+## Output Tuning
+1. Output is too long for paste destination
+- Set `Settings -> Output Format -> Brief`.
+
+2. Need richer context for downstream prompts
+- Set `Settings -> Output Format -> Full` to include content chunks and raw excerpt.
+- Keep `Settings -> Product Context Line -> On` to add a one-line tool description for downstream model context.
+
+3. Want LLM-assisted summarization
+- Open `Settings -> Advanced Settings... -> Summarizing -> Mode -> LLM`.
+- Select `Settings -> Advanced Settings... -> Summarizing -> LLM Provider`.
+- Optionally set model and summary budget.
+
+4. LLM mode selected but output still looks heuristic
+- Check provider credentials in environment variables:
+  - `OPENAI_API_KEY`
+  - `ANTHROPIC_API_KEY`
+  - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
+  - `OLLAMA_BASE_URL` for local Ollama endpoint
+- If provider call fails, host falls back to heuristic summarization and records `LLM summary fallback: ...` in output warnings.
 
 ## Safari Container Local-Install Issues
 1. `Embedded binary's bundle identifier is not prefixed with the parent app's bundle identifier`
