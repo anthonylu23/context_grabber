@@ -3,6 +3,9 @@ declare module "bun:test" {
 
   interface Matchers {
     toBe(expected: unknown): void;
+    toEqual(expected: unknown): void;
+    toBeUndefined(): void;
+    toContain(expected: unknown): void;
     toThrow(expected?: unknown): void;
   }
 
