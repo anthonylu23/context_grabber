@@ -31,7 +31,8 @@ func newRootCommand() *cobra.Command {
 	opts := defaultGlobalOptions()
 
 	rootCmd := &cobra.Command{
-		Use:           "context-grabber",
+		Use:           "cgrab",
+		Aliases:       []string{"context-grabber"},
 		Short:         "Context Grabber companion CLI",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -69,6 +70,7 @@ func newRootCommand() *cobra.Command {
 	)
 
 	rootCmd.AddCommand(newListCommand(opts))
+	rootCmd.AddCommand(newCaptureCommand(opts))
 	rootCmd.AddCommand(newDoctorCommand(opts))
 
 	return rootCmd

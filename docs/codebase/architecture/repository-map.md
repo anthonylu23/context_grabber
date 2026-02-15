@@ -8,7 +8,7 @@
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
 - `packages/companion-cli`: removed.
-- `cli`: Go companion CLI scaffold (`list tabs`, `list apps`, `doctor`) with capture/MCP phases in progress.
+- `cli`: Go companion CLI (`list`, `capture`, `doctor`), invoked as `cgrab` by default in help/output.
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules

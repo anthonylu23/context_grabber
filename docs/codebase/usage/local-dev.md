@@ -68,23 +68,41 @@ bun test --cwd packages/extension-chrome
 
 ## Companion CLI
 
-The TS companion CLI has been removed. A Go scaffold now exists under `cli/` with list and doctor commands.
+The TS companion CLI has been removed. The Go CLI under `cli/` now supports list/capture/doctor.
 
 ```bash
 cd /path/to/context_grabber/cli
 go test ./...
-go build ./...
+go build -o cgrab .
 
 # inventory commands
-go run . list tabs --format json
-go run . list apps --format json
+./cgrab list tabs --format json
+./cgrab list apps --format json
+
+# capture commands
+./cgrab capture --focused
+./cgrab capture --tab 1:2 --browser safari
+./cgrab capture --tab --url-match "docs" --method applescript
+./cgrab capture --app Finder --method auto
 
 # diagnostics
-go run . doctor --format json
+./cgrab doctor --format json
 ```
 
-Capture and MCP commands are still in progress. See `docs/plans/cli-expansion-plan.md` for the remaining Milestone G phases.
+Notes:
+- Browser capture methods: `auto`, `applescript` (live extraction), `extension` (runtime payload path).
+- Desktop capture methods: `auto`, `applescript` (alias of `auto`), `ax`, `ocr`.
+
+For a short trigger command, build the binary as `cgrab`:
+
+```bash
+cd /path/to/context_grabber/cli
+go build -o cgrab .
+./cgrab --help
+```
+
+`go run . <command>` also works for quick local iteration.
 
 ## Browser Source Defaults
-- Safari and Chrome CLI source `auto` now prefer runtime payload input first, then fall back to AppleScript live extraction.
+- Safari and Chrome CLI source `auto` now prefer AppleScript live extraction first, with runtime payload fallback only when runtime payload env vars are configured.
 - Fixture capture remains explicit (`CONTEXT_GRABBER_*_SOURCE=fixture`) for deterministic testing.
