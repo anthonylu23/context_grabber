@@ -105,7 +105,7 @@ describe("chrome native messaging cli", () => {
     expect((parsed as { type?: string }).type).toBe("extension.capture.result");
   });
 
-  it("returns extension.error in auto mode when live and runtime sources are unavailable", () => {
+  it("returns extension.error in auto mode when live capture fails and runtime is not configured", () => {
     const request: HostRequestMessage = {
       id: "req-cli-2",
       type: "host.capture.request",
@@ -136,6 +136,9 @@ describe("chrome native messaging cli", () => {
     expect((parsed as { payload?: { code?: string } }).payload?.code).toBe(
       "ERR_EXTENSION_UNAVAILABLE",
     );
+    const errorMessage = (parsed as { payload?: { message?: string } }).payload?.message ?? "";
+    expect(errorMessage.includes("Runtime source requires")).toBe(false);
+    expect(errorMessage.includes("live extraction")).toBe(true);
   });
 
   it("strips selectionText for runtime payload when includeSelectionText is false", () => {
@@ -183,7 +186,7 @@ describe("chrome native messaging cli", () => {
     ).toBe(undefined);
   });
 
-  it("uses runtime payload in auto mode before live extraction", () => {
+  it("falls back to runtime payload in auto mode when live extraction fails", () => {
     const request: HostRequestMessage = {
       id: "req-cli-4a",
       type: "host.capture.request",
@@ -223,10 +226,87 @@ describe("chrome native messaging cli", () => {
     expect(
       (
         parsed as {
+          payload?: { capture?: { title?: string } };
+        }
+      ).payload?.capture?.title,
+    ).toBe("Runtime Auto Capture");
+    expect(
+      (
+        parsed as {
           payload?: { capture?: { selectionText?: string } };
         }
       ).payload?.capture?.selectionText,
     ).toBe(undefined);
+  });
+
+  it("prefers live extraction in auto mode when runtime payload is also configured", async () => {
+    const request: HostRequestMessage = {
+      id: "req-cli-4aa",
+      type: "host.capture.request",
+      timestamp: "2026-02-14T00:00:00.000Z",
+      payload: {
+        protocolVersion: PROTOCOL_VERSION,
+        requestId: "req-cli-4aa",
+        mode: "manual_menu",
+        requestedAt: "2026-02-14T00:00:00.000Z",
+        timeoutMs: 1200,
+        includeSelectionText: false,
+      },
+    };
+
+    const runtimePayload = JSON.stringify({
+      url: "https://example.com/runtime-auto-ignored",
+      title: "Runtime Should Not Win",
+      fullText: "Runtime payload text.",
+      headings: [],
+      links: [],
+    });
+
+    const fixtureOutputPath = join(
+      tmpdir(),
+      `context-grabber-chrome-cli-auto-live-preferred-${Date.now()}.json`,
+    );
+    let fakeOsaBinary: string | undefined;
+    try {
+      await writeFile(
+        fixtureOutputPath,
+        JSON.stringify({
+          url: "https://example.com/live-preferred",
+          title: "Live Preferred",
+          fullText: "Live capture text.",
+          headings: [],
+          links: [],
+        }),
+        "utf8",
+      );
+      fakeOsaBinary = await createFakeOsaScriptBinary(fixtureOutputPath);
+
+      const result = runCli([], JSON.stringify(request), {
+        CONTEXT_GRABBER_CHROME_SOURCE: "auto",
+        CONTEXT_GRABBER_CHROME_RUNTIME_PAYLOAD: runtimePayload,
+        CONTEXT_GRABBER_CHROME_OSASCRIPT_BIN: fakeOsaBinary,
+      });
+      expect(result.status).toBe(0);
+
+      const parsed = parseLastJsonLine(result.stdout);
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Invalid auto/live-preferred response.");
+      }
+
+      expect((parsed as { type?: string }).type).toBe("extension.capture.result");
+      expect(
+        (
+          parsed as {
+            payload?: { capture?: { title?: string } };
+          }
+        ).payload?.capture?.title,
+      ).toBe("Live Preferred");
+    } finally {
+      await rm(fixtureOutputPath, { force: true });
+      if (fakeOsaBinary) {
+        await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
   });
 
   it("falls back to live extraction in auto mode when runtime payload is unavailable", async () => {
