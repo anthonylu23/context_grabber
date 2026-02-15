@@ -106,7 +106,7 @@ final class CapturePipelineTests: XCTestCase {
 
   func testMenuBarIconMapping() {
     let neutral = menuBarIconForIndicatorState(.neutral)
-    XCTAssertEqual(neutral.name, "MenuBarIcon")
+    XCTAssertEqual(neutral.name, "\u{1F90F}")
     XCTAssertFalse(neutral.isSystemSymbol)
 
     let success = menuBarIconForIndicatorState(.success)
@@ -137,6 +137,80 @@ final class CapturePipelineTests: XCTestCase {
         chromeTransportStatus: "chrome_extension_unreachable"
       ),
       false
+    )
+  }
+
+  func testResolveExtensionDiagnosticsStatusForProtocolMatch() {
+    let status = resolveExtensionDiagnosticsStatus(
+      ping: { NativeMessagingPingResponse(ok: true, protocolVersion: protocolVersion) },
+      transportStatusPrefix: "safari_extension"
+    )
+
+    XCTAssertEqual(status.label, "reachable/protocol \(protocolVersion)")
+    XCTAssertEqual(status.transportStatus, "safari_extension_ok")
+  }
+
+  func testResolveExtensionDiagnosticsStatusForProtocolMismatch() {
+    let status = resolveExtensionDiagnosticsStatus(
+      ping: { NativeMessagingPingResponse(ok: true, protocolVersion: "2") },
+      transportStatusPrefix: "chrome_extension"
+    )
+
+    XCTAssertEqual(status.label, "reachable/protocol mismatch")
+    XCTAssertEqual(status.transportStatus, "chrome_extension_protocol_mismatch")
+  }
+
+  func testResolveExtensionDiagnosticsStatusForUnreachablePing() {
+    let status = resolveExtensionDiagnosticsStatus(
+      ping: { throw NSError(domain: "CapturePipelineTests", code: 9001) },
+      transportStatusPrefix: "safari_extension"
+    )
+
+    XCTAssertEqual(status.label, "unreachable")
+    XCTAssertEqual(status.transportStatus, "safari_extension_unreachable")
+  }
+
+  func testDiagnosticsTransportStatusForTarget() {
+    let safariStatus: ExtensionDiagnosticsStatus = ("reachable/protocol \(protocolVersion)", "safari_extension_ok")
+    let chromeStatus: ExtensionDiagnosticsStatus = ("unreachable", "chrome_extension_unreachable")
+
+    XCTAssertEqual(
+      diagnosticsTransportStatusForTarget(.safari, safariStatus: safariStatus, chromeStatus: chromeStatus),
+      "safari_extension_ok"
+    )
+    XCTAssertEqual(
+      diagnosticsTransportStatusForTarget(.chrome, safariStatus: safariStatus, chromeStatus: chromeStatus),
+      "chrome_extension_unreachable"
+    )
+    XCTAssertEqual(
+      diagnosticsTransportStatusForTarget(
+        .unsupported(appName: "Notes", bundleIdentifier: "com.apple.Notes"),
+        safariStatus: safariStatus,
+        chromeStatus: chromeStatus
+      ),
+      "desktop_capture_ready"
+    )
+  }
+
+  func testFormatDiagnosticsSummaryUsesExpectedShape() {
+    let summary = formatDiagnosticsSummary(
+      DiagnosticsSummaryContext(
+        frontAppDisplayName: "Safari",
+        safariLabel: "reachable/protocol \(protocolVersion)",
+        chromeLabel: "unreachable",
+        desktopAccessibilityLabel: "granted",
+        desktopScreenLabel: "missing",
+        lastCaptureLabel: "2026-02-14T20:00:00Z",
+        lastErrorLabel: "ERR_TIMEOUT",
+        latencyLabel: "123ms",
+        storageWritable: true,
+        historyPath: "/tmp/history"
+      )
+    )
+
+    XCTAssertEqual(
+      summary,
+      "Front app: Safari | Safari: reachable/protocol \(protocolVersion) | Chrome: unreachable | Desktop AX: granted | Screen: missing | Last capture: 2026-02-14T20:00:00Z | Last error: ERR_TIMEOUT | Latency: 123ms | Storage writable: yes | History: /tmp/history"
     )
   }
 

@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import UserNotifications
 
-private let protocolVersion = "1"
+let protocolVersion = "1"
 private let defaultCaptureTimeoutMs = 1_200
 private let hotkeyKeyCodeC: UInt16 = 8
 private let hotkeyModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
@@ -111,14 +111,6 @@ struct MarkdownCaptureOutput {
   let fileURL: URL
 }
 
-struct CaptureResolution {
-  let payload: BrowserContextPayload
-  let extractionMethod: String
-  let transportStatus: String
-  let warning: String?
-  let errorCode: String?
-}
-
 enum BrowserTarget {
   case safari
   case chrome
@@ -215,126 +207,6 @@ func resolveEffectiveFrontmostApp(
   return current
 }
 
-func createMetadataOnlyBrowserPayload(
-  browser: String,
-  details: [String: String]?,
-  warning: String,
-  frontAppName: String?
-) -> BrowserContextPayload {
-  let title = details?["title"] ?? (frontAppName.map { "\($0) (metadata only)" } ?? "\(browser.capitalized) (metadata only)")
-  let url = details?["url"] ?? "about:blank"
-
-  return BrowserContextPayload(
-    source: "browser",
-    browser: browser,
-    url: url,
-    title: title,
-    fullText: "",
-    headings: [],
-    links: [],
-    metaDescription: nil,
-    siteName: details?["site_name"],
-    language: nil,
-    author: nil,
-    publishedTime: nil,
-    selectionText: nil,
-    extractionWarnings: [warning]
-  )
-}
-
-func createBrowserMetadataFallbackResolution(
-  target: BrowserTarget,
-  code: String,
-  message: String,
-  details: [String: String]?,
-  frontAppName: String?
-) -> CaptureResolution {
-  let warning = "\(code): \(message)"
-  return CaptureResolution(
-    payload: createMetadataOnlyBrowserPayload(
-      browser: target.browserLabel,
-      details: details,
-      warning: warning,
-      frontAppName: frontAppName
-    ),
-    extractionMethod: "metadata_only",
-    transportStatus: "\(target.transportStatusPrefix)_error:\(code)",
-    warning: warning,
-    errorCode: code
-  )
-}
-
-func resolveBrowserCapture(
-  target: BrowserTarget,
-  bridgeResult: Result<ExtensionBridgeMessage, Error>,
-  frontAppName: String?
-) -> CaptureResolution {
-  switch bridgeResult {
-  case .success(let bridgeMessage):
-    switch bridgeMessage {
-    case .captureResult(let captureResponse):
-      if captureResponse.payload.protocolVersion != protocolVersion {
-        return createBrowserMetadataFallbackResolution(
-          target: target,
-          code: "ERR_PROTOCOL_VERSION",
-          message: "Protocol version mismatch. Expected \(protocolVersion).",
-          details: nil,
-          frontAppName: frontAppName
-        )
-      }
-
-      return CaptureResolution(
-        payload: captureResponse.payload.capture,
-        extractionMethod: "browser_extension",
-        transportStatus: "\(target.transportStatusPrefix)_ok",
-        warning: nil,
-        errorCode: nil
-      )
-
-    case .error(let errorMessage):
-      return createBrowserMetadataFallbackResolution(
-        target: target,
-        code: errorMessage.payload.code,
-        message: errorMessage.payload.message,
-        details: errorMessage.payload.details,
-        frontAppName: frontAppName
-      )
-    }
-
-  case .failure(let error):
-    if let safariTransportError = error as? SafariNativeMessagingTransportError,
-      case .timedOut = safariTransportError
-    {
-      return createBrowserMetadataFallbackResolution(
-        target: target,
-        code: "ERR_TIMEOUT",
-        message: "Timed out waiting for extension response.",
-        details: nil,
-        frontAppName: frontAppName
-      )
-    }
-
-    if let chromeTransportError = error as? ChromeNativeMessagingTransportError,
-      case .timedOut = chromeTransportError
-    {
-      return createBrowserMetadataFallbackResolution(
-        target: target,
-        code: "ERR_TIMEOUT",
-        message: "Timed out waiting for extension response.",
-        details: nil,
-        frontAppName: frontAppName
-      )
-    }
-
-    return createBrowserMetadataFallbackResolution(
-      target: target,
-      code: "ERR_EXTENSION_UNAVAILABLE",
-      message: error.localizedDescription,
-      details: nil,
-      frontAppName: frontAppName
-    )
-  }
-}
 
 enum SafariNativeMessagingTransportError: LocalizedError {
   case repoRootNotFound
@@ -939,7 +811,7 @@ private final class AppActivationObserverRegistration {
 @MainActor
 final class ContextGrabberModel: ObservableObject {
   @Published var statusLine: String = "Ready"
-  @Published private(set) var menuBarSymbolName: String = menuBarSymbolNameForIndicatorState(.neutral)
+  @Published private(set) var menuBarIcon: MenuBarIcon = menuBarIconForIndicatorState(.neutral)
   @Published private(set) var lastCaptureLabel: String = "Last capture: never"
   @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
   @Published private(set) var outputDirectoryLabel: String = "Default"
@@ -1177,8 +1049,18 @@ final class ContextGrabberModel: ObservableObject {
       frontmostAppName: frontmostApp.appName
     )
 
-    let safariStatus = diagnosticsStatusForSafari()
-    let chromeStatus = diagnosticsStatusForChrome()
+    let safariStatus = resolveExtensionDiagnosticsStatus(
+      ping: { try safariTransport.ping(timeoutMs: 800) },
+      transportStatusPrefix: "safari_extension"
+    ) { [logger] error in
+      logger.error("Safari diagnostics ping failed: \(error.localizedDescription)")
+    }
+    let chromeStatus = resolveExtensionDiagnosticsStatus(
+      ping: { try chromeTransport.ping(timeoutMs: 800) },
+      transportStatusPrefix: "chrome_extension"
+    ) { [logger] error in
+      logger.error("Chrome diagnostics ping failed: \(error.localizedDescription)")
+    }
     let desktopReadiness = desktopPermissionReadiness()
     let accessibilityLabel = desktopReadiness.accessibilityTrusted ? "granted" : "missing"
     let screenLabel = desktopReadiness.screenRecordingGranted.map { $0 ? "granted" : "missing" } ?? "unknown"
@@ -1187,21 +1069,30 @@ final class ContextGrabberModel: ObservableObject {
     desktopAccessibilityDiagnosticsLabel = accessibilityLabel
     desktopScreenDiagnosticsLabel = screenLabel
 
-    switch target {
-    case .chrome:
-      lastTransportStatus = chromeStatus.transportStatus
-    case .safari:
-      lastTransportStatus = safariStatus.transportStatus
-    case .unsupported:
-      lastTransportStatus = "desktop_capture_ready"
-    }
+    lastTransportStatus = diagnosticsTransportStatusForTarget(
+      target,
+      safariStatus: safariStatus,
+      chromeStatus: chromeStatus
+    )
 
     let lastCaptureLabel = lastCaptureAt ?? "never"
     let lastErrorLabel = lastTransportErrorCode ?? "none"
     let latencyLabel = lastTransportLatencyMs.map { "\($0)ms" } ?? "n/a"
 
-    let summary =
-      "Front app: \(target.displayName) | Safari: \(safariStatus.label) | Chrome: \(chromeStatus.label) | Desktop AX: \(accessibilityLabel) | Screen: \(screenLabel) | Last capture: \(lastCaptureLabel) | Last error: \(lastErrorLabel) | Latency: \(latencyLabel) | Storage writable: \(writable ? "yes" : "no") | History: \(historyURL.path)"
+    let summary = formatDiagnosticsSummary(
+      DiagnosticsSummaryContext(
+        frontAppDisplayName: target.displayName,
+        safariLabel: safariStatus.label,
+        chromeLabel: chromeStatus.label,
+        desktopAccessibilityLabel: accessibilityLabel,
+        desktopScreenLabel: screenLabel,
+        lastCaptureLabel: lastCaptureLabel,
+        lastErrorLabel: lastErrorLabel,
+        latencyLabel: latencyLabel,
+        storageWritable: writable,
+        historyPath: historyURL.path
+      )
+    )
 
     statusLine = summary
     logger.info("Diagnostics: \(summary)")
@@ -1355,44 +1246,12 @@ final class ContextGrabberModel: ObservableObject {
     return resolution
   }
 
-  private func diagnosticsStatusForSafari() -> (label: String, transportStatus: String) {
-    do {
-      let ping = try safariTransport.ping(timeoutMs: 800)
-      if ping.ok && ping.protocolVersion == protocolVersion {
-        return ("reachable/protocol \(protocolVersion)", "safari_extension_ok")
-      }
-      if ping.ok {
-        return ("reachable/protocol mismatch", "safari_extension_protocol_mismatch")
-      }
-      return ("unreachable", "safari_extension_unreachable")
-    } catch {
-      logger.error("Safari diagnostics ping failed: \(error.localizedDescription)")
-      return ("unreachable", "safari_extension_unreachable")
-    }
-  }
-
-  private func diagnosticsStatusForChrome() -> (label: String, transportStatus: String) {
-    do {
-      let ping = try chromeTransport.ping(timeoutMs: 800)
-      if ping.ok && ping.protocolVersion == protocolVersion {
-        return ("reachable/protocol \(protocolVersion)", "chrome_extension_ok")
-      }
-      if ping.ok {
-        return ("reachable/protocol mismatch", "chrome_extension_protocol_mismatch")
-      }
-      return ("unreachable", "chrome_extension_unreachable")
-    } catch {
-      logger.error("Chrome diagnostics ping failed: \(error.localizedDescription)")
-      return ("unreachable", "chrome_extension_unreachable")
-    }
-  }
-
   private func setMenuBarIndicator(
     _ state: MenuBarIndicatorState,
     autoResetAfter seconds: TimeInterval? = nil
   ) {
     indicatorResetTask?.cancel()
-    menuBarSymbolName = menuBarSymbolNameForIndicatorState(state)
+    menuBarIcon = menuBarIconForIndicatorState(state)
 
     guard let seconds else {
       return
@@ -1403,7 +1262,7 @@ final class ContextGrabberModel: ObservableObject {
       guard !Task.isCancelled else {
         return
       }
-      self?.menuBarSymbolName = menuBarSymbolNameForIndicatorState(.neutral)
+      self?.menuBarIcon = menuBarIconForIndicatorState(.neutral)
     }
   }
 
@@ -1659,7 +1518,7 @@ struct ContextGrabberHostApp: App {
   @StateObject private var model = ContextGrabberModel()
 
   var body: some Scene {
-    MenuBarExtra("Context Grabber", systemImage: model.menuBarSymbolName) {
+    MenuBarExtra {
       VStack(alignment: .leading, spacing: 6) {
         Text(model.lastCaptureLabel)
           .font(.caption)
@@ -1804,8 +1663,25 @@ struct ContextGrabberHostApp: App {
       .padding(.top, 12)
       .padding(.bottom, 12)
       .padding(.horizontal, 8)
+    } label: {
+      if model.menuBarIcon.isSystemSymbol {
+        Label("Context Grabber", systemImage: model.menuBarIcon.name)
+      } else {
+        Text(model.menuBarIcon.name)
+      }
     }
     .menuBarExtraStyle(.window)
+  }
+
+  private static func menuBarNSImage(named name: String) -> NSImage {
+    guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+          let image = NSImage(contentsOf: url)
+    else {
+      return NSImage()
+    }
+    image.size = NSSize(width: 18, height: 18)
+    image.isTemplate = true
+    return image
   }
 }
 

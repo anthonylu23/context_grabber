@@ -35,16 +35,21 @@ private let menuTimestampFormatter: DateFormatter = {
   return formatter
 }()
 
-func menuBarSymbolNameForIndicatorState(_ state: MenuBarIndicatorState) -> String {
+struct MenuBarIcon {
+  let name: String
+  let isSystemSymbol: Bool
+}
+
+func menuBarIconForIndicatorState(_ state: MenuBarIndicatorState) -> MenuBarIcon {
   switch state {
   case .neutral:
-    return "text.viewfinder"
+    return MenuBarIcon(name: "\u{1F90F}", isSystemSymbol: false)
   case .success:
-    return "checkmark.circle.fill"
+    return MenuBarIcon(name: "checkmark.circle.fill", isSystemSymbol: true)
   case .failure:
-    return "exclamationmark.triangle.fill"
+    return MenuBarIcon(name: "exclamationmark.triangle.fill", isSystemSymbol: true)
   case .disconnected:
-    return "smallcircle.filled.circle"
+    return MenuBarIcon(name: "smallcircle.filled.circle", isSystemSymbol: true)
   }
 }
 
