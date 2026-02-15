@@ -18,6 +18,11 @@ struct CaptureFeedbackState: Identifiable {
   let kind: CaptureFeedbackKind
   let title: String
   let detail: String
+  let sourceLabel: String?
+  let targetLabel: String?
+  let extractionMethod: String?
+  let warning: String?
+  let fileURL: URL?
   let fileName: String?
   let tokenCount: Int?
   let shownAt: Date
@@ -97,6 +102,18 @@ func formatCaptureSuccessFeedbackDetail(
 
 func formatCaptureFailureFeedbackDetail(_ errorDescription: String) -> String {
   return "Error: \(errorDescription)"
+}
+
+func formatTokenEstimateLabel(_ tokenCount: Int?) -> String? {
+  guard let tokenCount else {
+    return nil
+  }
+
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .decimal
+  formatter.groupingSeparator = ","
+  let formatted = formatter.string(from: NSNumber(value: tokenCount)) ?? "\(tokenCount)"
+  return "~\(formatted) tokens"
 }
 
 func formatAppVersionLabel(shortVersion: String?, buildVersion: String?) -> String {
