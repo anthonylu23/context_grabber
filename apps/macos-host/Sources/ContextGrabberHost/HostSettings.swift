@@ -6,6 +6,13 @@ private enum HostSettingsKeys {
   static let retentionMaxAgeDays = "context_grabber.retention_max_age_days"
   static let capturesPausedPlaceholder = "context_grabber.captures_paused_placeholder"
   static let clipboardCopyMode = "context_grabber.clipboard_copy_mode"
+  static let outputFormatPreset = "context_grabber.output_format_preset"
+  static let includeProductContextLine = "context_grabber.include_product_context_line"
+  static let summarizationMode = "context_grabber.summarization_mode"
+  static let summarizationProvider = "context_grabber.summarization_provider"
+  static let summarizationModel = "context_grabber.summarization_model"
+  static let summaryTokenBudget = "context_grabber.summary_token_budget"
+  static let summaryTimeoutMs = "context_grabber.summary_timeout_ms"
 }
 
 enum ClipboardCopyMode: String, CaseIterable {
@@ -13,16 +20,45 @@ enum ClipboardCopyMode: String, CaseIterable {
   case text = "text"
 }
 
+enum OutputFormatPreset: String, CaseIterable {
+  case brief = "brief"
+  case full = "full"
+}
+
+enum SummarizationMode: String, CaseIterable {
+  case heuristic = "heuristic"
+  case llm = "llm"
+}
+
+enum SummarizationProvider: String, CaseIterable {
+  case openAI = "openai"
+  case anthropic = "anthropic"
+  case gemini = "gemini"
+  case ollama = "ollama"
+}
+
 struct HostSettings {
   static let defaultRetentionMaxFileCount = 200
   static let defaultRetentionMaxAgeDays = 30
   static let defaultClipboardCopyMode: ClipboardCopyMode = .markdownFile
+  static let defaultOutputFormatPreset: OutputFormatPreset = .brief
+  static let defaultIncludeProductContextLine = true
+  static let defaultSummarizationMode: SummarizationMode = .heuristic
+  static let defaultSummaryTokenBudget = 120
+  static let defaultSummaryTimeoutMs = 2_500
 
   var outputDirectoryPath: String?
   var retentionMaxFileCount: Int
   var retentionMaxAgeDays: Int
   var capturesPausedPlaceholder: Bool
   var clipboardCopyMode: ClipboardCopyMode
+  var outputFormatPreset: OutputFormatPreset
+  var includeProductContextLine: Bool
+  var summarizationMode: SummarizationMode
+  var summarizationProvider: SummarizationProvider?
+  var summarizationModel: String?
+  var summaryTokenBudget: Int
+  var summaryTimeoutMs: Int
 
   var outputDirectoryURL: URL? {
     guard let outputDirectoryPath else {
@@ -38,6 +74,7 @@ struct HostSettings {
 
 let retentionMaxFileCountOptions: [Int] = [50, 100, 200, 500, 0]
 let retentionMaxAgeDaysOptions: [Int] = [7, 30, 90, 0]
+let summaryTokenBudgetOptions: [Int] = [80, 120, 180]
 
 struct HostRetentionPolicy {
   let maxFileCount: Int
@@ -72,6 +109,15 @@ func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
   let outputDirectoryPath = userDefaults.string(forKey: HostSettingsKeys.outputDirectoryPath)
   let capturesPaused = userDefaults.bool(forKey: HostSettingsKeys.capturesPausedPlaceholder)
   let storedClipboardCopyMode = userDefaults.string(forKey: HostSettingsKeys.clipboardCopyMode)
+  let storedOutputFormatPreset = userDefaults.string(forKey: HostSettingsKeys.outputFormatPreset)
+  let includeProductContextStored = userDefaults.object(
+    forKey: HostSettingsKeys.includeProductContextLine
+  ) as? Bool
+  let storedSummarizationMode = userDefaults.string(forKey: HostSettingsKeys.summarizationMode)
+  let storedSummarizationProvider = userDefaults.string(forKey: HostSettingsKeys.summarizationProvider)
+  let storedSummarizationModel = userDefaults.string(forKey: HostSettingsKeys.summarizationModel)
+  let storedSummaryTokenBudget = userDefaults.object(forKey: HostSettingsKeys.summaryTokenBudget) as? Int
+  let storedSummaryTimeoutMs = userDefaults.object(forKey: HostSettingsKeys.summaryTimeoutMs) as? Int
 
   let retentionMaxFileCount = sanitizeRetentionValue(
     storedCount,
@@ -83,13 +129,40 @@ func loadHostSettings(userDefaults: UserDefaults = .standard) -> HostSettings {
   )
   let clipboardCopyMode = ClipboardCopyMode(rawValue: storedClipboardCopyMode ?? "")
     ?? HostSettings.defaultClipboardCopyMode
+  let outputFormatPreset = OutputFormatPreset(rawValue: storedOutputFormatPreset ?? "")
+    ?? HostSettings.defaultOutputFormatPreset
+  let includeProductContextLine =
+    includeProductContextStored ?? HostSettings.defaultIncludeProductContextLine
+  var summarizationMode = SummarizationMode(rawValue: storedSummarizationMode ?? "")
+    ?? HostSettings.defaultSummarizationMode
+  let summarizationProvider = SummarizationProvider(rawValue: storedSummarizationProvider ?? "")
+  let summaryTokenBudget = sanitizeSummaryTokenBudget(
+    storedSummaryTokenBudget,
+    fallback: HostSettings.defaultSummaryTokenBudget
+  )
+  let summaryTimeoutMs = sanitizeSummaryTimeoutMs(
+    storedSummaryTimeoutMs,
+    fallback: HostSettings.defaultSummaryTimeoutMs
+  )
+  let summarizationModel = storedSummarizationModel?
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+  if summarizationMode == .llm, summarizationProvider == nil {
+    summarizationMode = .heuristic
+  }
 
   return HostSettings(
     outputDirectoryPath: outputDirectoryPath,
     retentionMaxFileCount: retentionMaxFileCount,
     retentionMaxAgeDays: retentionMaxAgeDays,
     capturesPausedPlaceholder: capturesPaused,
-    clipboardCopyMode: clipboardCopyMode
+    clipboardCopyMode: clipboardCopyMode,
+    outputFormatPreset: outputFormatPreset,
+    includeProductContextLine: includeProductContextLine,
+    summarizationMode: summarizationMode,
+    summarizationProvider: summarizationProvider,
+    summarizationModel: (summarizationModel?.isEmpty ?? true) ? nil : summarizationModel,
+    summaryTokenBudget: summaryTokenBudget,
+    summaryTimeoutMs: summaryTimeoutMs
   )
 }
 
@@ -109,6 +182,26 @@ func saveHostSettings(
   userDefaults.set(settings.retentionMaxAgeDays, forKey: HostSettingsKeys.retentionMaxAgeDays)
   userDefaults.set(settings.capturesPausedPlaceholder, forKey: HostSettingsKeys.capturesPausedPlaceholder)
   userDefaults.set(settings.clipboardCopyMode.rawValue, forKey: HostSettingsKeys.clipboardCopyMode)
+  userDefaults.set(settings.outputFormatPreset.rawValue, forKey: HostSettingsKeys.outputFormatPreset)
+  userDefaults.set(
+    settings.includeProductContextLine,
+    forKey: HostSettingsKeys.includeProductContextLine
+  )
+  userDefaults.set(settings.summarizationMode.rawValue, forKey: HostSettingsKeys.summarizationMode)
+  if let summarizationProvider = settings.summarizationProvider {
+    userDefaults.set(summarizationProvider.rawValue, forKey: HostSettingsKeys.summarizationProvider)
+  } else {
+    userDefaults.removeObject(forKey: HostSettingsKeys.summarizationProvider)
+  }
+  if let summarizationModel = settings.summarizationModel?.trimmingCharacters(in: .whitespacesAndNewlines),
+    !summarizationModel.isEmpty
+  {
+    userDefaults.set(summarizationModel, forKey: HostSettingsKeys.summarizationModel)
+  } else {
+    userDefaults.removeObject(forKey: HostSettingsKeys.summarizationModel)
+  }
+  userDefaults.set(settings.summaryTokenBudget, forKey: HostSettingsKeys.summaryTokenBudget)
+  userDefaults.set(settings.summaryTimeoutMs, forKey: HostSettingsKeys.summaryTimeoutMs)
 }
 
 func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
@@ -118,6 +211,55 @@ func clipboardCopyModeLabel(_ mode: ClipboardCopyMode) -> String {
   case .text:
     return "Text"
   }
+}
+
+func outputFormatPresetLabel(_ preset: OutputFormatPreset) -> String {
+  switch preset {
+  case .brief:
+    return "Brief"
+  case .full:
+    return "Full"
+  }
+}
+
+func summarizationModeLabel(_ mode: SummarizationMode) -> String {
+  switch mode {
+  case .heuristic:
+    return "Heuristic"
+  case .llm:
+    return "LLM"
+  }
+}
+
+func summarizationProviderLabel(_ provider: SummarizationProvider?) -> String {
+  guard let provider else {
+    return "Not Set"
+  }
+
+  switch provider {
+  case .openAI:
+    return "OpenAI"
+  case .anthropic:
+    return "Anthropic"
+  case .gemini:
+    return "Gemini"
+  case .ollama:
+    return "Ollama"
+  }
+}
+
+func sanitizeSummaryTokenBudget(_ value: Int?, fallback: Int) -> Int {
+  guard let value, summaryTokenBudgetOptions.contains(value) else {
+    return fallback
+  }
+  return value
+}
+
+func sanitizeSummaryTimeoutMs(_ value: Int?, fallback: Int) -> Int {
+  guard let value, value >= 500, value <= 20_000 else {
+    return fallback
+  }
+  return value
 }
 
 func retentionPruneCandidates(
