@@ -1,67 +1,27 @@
 import {
-  type BrowserContextPayload,
-  type ErrorMessage,
-  type ExtensionResponseMessage,
-  type HostRequestMessage,
-  PROTOCOL_VERSION,
-  type ProtocolErrorCode,
-  createNativeMessageEnvelope,
-  isHostRequestMessage,
+  type ExtractionInput,
+  createBrowserPayload,
+  createCaptureResponseMessage,
+  createErrorMessage,
+  supportsHostCaptureRequest,
+} from "@context-grabber/extension-shared";
+import type {
+  BrowserContextPayload,
+  ErrorMessage,
+  ExtensionResponseMessage,
+  ProtocolErrorCode,
 } from "@context-grabber/shared-types";
 
-export interface ChromeExtractionInput {
-  url: string;
-  title: string;
-  fullText: string;
-  headings?: Array<{ level: number; text: string }>;
-  links?: Array<{ text: string; href: string }>;
-  metaDescription?: string;
-  siteName?: string;
-  language?: string;
-  author?: string;
-  publishedTime?: string;
-  selectionText?: string;
-  extractionWarnings?: string[];
-}
+/**
+ * Chrome-specific alias for the browser-agnostic {@link ExtractionInput}.
+ * Kept for backward compatibility with existing consumers.
+ */
+export type ChromeExtractionInput = ExtractionInput;
 
-export const supportsHostCaptureRequest = (value: unknown): value is HostRequestMessage => {
-  return isHostRequestMessage(value);
-};
+export { supportsHostCaptureRequest };
 
 export const createChromeBrowserPayload = (input: ChromeExtractionInput): BrowserContextPayload => {
-  const payload: BrowserContextPayload = {
-    source: "browser",
-    browser: "chrome",
-    url: input.url,
-    title: input.title,
-    fullText: input.fullText,
-    headings: input.headings ?? [],
-    links: input.links ?? [],
-  };
-
-  if (input.metaDescription !== undefined) {
-    payload.metaDescription = input.metaDescription;
-  }
-  if (input.siteName !== undefined) {
-    payload.siteName = input.siteName;
-  }
-  if (input.language !== undefined) {
-    payload.language = input.language;
-  }
-  if (input.author !== undefined) {
-    payload.author = input.author;
-  }
-  if (input.publishedTime !== undefined) {
-    payload.publishedTime = input.publishedTime;
-  }
-  if (input.selectionText !== undefined) {
-    payload.selectionText = input.selectionText;
-  }
-  if (input.extractionWarnings !== undefined) {
-    payload.extractionWarnings = input.extractionWarnings;
-  }
-
-  return payload;
+  return createBrowserPayload(input, "chrome");
 };
 
 export const createChromeCaptureResponseMessage = (
@@ -69,15 +29,7 @@ export const createChromeCaptureResponseMessage = (
   id: string,
   timestamp: string,
 ): ExtensionResponseMessage => {
-  return createNativeMessageEnvelope({
-    id,
-    type: "extension.capture.result",
-    timestamp,
-    payload: {
-      protocolVersion: PROTOCOL_VERSION,
-      capture,
-    },
-  });
+  return createCaptureResponseMessage(capture, id, timestamp);
 };
 
 export const createChromeErrorMessage = (
@@ -87,15 +39,5 @@ export const createChromeErrorMessage = (
   timestamp: string,
   recoverable = true,
 ): ErrorMessage => {
-  return createNativeMessageEnvelope({
-    id,
-    type: "extension.error",
-    timestamp,
-    payload: {
-      protocolVersion: PROTOCOL_VERSION,
-      code,
-      message,
-      recoverable,
-    },
-  });
+  return createErrorMessage(code, message, id, timestamp, recoverable);
 };

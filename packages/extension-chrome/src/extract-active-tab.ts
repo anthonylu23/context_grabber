@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import type { ChromeExtractionInput } from "./index.js";
+import {
+  type ExtractionInput,
+  type PageSnapshot,
+  buildDocumentScript,
+  toExtractionInput,
+} from "@context-grabber/extension-shared";
+
+export type { PageSnapshot as ChromePageSnapshot };
 
 export interface ChromeActiveTabExtractionOptions {
   includeSelectionText: boolean;
@@ -10,225 +17,20 @@ export interface ChromeActiveTabExtractionOptions {
   chromeAppName?: string;
 }
 
-export interface ChromePageSnapshot {
-  url?: unknown;
-  title?: unknown;
-  fullText?: unknown;
-  headings?: unknown;
-  links?: unknown;
-  metaDescription?: unknown;
-  siteName?: unknown;
-  language?: unknown;
-  author?: unknown;
-  publishedTime?: unknown;
-  selectionText?: unknown;
-}
-
-const MAX_LINKS = 200;
 const DEFAULT_OSASCRIPT_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
-const asString = (value: unknown): string | undefined => {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
-
-const normalizeText = (value: unknown): string => {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value
-    .replace(/\r\n?/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
-
-const sanitizeHeadings = (value: unknown): Array<{ level: number; text: string }> => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (typeof item !== "object" || item === null) {
-        return null;
-      }
-
-      const level = (item as { level?: unknown }).level;
-      const text = asString((item as { text?: unknown }).text);
-      if (
-        typeof level !== "number" ||
-        !Number.isInteger(level) ||
-        level < 1 ||
-        level > 6 ||
-        !text
-      ) {
-        return null;
-      }
-
-      return { level, text };
-    })
-    .filter((item): item is { level: number; text: string } => item !== null);
-};
-
-const sanitizeLinks = (value: unknown): Array<{ text: string; href: string }> => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const unique = new Set<string>();
-  const links: Array<{ text: string; href: string }> = [];
-
-  for (const item of value) {
-    if (typeof item !== "object" || item === null) {
-      continue;
-    }
-
-    const text = asString((item as { text?: unknown }).text);
-    const href = asString((item as { href?: unknown }).href);
-
-    if (!text || !href) {
-      continue;
-    }
-
-    const dedupeKey = `${text}::${href}`;
-    if (unique.has(dedupeKey)) {
-      continue;
-    }
-
-    unique.add(dedupeKey);
-    links.push({ text, href });
-
-    if (links.length >= MAX_LINKS) {
-      break;
-    }
-  }
-
-  return links;
-};
-
+/**
+ * Re-export shared helpers under Chrome-specific names for backward
+ * compatibility with existing test imports.
+ */
 export const toChromeExtractionInput = (
   rawSnapshot: unknown,
   includeSelectionText: boolean,
-): ChromeExtractionInput => {
-  if (typeof rawSnapshot !== "object" || rawSnapshot === null) {
-    throw new Error("Chrome extraction snapshot is not an object.");
-  }
-
-  const snapshot = rawSnapshot as ChromePageSnapshot;
-  const url = asString(snapshot.url);
-  const title = asString(snapshot.title);
-
-  if (!url || !title) {
-    throw new Error("Chrome extraction is missing required url/title fields.");
-  }
-
-  const result: ChromeExtractionInput = {
-    url,
-    title,
-    fullText: normalizeText(snapshot.fullText),
-    headings: sanitizeHeadings(snapshot.headings),
-    links: sanitizeLinks(snapshot.links),
-  };
-
-  const metaDescription = asString(snapshot.metaDescription);
-  const siteName = asString(snapshot.siteName);
-  const language = asString(snapshot.language);
-  const author = asString(snapshot.author);
-  const publishedTime = asString(snapshot.publishedTime);
-  const selectionText = asString(snapshot.selectionText);
-
-  if (metaDescription) {
-    result.metaDescription = metaDescription;
-  }
-  if (siteName) {
-    result.siteName = siteName;
-  }
-  if (language) {
-    result.language = language;
-  }
-  if (author) {
-    result.author = author;
-  }
-  if (publishedTime) {
-    result.publishedTime = publishedTime;
-  }
-  if (includeSelectionText && selectionText) {
-    result.selectionText = selectionText;
-  }
-
-  return result;
+): ExtractionInput => {
+  return toExtractionInput(rawSnapshot, includeSelectionText, "Chrome");
 };
 
-export const buildChromeDocumentScript = (includeSelectionText: boolean): string => {
-  const includeSelectionLiteral = includeSelectionText ? "true" : "false";
-
-  return `(() => {
-  const normalize = (value) => {
-    if (typeof value !== "string") {
-      return "";
-    }
-
-    return value
-      .replace(/\\r\\n?/g, "\\n")
-      .replace(/[ \\t]+\\n/g, "\\n")
-      .replace(/\\n{3,}/g, "\\n\\n")
-      .trim();
-  };
-
-  const meta = (selector) => {
-    const element = document.querySelector(selector);
-    if (!element) {
-      return undefined;
-    }
-
-    const content = element.getAttribute("content");
-    if (typeof content !== "string") {
-      return undefined;
-    }
-
-    const trimmed = content.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  };
-
-  const headings = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).map((heading) => {
-    const tagName = heading.tagName.toLowerCase();
-    const parsedLevel = Number.parseInt(tagName.slice(1), 10);
-    return {
-      level: Number.isInteger(parsedLevel) ? parsedLevel : 1,
-      text: normalize(heading.textContent || ""),
-    };
-  }).filter((heading) => heading.text.length > 0);
-
-  const links = Array.from(document.querySelectorAll("a[href]")).map((link) => ({
-    text: normalize(link.textContent || ""),
-    href: normalize(link.href || ""),
-  })).filter((link) => link.text.length > 0 && link.href.length > 0).slice(0, 200);
-
-  const selectionText = ${includeSelectionLiteral}
-    ? normalize(String(window.getSelection ? window.getSelection() : ""))
-    : undefined;
-
-  return JSON.stringify({
-    url: document.location ? document.location.href : "",
-    title: document.title || "",
-    fullText: normalize(document.body ? document.body.innerText : ""),
-    headings,
-    links,
-    metaDescription: meta('meta[name="description"]') || meta('meta[property="og:description"]'),
-    siteName: meta('meta[property="og:site_name"]') || meta('meta[name="application-name"]'),
-    language: (document.documentElement && document.documentElement.lang) || undefined,
-    author: meta('meta[name="author"]') || meta('meta[property="article:author"]'),
-    publishedTime: meta('meta[property="article:published_time"]') || meta('meta[name="article:published_time"]'),
-    selectionText,
-  });
-})();`;
-};
+export const buildChromeDocumentScript = buildDocumentScript;
 
 const escapeAppleScriptString = (value: string): string => {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
@@ -249,8 +51,8 @@ const buildAppleScriptProgram = (javascript: string, appName = "Google Chrome"):
 
 export const extractActiveTabContextFromChrome = (
   options: ChromeActiveTabExtractionOptions,
-): ChromeExtractionInput => {
-  const script = buildChromeDocumentScript(options.includeSelectionText);
+): ExtractionInput => {
+  const script = buildDocumentScript(options.includeSelectionText);
   const appName = options.chromeAppName ?? "Google Chrome";
   const program = buildAppleScriptProgram(script, appName);
 
