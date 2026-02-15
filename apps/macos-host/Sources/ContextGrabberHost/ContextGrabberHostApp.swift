@@ -1,9 +1,9 @@
 import AppKit
 import Foundation
 import SwiftUI
-import UserNotifications
 
 let protocolVersion = "1"
+private let advancedSettingsWindowID = "advanced-settings"
 private let defaultCaptureTimeoutMs = 1_200
 // Hotkey rebinding is deferred to Milestone G; keep fixed chord for now.
 private let hotkeyKeyCodeC: UInt16 = 8
@@ -841,11 +841,21 @@ final class ContextGrabberModel: ObservableObject {
   @Published private(set) var lastCaptureLabel: String = "Last capture: never"
   @Published private(set) var recentCaptures: [CaptureHistoryEntry] = []
   @Published private(set) var outputDirectoryLabel: String = "Default"
+  @Published private(set) var usingDefaultOutputDirectory: Bool = true
   @Published private(set) var retentionMaxFileCount: Int = HostSettings.defaultRetentionMaxFileCount
   @Published private(set) var retentionMaxAgeDays: Int = HostSettings.defaultRetentionMaxAgeDays
   @Published private(set) var capturesPausedPlaceholder = false
   @Published private(set) var clipboardCopyMode: ClipboardCopyMode =
     HostSettings.defaultClipboardCopyMode
+  @Published private(set) var outputFormatPreset: OutputFormatPreset =
+    HostSettings.defaultOutputFormatPreset
+  @Published private(set) var includeProductContextLine: Bool =
+    HostSettings.defaultIncludeProductContextLine
+  @Published private(set) var summarizationMode: SummarizationMode =
+    HostSettings.defaultSummarizationMode
+  @Published private(set) var summarizationProvider: SummarizationProvider?
+  @Published private(set) var summarizationModel: String?
+  @Published private(set) var summaryTokenBudget: Int = HostSettings.defaultSummaryTokenBudget
   @Published private(set) var safariDiagnosticsLabel: String = "unknown"
   @Published private(set) var chromeDiagnosticsLabel: String = "unknown"
   @Published private(set) var desktopAccessibilityDiagnosticsLabel: String = "unknown"
@@ -855,8 +865,8 @@ final class ContextGrabberModel: ObservableObject {
   private let fileManager = FileManager.default
   private let safariTransport = SafariNativeMessagingTransport()
   private let chromeTransport = ChromeNativeMessagingTransport()
+  private let captureResultPopup = CaptureResultPopupController()
   private let hostProcessIdentifier = ProcessInfo.processInfo.processIdentifier
-  private let notificationsEnabled: Bool
   private var settings: HostSettings
   private var hotkeyMonitorRegistration: HotkeyMonitorRegistration?
   private var appActivationObserverRegistration: AppActivationObserverRegistration?
@@ -876,13 +886,6 @@ final class ContextGrabberModel: ObservableObject {
 
   init() {
     settings = loadHostSettings()
-    notificationsEnabled = Self.canUseUserNotifications()
-    if notificationsEnabled {
-      requestNotificationAuthorization()
-    } else {
-      logger.info("User notifications disabled for unbundled runtime (swift run).")
-    }
-
     registerHotkeyMonitors()
     registerFrontmostAppObserver()
     appVersionLabel = resolveAppVersionLabel()
@@ -942,7 +945,7 @@ final class ContextGrabberModel: ObservableObject {
       lastCaptureAt = timestamp
       updateLastCaptureLabel()
 
-      let output = try createCaptureOutput(
+      let output = try await createCaptureOutput(
         from: resolution.payload,
         extractionMethod: resolution.extractionMethod,
         requestID: requestID,
@@ -969,15 +972,22 @@ final class ContextGrabberModel: ObservableObject {
       refreshRecentCaptures()
 
       let tokenCount = max(1, Int(ceil(Double(output.markdown.count) / 4.0)))
+      let sourceLabel = payloadSourceLabel(for: resolution.payload)
+      let targetLabel = payloadTargetLabel(for: resolution.payload)
       presentCaptureFeedback(
         kind: .success,
         detail: formatCaptureSuccessFeedbackDetail(
-          sourceLabel: payloadSourceLabel(for: resolution.payload),
-          targetLabel: payloadTargetLabel(for: resolution.payload),
+          sourceLabel: sourceLabel,
+          targetLabel: targetLabel,
           extractionMethod: resolution.extractionMethod,
           transportStatus: resolution.transportStatus,
           warning: captureWarning
         ),
+        sourceLabel: sourceLabel,
+        targetLabel: targetLabel,
+        extractionMethod: resolution.extractionMethod,
+        warning: captureWarning,
+        fileURL: output.fileURL,
         fileName: output.fileURL.lastPathComponent,
         tokenCount: tokenCount,
         autoDismissAfter: 4.0
@@ -997,18 +1007,17 @@ final class ContextGrabberModel: ObservableObject {
       logger.info(
         "Capture complete: \(output.fileURL.path) | mode=\(mode) | transport=\(resolution.transportStatus) | latency_ms=\(lastTransportLatencyMs ?? -1)"
       )
-
-      let subtitle = captureWarning == nil
-        ? output.fileURL.lastPathComponent
-        : "\(output.fileURL.lastPathComponent) | \(captureWarning ?? "")"
-      postUserNotification(title: "Context Captured", subtitle: subtitle)
     } catch {
       statusLine = "Capture failed"
       logger.error("Capture failed: \(error.localizedDescription)")
-      postUserNotification(title: "Capture Failed", subtitle: error.localizedDescription)
       presentCaptureFeedback(
         kind: .failure,
         detail: formatCaptureFailureFeedbackDetail(error.localizedDescription),
+        sourceLabel: nil,
+        targetLabel: nil,
+        extractionMethod: nil,
+        warning: nil,
+        fileURL: nil,
         fileName: nil,
         autoDismissAfter: 4.0
       )
@@ -1047,13 +1056,41 @@ final class ContextGrabberModel: ObservableObject {
     }
 
     do {
-      try copyCaptureEntryToClipboard(latest)
+      try copyCaptureFileToClipboard(latest.fileURL)
       statusLine = "Copied last capture (\(clipboardCopyModeLabel(clipboardCopyMode)))"
       logger.info("Copied last capture from: \(latest.fileURL.path)")
     } catch {
       statusLine = "Unable to copy last capture"
       logger.error("Failed copying last capture: \(error.localizedDescription)")
     }
+  }
+
+  func copyFeedbackCaptureToClipboard() {
+    guard let fileURL = feedbackState?.fileURL else {
+      statusLine = "No feedback capture available to copy"
+      return
+    }
+
+    do {
+      try copyCaptureFileToClipboard(fileURL)
+      statusLine = "Copied capture (\(clipboardCopyModeLabel(clipboardCopyMode)))"
+      logger.info("Copied capture from popup: \(fileURL.path)")
+    } catch {
+      statusLine = "Unable to copy capture from popup"
+      logger.error("Failed copying capture from popup: \(error.localizedDescription)")
+    }
+  }
+
+  func openFeedbackCaptureFile() {
+    guard let fileURL = feedbackState?.fileURL else {
+      statusLine = "No feedback capture available to open"
+      return
+    }
+    openCaptureFile(fileURL)
+  }
+
+  func dismissCaptureFeedback() {
+    clearCaptureFeedback()
   }
 
   func chooseCustomOutputDirectory() {
@@ -1121,6 +1158,62 @@ final class ContextGrabberModel: ObservableObject {
       current.clipboardCopyMode = mode
     }
     statusLine = "Clipboard copy mode: \(clipboardCopyModeLabel(mode))"
+  }
+
+  func setOutputFormatPresetPreference(_ preset: OutputFormatPreset) {
+    updateSettings { current in
+      current.outputFormatPreset = preset
+    }
+    statusLine = "Output format: \(outputFormatPresetLabel(preset))"
+  }
+
+  func setIncludeProductContextLinePreference(_ include: Bool) {
+    updateSettings { current in
+      current.includeProductContextLine = include
+    }
+    statusLine = include ? "Product context included in output" : "Product context removed from output"
+  }
+
+  func setSummarizationModePreference(_ mode: SummarizationMode) {
+    if mode == .llm, settings.summarizationProvider == nil {
+      statusLine = "Select an LLM provider before enabling LLM summarization"
+      return
+    }
+    updateSettings { current in
+      current.summarizationMode = mode
+    }
+    statusLine = "Summarization mode: \(summarizationModeLabel(mode))"
+  }
+
+  func setSummarizationProviderPreference(_ provider: SummarizationProvider?) {
+    updateSettings { current in
+      current.summarizationProvider = provider
+      if let provider {
+        if current.summarizationModel == nil {
+          current.summarizationModel = summarizationProviderDefaultModel(provider)
+        }
+      } else if current.summarizationMode == .llm {
+        current.summarizationMode = .heuristic
+      }
+    }
+    statusLine = "Summarization provider: \(summarizationProviderLabel(provider))"
+  }
+
+  func setSummarizationModelPreference(_ model: String?) {
+    updateSettings { current in
+      current.summarizationModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    statusLine = "Summarization model: \(summarizationModelLabel(model))"
+  }
+
+  func setSummaryTokenBudgetPreference(_ budget: Int) {
+    updateSettings { current in
+      current.summaryTokenBudget = sanitizeSummaryTokenBudget(
+        budget,
+        fallback: HostSettings.defaultSummaryTokenBudget
+      )
+    }
+    statusLine = "Summary budget: ~\(summaryTokenBudget) tokens"
   }
 
   func openAccessibilitySettings() {
@@ -1414,11 +1507,17 @@ final class ContextGrabberModel: ObservableObject {
   private func clearCaptureFeedback() {
     feedbackDismissTask?.cancel()
     feedbackState = nil
+    captureResultPopup.hide()
   }
 
   private func presentCaptureFeedback(
     kind: CaptureFeedbackKind,
     detail: String,
+    sourceLabel: String?,
+    targetLabel: String?,
+    extractionMethod: String?,
+    warning: String?,
+    fileURL: URL?,
     fileName: String?,
     tokenCount: Int? = nil,
     autoDismissAfter: TimeInterval
@@ -1428,6 +1527,11 @@ final class ContextGrabberModel: ObservableObject {
       kind: kind,
       title: formatCaptureFeedbackTitle(kind: kind),
       detail: detail,
+      sourceLabel: sourceLabel,
+      targetLabel: targetLabel,
+      extractionMethod: extractionMethod,
+      warning: warning,
+      fileURL: fileURL,
       fileName: fileName,
       tokenCount: tokenCount,
       shownAt: Date(),
@@ -1436,6 +1540,18 @@ final class ContextGrabberModel: ObservableObject {
 
     feedbackDismissTask?.cancel()
     feedbackState = state
+    captureResultPopup.show(
+      state: state,
+      onCopy: fileURL == nil ? nil : { [weak self] in
+        self?.copyFeedbackCaptureToClipboard()
+      },
+      onOpen: fileURL == nil ? nil : { [weak self] in
+        self?.openFeedbackCaptureFile()
+      },
+      onDismiss: { [weak self] in
+        self?.dismissCaptureFeedback()
+      }
+    )
     let expectedID = state.id
 
     feedbackDismissTask = Task { @MainActor [weak self] in
@@ -1447,6 +1563,7 @@ final class ContextGrabberModel: ObservableObject {
         return
       }
       self.feedbackState = nil
+      self.captureResultPopup.hide()
     }
   }
 
@@ -1465,6 +1582,13 @@ final class ContextGrabberModel: ObservableObject {
     retentionMaxAgeDays = settings.retentionMaxAgeDays
     capturesPausedPlaceholder = settings.capturesPausedPlaceholder
     clipboardCopyMode = settings.clipboardCopyMode
+    outputFormatPreset = settings.outputFormatPreset
+    includeProductContextLine = settings.includeProductContextLine
+    summarizationMode = settings.summarizationMode
+    summarizationProvider = settings.summarizationProvider
+    summarizationModel = settings.summarizationModel
+    summaryTokenBudget = settings.summaryTokenBudget
+    usingDefaultOutputDirectory = settings.outputDirectoryURL == nil
     outputDirectoryLabel = settings.outputDirectoryURL?.path ?? "Default"
   }
 
@@ -1638,12 +1762,23 @@ final class ContextGrabberModel: ObservableObject {
     extractionMethod: String,
     requestID: String,
     capturedAt: String
-  ) throws -> MarkdownCaptureOutput {
+  ) async throws -> MarkdownCaptureOutput {
+    let summarySections = await resolveSummarizationSections(
+      payload: payload,
+      settings: settings,
+      outputPreset: settings.outputFormatPreset
+    )
     let markdown = renderMarkdown(
       requestID: requestID,
       capturedAt: capturedAt,
       extractionMethod: extractionMethod,
-      payload: payload
+      payload: payload,
+      outputPreset: settings.outputFormatPreset,
+      includeProductContextLine: settings.includeProductContextLine,
+      summaryOverride: summarySections.summary,
+      keyPointsOverride: summarySections.keyPoints,
+      additionalWarnings: summarySections.warnings,
+      summaryTokenBudget: settings.summaryTokenBudget
     )
 
     let dateFormatter = DateFormatter()
@@ -1672,12 +1807,12 @@ final class ContextGrabberModel: ObservableObject {
     }
   }
 
-  private func copyCaptureEntryToClipboard(_ entry: CaptureHistoryEntry) throws {
+  private func copyCaptureFileToClipboard(_ fileURL: URL) throws {
     switch settings.clipboardCopyMode {
     case .markdownFile:
-      try copyFileToClipboard(entry.fileURL)
+      try copyFileToClipboard(fileURL)
     case .text:
-      let content = try String(contentsOf: entry.fileURL, encoding: .utf8)
+      let content = try String(contentsOf: fileURL, encoding: .utf8)
       try copyTextToClipboard(content)
     }
   }
@@ -1706,49 +1841,6 @@ final class ContextGrabberModel: ObservableObject {
         userInfo: [NSLocalizedDescriptionKey: "Failed to write capture file to clipboard."]
       )
     }
-  }
-
-  private func postUserNotification(title: String, subtitle: String) {
-    guard notificationsEnabled else {
-      return
-    }
-
-    let content = UNMutableNotificationContent()
-    content.title = title
-    content.body = subtitle
-
-    let request = UNNotificationRequest(
-      identifier: UUID().uuidString.lowercased(),
-      content: content,
-      trigger: nil
-    )
-
-    UNUserNotificationCenter.current().add(request) { error in
-      if let error {
-        fputs("ContextGrabberHost notification error: \(error.localizedDescription)\n", stderr)
-      }
-    }
-  }
-
-  private func requestNotificationAuthorization() {
-    guard notificationsEnabled else {
-      return
-    }
-
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
-      if let error {
-        fputs("ContextGrabberHost notification authorization error: \(error.localizedDescription)\n", stderr)
-      }
-    }
-  }
-
-  private static func canUseUserNotifications() -> Bool {
-    if Bundle.main.bundleIdentifier == nil {
-      return false
-    }
-
-    let bundlePath = Bundle.main.bundleURL.path
-    return !bundlePath.contains("/.build/")
   }
 
   private func resolveAppVersionLabel(bundle: Bundle = .main) -> String {
@@ -1834,6 +1926,7 @@ final class ContextGrabberModel: ObservableObject {
 @main
 struct ContextGrabberHostApp: App {
   @StateObject private var model = ContextGrabberModel()
+  @Environment(\.openWindow) private var openWindow
 
   var body: some Scene {
     MenuBarExtra {
@@ -1923,47 +2016,24 @@ struct ContextGrabberHostApp: App {
           .padding(.vertical, 4)
 
         Menu("Settings") {
-          Text("Output: \(model.outputDirectoryLabel)")
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-          Text("Clipboard: \(clipboardCopyModeLabel(model.clipboardCopyMode))")
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-
-          Button("Use Default Output Directory") {
-            model.useDefaultOutputDirectory()
-          }
-
-          Button("Choose Custom Output Directory...") {
-            model.chooseCustomOutputDirectory()
-          }
-
-          Divider()
-          Menu("Retention Max Files") {
-            ForEach(retentionMaxFileCountOptions, id: \.self) { option in
-              Button(retentionMenuOptionLabel(
-                valueLabel: retentionMaxFileCountLabel(option),
-                isSelected: model.retentionMaxFileCount == option
-              )) {
-                model.setRetentionMaxFileCountPreference(option)
-              }
+          Menu("Output Directory") {
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: "Default Output Directory",
+              isSelected: model.usingDefaultOutputDirectory
+            )) {
+              model.useDefaultOutputDirectory()
             }
-          }
-
-          Menu("Retention Max Age") {
-            ForEach(retentionMaxAgeDaysOptions, id: \.self) { option in
-              Button(retentionMenuOptionLabel(
-                valueLabel: retentionMaxAgeDaysLabel(option),
-                isSelected: model.retentionMaxAgeDays == option
-              )) {
-                model.setRetentionMaxAgeDaysPreference(option)
-              }
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: "Custom Output Directory",
+              isSelected: !model.usingDefaultOutputDirectory
+            )) {
+              model.chooseCustomOutputDirectory()
             }
           }
 
           Menu("Clipboard Copy Mode") {
             ForEach(ClipboardCopyMode.allCases, id: \.self) { mode in
-              Button(retentionMenuOptionLabel(
+              Button(checkmarkMenuOptionLabel(
                 valueLabel: clipboardCopyModeLabel(mode),
                 isSelected: model.clipboardCopyMode == mode
               )) {
@@ -1972,9 +2042,40 @@ struct ContextGrabberHostApp: App {
             }
           }
 
+          Menu("Output Format") {
+            ForEach(OutputFormatPreset.allCases, id: \.self) { preset in
+              Button(checkmarkMenuOptionLabel(
+                valueLabel: outputFormatPresetLabel(preset),
+                isSelected: model.outputFormatPreset == preset
+              )) {
+                model.setOutputFormatPresetPreference(preset)
+              }
+            }
+          }
+
+          Menu("Product Context Line") {
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: "On",
+              isSelected: model.includeProductContextLine
+            )) {
+              model.setIncludeProductContextLinePreference(true)
+            }
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: "Off",
+              isSelected: !model.includeProductContextLine
+            )) {
+              model.setIncludeProductContextLinePreference(false)
+            }
+          }
+
           Divider()
           Button(model.capturesPausedPlaceholder ? "Resume Captures" : "Pause Captures") {
             model.toggleCapturePausedPlaceholder()
+          }
+
+          Divider()
+          Button("Advanced Settings...") {
+            openWindow(id: advancedSettingsWindowID)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2025,6 +2126,11 @@ struct ContextGrabberHostApp: App {
       }
     }
     .menuBarExtraStyle(.window)
+
+    WindowGroup("Advanced Settings", id: advancedSettingsWindowID) {
+      AdvancedSettingsView(model: model)
+    }
+    .defaultSize(width: 560, height: 620)
   }
 
   @ViewBuilder
@@ -2032,36 +2138,58 @@ struct ContextGrabberHostApp: App {
     let accent = feedback.kind == .success ? Color.green : Color.orange
     let symbol = feedback.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
 
-    HStack(alignment: .top, spacing: 8) {
-      Image(systemName: symbol)
-        .foregroundStyle(accent)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(feedback.title)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.primary)
-          .lineLimit(1)
-        Text(feedback.detail)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(3)
-        if let fileName = feedback.fileName {
-          Text(fileName)
-            .font(.caption2)
-            .foregroundStyle(accent)
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .top, spacing: 8) {
+        Image(systemName: symbol)
+          .foregroundStyle(accent)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(feedback.title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
             .lineLimit(1)
-        }
-        if let tokenCount = feedback.tokenCount {
-          let formatter = NumberFormatter()
-          let _ = formatter.numberStyle = .decimal
-          let _ = formatter.groupingSeparator = ","
-          let formatted = formatter.string(from: NSNumber(value: tokenCount)) ?? "\(tokenCount)"
-          Text("~\(formatted) tokens")
+          Text(feedback.detail)
             .font(.caption2)
-            .foregroundStyle(accent)
-            .lineLimit(1)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+          if let fileName = feedback.fileName {
+            Text(fileName)
+              .font(.caption2)
+              .foregroundStyle(accent)
+              .lineLimit(1)
+          }
+          if let tokenLabel = formatTokenEstimateLabel(feedback.tokenCount) {
+            Text(tokenLabel)
+              .font(.caption2)
+              .foregroundStyle(accent)
+              .lineLimit(1)
+          }
         }
+        Spacer(minLength: 0)
       }
-      Spacer(minLength: 0)
+
+      HStack(spacing: 6) {
+        Button("Copy") {
+          model.copyFeedbackCaptureToClipboard()
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.mini)
+        .disabled(feedback.fileURL == nil)
+
+        Button("Open") {
+          model.openFeedbackCaptureFile()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+        .disabled(feedback.fileURL == nil)
+
+        Button("Dismiss") {
+          model.dismissCaptureFeedback()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+
+        Spacer(minLength: 0)
+      }
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 6)
@@ -2083,6 +2211,6 @@ struct ContextGrabberHostApp: App {
   }
 }
 
-private func retentionMenuOptionLabel(valueLabel: String, isSelected: Bool) -> String {
+func checkmarkMenuOptionLabel(valueLabel: String, isSelected: Bool) -> String {
   return isSelected ? "✓ \(valueLabel)" : valueLabel
 }
