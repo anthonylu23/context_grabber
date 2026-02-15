@@ -4,10 +4,23 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SAFARI_EXTENSION_DIR="$REPO_ROOT/packages/extension-safari"
 CONTAINER_PROJECT_ROOT="$REPO_ROOT/apps/safari-container"
-TMP_BUNDLE_DIR="${CONTEXT_GRABBER_SAFARI_TMP_BUNDLE_DIR:-/tmp/context-grabber-safari-web-extension-bundle}"
+if [[ -n "${CONTEXT_GRABBER_SAFARI_TMP_BUNDLE_DIR:-}" ]]; then
+  TMP_BUNDLE_DIR="$CONTEXT_GRABBER_SAFARI_TMP_BUNDLE_DIR"
+  MANAGED_TMP_BUNDLE_DIR=0
+else
+  TMP_BUNDLE_DIR="$(mktemp -d /tmp/context-grabber-safari-web-extension-bundle.XXXXXX)"
+  MANAGED_TMP_BUNDLE_DIR=1
+fi
 APP_NAME="${CONTEXT_GRABBER_SAFARI_APP_NAME:-ContextGrabberSafari}"
 BUNDLE_ID="${CONTEXT_GRABBER_SAFARI_BUNDLE_ID:-com.contextgrabber.ContextGrabberSafari}"
 ICONS_DIR="$SAFARI_EXTENSION_DIR/assets/icons"
+
+cleanup() {
+  if [[ "$MANAGED_TMP_BUNDLE_DIR" -eq 1 && -d "$TMP_BUNDLE_DIR" ]]; then
+    rm -rf "$TMP_BUNDLE_DIR"
+  fi
+}
+trap cleanup EXIT
 
 if ! command -v bun >/dev/null 2>&1; then
   echo "bun is required but was not found on PATH." >&2
@@ -23,7 +36,9 @@ echo "[safari-container] building Safari extension runtime artifacts"
 bun run --cwd "$SAFARI_EXTENSION_DIR" build
 
 echo "[safari-container] preparing temporary WebExtension bundle at: $TMP_BUNDLE_DIR"
-rm -rf "$TMP_BUNDLE_DIR"
+if [[ "$MANAGED_TMP_BUNDLE_DIR" -eq 0 ]]; then
+  rm -rf "$TMP_BUNDLE_DIR"
+fi
 mkdir -p "$TMP_BUNDLE_DIR"
 cp "$SAFARI_EXTENSION_DIR/manifest.json" "$TMP_BUNDLE_DIR/manifest.json"
 cp -R "$SAFARI_EXTENSION_DIR/dist" "$TMP_BUNDLE_DIR/dist"
