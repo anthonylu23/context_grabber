@@ -85,6 +85,32 @@ const resolveSourceMode = (): SafariSourceMode => {
   return "auto";
 };
 
+const hasConfiguredRuntimePayload = (): boolean => {
+  const inlinePayload = process.env.CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD;
+  const payloadPath = process.env.CONTEXT_GRABBER_SAFARI_RUNTIME_PAYLOAD_PATH;
+  return Boolean(
+    (inlinePayload && inlinePayload.length > 0) || (payloadPath && payloadPath.length > 0),
+  );
+};
+
+const errorReason = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+};
+
+const buildAutoSourceFailureMessage = (liveError: unknown, runtimeError?: unknown): string => {
+  const liveMessage = errorReason(liveError);
+  if (runtimeError === undefined) {
+    return `Auto source failed during live extraction: ${liveMessage}`;
+  }
+
+  const runtimeMessage = errorReason(runtimeError);
+  return `Auto source failed. Live extraction error: ${liveMessage}. Runtime fallback error: ${runtimeMessage}`;
+};
+
 const resolveCaptureSource = async (
   hostRequest: HostRequestMessage,
 ): Promise<SafariExtractionInput> => {
@@ -123,15 +149,18 @@ const resolveCaptureSource = async (
     return fromFixture();
   }
 
+  const runtimeConfigured = hasConfiguredRuntimePayload();
   try {
-    return await fromRuntime();
-  } catch (runtimeError) {
+    return fromLive();
+  } catch (liveError) {
+    if (!runtimeConfigured) {
+      throw new Error(buildAutoSourceFailureMessage(liveError));
+    }
+
     try {
-      return fromLive();
-    } catch (liveError) {
-      throw new Error(
-        `Auto source failed. Runtime error: ${runtimeError instanceof Error ? runtimeError.message : String(runtimeError)}. Live error: ${liveError instanceof Error ? liveError.message : String(liveError)}. Use CONTEXT_GRABBER_SAFARI_SOURCE=fixture for deterministic fixture capture.`,
-      );
+      return await fromRuntime();
+    } catch (runtimeError) {
+      throw new Error(buildAutoSourceFailureMessage(liveError, runtimeError));
     }
   }
 };
