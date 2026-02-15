@@ -21,6 +21,19 @@ const createFakeOsaScriptBinary = async (stdoutFilePath: string): Promise<string
   return binaryPath;
 };
 
+const createWrappedJsonOsaScriptBinary = async (wrappedPayloadPath: string): Promise<string> => {
+  const dir = await mkdtemp(join(tmpdir(), "context-grabber-safari-osa-wrapped-"));
+  const binaryPath = join(dir, "wrapped-osascript.sh");
+
+  await writeFile(
+    binaryPath,
+    ["#!/bin/sh", `cat "${wrappedPayloadPath}"`, "exit 0", ""].join("\n"),
+    "utf8",
+  );
+  await chmod(binaryPath, 0o755);
+  return binaryPath;
+};
+
 describe("safari active-tab extraction helpers", () => {
   it("sanitizes raw snapshots into Safari extraction payloads", () => {
     const payload = toSafariExtractionInput(
@@ -103,6 +116,39 @@ describe("safari active-tab extraction helpers", () => {
       await rm(fixturePath, { force: true });
       if (fakeOsaBinary) {
         await rm(dirname(fakeOsaBinary), { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("decodes wrapped JSON string payloads from osascript output", async () => {
+    const wrappedPath = join(tmpdir(), `context-grabber-safari-wrapped-${Date.now()}.json`);
+    let wrappedBinary: string | undefined;
+    try {
+      await writeFile(
+        wrappedPath,
+        JSON.stringify(
+          JSON.stringify({
+            url: "https://example.com/safari-wrapped",
+            title: "Safari Wrapped JSON",
+            fullText: "Wrapped output.",
+            headings: [],
+            links: [],
+          }),
+        ),
+        "utf8",
+      );
+      wrappedBinary = await createWrappedJsonOsaScriptBinary(wrappedPath);
+      const payload = extractActiveTabContextFromSafari({
+        includeSelectionText: false,
+        osascriptBinary: wrappedBinary,
+      });
+
+      expect(payload.title).toBe("Safari Wrapped JSON");
+      expect(payload.url).toBe("https://example.com/safari-wrapped");
+    } finally {
+      await rm(wrappedPath, { force: true });
+      if (wrappedBinary) {
+        await rm(dirname(wrappedBinary), { recursive: true, force: true });
       }
     }
   });
