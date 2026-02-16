@@ -48,6 +48,7 @@ public func resolveEffectiveFrontmostApp(
 
 public final class HostLogger: @unchecked Sendable {
   private let logURL: URL
+  private let lock = NSLock()
 
   public init() {
     let baseURL = Self.appSupportBaseURL()
@@ -69,6 +70,9 @@ public final class HostLogger: @unchecked Sendable {
     guard let data = line.data(using: .utf8) else {
       return
     }
+
+    lock.lock()
+    defer { lock.unlock() }
 
     if !FileManager.default.fileExists(atPath: logURL.path) {
       FileManager.default.createFile(atPath: logURL.path, contents: data)
