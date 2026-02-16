@@ -29,7 +29,7 @@ func (m mockBunRunner) Run(
 func TestCaptureBrowserPassesTargetAndSourceToBridgeScript(t *testing.T) {
 	tempRoot := t.TempDir()
 	mustWriteExecutableFile(t, filepath.Join(tempRoot, "packages", "shared-types", "package.json"), "{}")
-	mustWriteExecutableFile(t, filepath.Join(tempRoot, "cli", "internal", "bridge", "browser_capture.ts"), "// script")
+	mustWriteExecutableFile(t, filepath.Join(tempRoot, "cgrab", "internal", "bridge", "browser_capture.ts"), "// script")
 	bunPath := filepath.Join(tempRoot, "bin", "bun")
 	mustWriteExecutableFile(t, bunPath, "#!/bin/sh\necho bun\n")
 

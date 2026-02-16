@@ -11,6 +11,8 @@
 - `CONTEXT_GRABBER_BROWSER_TARGET`: force capture target for `capture --focused` (`safari` or `chrome`).
 - `CONTEXT_GRABBER_OSASCRIPT_BIN`: override AppleScript binary path for `list tabs` / `list apps`.
 - `CONTEXT_GRABBER_HOST_BIN`: override `ContextGrabberHost` binary path used for desktop-capture capability checks and subprocess invocation.
+- `CONTEXT_GRABBER_APP_BUNDLE_PATH`: override app bundle path used by browser capture auto-launch (default: `/Applications/ContextGrabber.app`).
+- `CONTEXT_GRABBER_CLI_HOME`: override `cgrab` storage home (default: `~/contextgrabber`).
 
 Outside-repo notes for global `cgrab` usage:
 

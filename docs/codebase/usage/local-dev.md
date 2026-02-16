@@ -70,10 +70,27 @@ bun test --cwd packages/extension-chrome
 
 The TS companion CLI has been removed. The Go CLI under `cgrab/` now supports list/capture/doctor/config/docs.
 
+### Rebuild local CLI binary
+
 ```bash
 cd /path/to/context_grabber/cgrab
-go test ./...
 go build .
+./cgrab --help
+```
+
+Use `./cgrab ...` when running from this directory.
+
+### Run without rebuilding
+
+```bash
+cd /path/to/context_grabber/cgrab
+go run . --help
+```
+
+### Typical command usage
+
+```bash
+cd /path/to/context_grabber/cgrab
 
 # inventory commands
 ./cgrab list
@@ -104,6 +121,8 @@ Notes:
 - Capture output default: `~/contextgrabber/captures/` (or configured subdir under `~/contextgrabber`).
 - Config file: `~/contextgrabber/config.json`.
 - Optional override for storage home: `CONTEXT_GRABBER_CLI_HOME=/absolute/path`.
+- Browser capture auto-launches `ContextGrabber.app` when not running.
+- Optional override for app bundle launch path: `CONTEXT_GRABBER_APP_BUNDLE_PATH=/absolute/path/to/ContextGrabber.app`.
 
 ## Install `cgrab` on PATH (dev)
 
@@ -130,6 +149,15 @@ cgrab --version
 cgrab doctor --format json
 ```
 
+When you change CLI code and want the global command updated:
+
+```bash
+cd /path/to/context_grabber/cgrab
+go build .
+cd /path/to/context_grabber
+./scripts/install-cli.sh
+```
+
 Outside the repo tree:
 - desktop capture host resolution order is: `CONTEXT_GRABBER_HOST_BIN` -> repo debug host (`apps/macos-host/.build/debug/ContextGrabberHost`) -> installed app fallback (`/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`).
 - browser capture + browser bridge diagnostics still rely on repo assets (`packages/extension-*`), so set `CONTEXT_GRABBER_REPO_ROOT` for those workflows.
@@ -146,7 +174,7 @@ Optional override if desktop host binary is elsewhere:
 export CONTEXT_GRABBER_HOST_BIN="/absolute/path/to/ContextGrabberHost"
 ```
 
-`go run . <command>` still works for quick local iteration.
+`go run . <command>` still works for quick local iteration from `cgrab/`.
 
 ## Browser Source Defaults
 - Safari and Chrome CLI source `auto` now prefer AppleScript live extraction first, with runtime payload fallback only when runtime payload env vars are configured.

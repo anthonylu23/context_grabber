@@ -18,14 +18,15 @@ import (
 )
 
 var (
-	listTabsFunc            = osascript.ListTabs
-	listAppsFunc            = osascript.ListApps
-	activateTabFunc         = osascript.ActivateTab
-	activateAppByNameFunc   = osascript.ActivateAppByName
-	activateAppByBundleFunc = osascript.ActivateAppByBundleID
-	captureBrowserFunc      = bridge.CaptureBrowser
-	captureDesktopFunc      = bridge.CaptureDesktop
-	nowFunc                 = time.Now
+	listTabsFunc             = osascript.ListTabs
+	listAppsFunc             = osascript.ListApps
+	activateTabFunc          = osascript.ActivateTab
+	activateAppByNameFunc    = osascript.ActivateAppByName
+	activateAppByBundleFunc  = osascript.ActivateAppByBundleID
+	captureBrowserFunc       = bridge.CaptureBrowser
+	captureDesktopFunc       = bridge.CaptureDesktop
+	ensureHostAppRunningFunc = bridge.EnsureHostAppRunning
+	nowFunc                  = time.Now
 )
 
 func newCaptureCommand(global *globalOptions) *cobra.Command {
@@ -203,6 +204,14 @@ func (r captureRequest) validate() (captureMode, error) {
 }
 
 func runBrowserCapture(ctx context.Context, request captureRequest) ([]byte, error) {
+	if _, launchErr := ensureHostAppRunningFunc(ctx); launchErr != nil {
+		fmt.Fprintf(
+			os.Stderr,
+			"warning: unable to auto-launch ContextGrabber app before browser capture (%v)\n",
+			launchErr,
+		)
+	}
+
 	targetOverride, envErr := resolveBrowserTargetOverrideEnv()
 	if envErr != nil {
 		return nil, envErr

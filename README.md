@@ -24,8 +24,44 @@ Native bridge `auto` source mode now defaults to live extraction. Runtime payloa
 
 The Go CLI lives under `cgrab/`:
 
+#### Rebuild and run from repo
+
 ```bash
 cd cgrab && go build .
+./cgrab --help
+```
+
+Use `./cgrab ...` from `cgrab/` when running the local binary you just built.
+
+#### Run without building (dev iteration)
+
+```bash
+cd cgrab
+go run . --help
+```
+
+#### Install globally on PATH
+
+```bash
+# from repo root
+./scripts/install-cli.sh
+```
+
+After install, run commands as `cgrab ...` from any directory.
+
+#### Rebuild + reinstall after CLI code changes
+
+```bash
+cd cgrab && go build .
+cd ..
+./scripts/install-cli.sh
+```
+
+Verify:
+
+```bash
+command -v cgrab
+cgrab --version
 ```
 
 | Command | Description |
@@ -63,24 +99,11 @@ cgrab config show
 cgrab config set-output-dir projects/client-a
 ```
 
-`go run . ...` from `cgrab/` also works during development. `go install` from the directory installs as `cgrab` automatically.
+`go run . ...` from `cgrab/` also works during development. `go install` from `cgrab/` installs as `cgrab` as well.
 
 By default, `cgrab capture` saves outputs under `~/contextgrabber/captures/` (or your configured subdirectory).
 Use `CONTEXT_GRABBER_CLI_HOME=/absolute/path` to override the base storage folder.
-
-#### Global install
-
-```bash
-# from the repo root
-./scripts/install-cli.sh
-```
-
-Verify:
-
-```bash
-cgrab --version
-cgrab doctor
-```
+For browser capture, `cgrab` attempts to auto-launch `ContextGrabber.app` before invoking extension bridge capture.
 
 #### Outside the repo tree
 

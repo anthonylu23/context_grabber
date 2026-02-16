@@ -638,6 +638,7 @@ Lightweight settings popover or small window accessible from the menu:
 3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 5. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
+6. Browser capture host-first follow-up — add explicit host IPC request/response path so `cgrab` can request extension capture through the running menu bar app before Bun direct fallback.
 
 ## Progress Notes (Milestone G CLI Rebuild)
 56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
@@ -680,3 +681,8 @@ Lightweight settings popover or small window accessible from the menu:
   - `bridge.CaptureDesktop` no longer hard-fails on repo-root lookup when installed host fallback is available
   - docs updated for PATH setup, verification flow, and outside-repo behavior split (desktop fallback vs browser repo requirements)
   - validation passed: `go test ./...`, install script smoke test, and outside-repo doctor behavior checks
+64. Browser-capture host orchestration hardening is now implemented (phase 1):
+  - `cgrab capture` now attempts to auto-launch `ContextGrabber.app` before browser-extension capture when the host app is not running
+  - app launch path is configurable via `CONTEXT_GRABBER_APP_BUNDLE_PATH` (default `/Applications/ContextGrabber.app`)
+  - browser bridge runtime path lookup now points to `cgrab/internal/bridge/browser_capture.ts` (repo-rename follow-up)
+  - new Go unit coverage added for host app auto-launch readiness behavior

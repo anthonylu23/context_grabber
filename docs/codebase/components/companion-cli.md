@@ -49,6 +49,7 @@ The new CLI is a Go binary (`cgrab/`) that orchestrates capture via subprocesses
   - if `--file` is omitted for `capture`, output is saved to `~/contextgrabber/<configured-subdir>/`
   - config is persisted at `~/contextgrabber/config.json`
   - `CONTEXT_GRABBER_CLI_HOME` can override the base storage folder (must be an absolute path)
+  - browser capture attempts to auto-launch `ContextGrabber.app` before extension bridge capture
 - `doctor` checks:
   - osascript availability
   - bun availability
@@ -79,6 +80,14 @@ The new CLI is a Go binary (`cgrab/`) that orchestrates capture via subprocesses
 
 ## Global Trigger (dev setup)
 
+Build local binary:
+
+```bash
+cd /path/to/context_grabber/cgrab
+go build .
+./cgrab --help
+```
+
 Install `cgrab` into a PATH directory:
 
 ```bash
@@ -92,6 +101,15 @@ Verify:
 command -v cgrab
 cgrab --version
 cgrab doctor --format json
+```
+
+After CLI code changes, rebuild + reinstall to refresh global `cgrab`:
+
+```bash
+cd /path/to/context_grabber/cgrab
+go build .
+cd /path/to/context_grabber
+./scripts/install-cli.sh
 ```
 
 Current limitation: desktop host resolution order is `CONTEXT_GRABBER_HOST_BIN` -> repo debug host -> `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`; browser bridge workflows still rely on repo assets unless `CONTEXT_GRABBER_REPO_ROOT` is set.

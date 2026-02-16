@@ -9,31 +9,33 @@ import (
 	"strings"
 
 	"github.com/anthonylu23/context_grabber/cgrab/internal/config"
+	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
 
 const (
 	defaultCardWidth = 56
-	minCardWidth     = 40
+	minCardWidth     = 20
 	maxCardWidth     = 80
+	borderedCardMin  = 52
 )
 
 func detectCardWidth(out io.Writer) int {
 	// Prefer the actual output stream (e.g. when help goes to stdout)
 	if f, ok := out.(*os.File); ok {
-		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w >= minCardWidth {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
 			return clampWidth(w)
 		}
 	}
 	// Fallback: try stdout, then stderr
 	for _, f := range []*os.File{os.Stdout, os.Stderr} {
-		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w >= minCardWidth {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
 			return clampWidth(w)
 		}
 	}
 	// Fallback: COLUMNS env (set by many shells)
 	if s := os.Getenv("COLUMNS"); s != "" {
-		if w, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && w >= minCardWidth {
+		if w, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && w > 0 {
 			return clampWidth(w)
 		}
 	}
@@ -41,6 +43,9 @@ func detectCardWidth(out io.Writer) int {
 }
 
 func clampWidth(w int) int {
+	if w < minCardWidth {
+		return minCardWidth
+	}
 	if w > maxCardWidth {
 		return maxCardWidth
 	}
@@ -48,44 +53,63 @@ func clampWidth(w int) int {
 }
 
 func buildProductCard(width int) string {
+	useBorder := width >= borderedCardMin
+	contentWidth := width
+	if useBorder {
+		contentWidth = width - 4
+	}
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
 	baseDir := "—"
 	captureDir := "—"
 
 	settings, err := config.LoadSettings()
 	if err == nil {
 		if bd, e := config.ResolveBaseDir(); e == nil {
-			baseDir = shortenPath(bd, width)
+			baseDir = shortenPath(bd, valueWidth(contentWidth))
 		}
 		if _, cd, e := config.EnsureBaseLayout(settings); e == nil {
-			captureDir = shortenPath(cd, width)
+			captureDir = shortenPath(cd, valueWidth(contentWidth))
 		}
 	}
 
 	title := "ContextGrabber 🤏"
 	lines := []string{
+		title,
 		"",
 		fmt.Sprintf("base_dir    %s", baseDir),
 		fmt.Sprintf("output_dir  %s", captureDir),
 		fmt.Sprintf("version     %s", Version),
 	}
 
-	pad := width - 4
-	var b strings.Builder
-	b.WriteString("╭" + strings.Repeat("─", width-2) + "╮\n")
-	b.WriteString("│ " + padRight(title, pad) + " │\n")
-	b.WriteString("│" + strings.Repeat(" ", width-2) + "│\n")
+	lineStyle := lipgloss.NewStyle().Width(contentWidth)
+	formattedLines := make([]string, 0, len(lines))
 	for _, line := range lines {
-		b.WriteString("│ " + padRight(line, pad) + " │\n")
+		formattedLines = append(formattedLines, lineStyle.Render(line))
 	}
-	b.WriteString("╰" + strings.Repeat("─", width-2) + "╯")
-	return b.String()
+
+	if !useBorder {
+		return strings.Join(formattedLines, "\n")
+	}
+
+	cardStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, 1)
+	return cardStyle.Render(strings.Join(formattedLines, "\n"))
 }
 
-func shortenPath(p string, cardWidth int) string {
-	maxLen := cardWidth - 14
+func valueWidth(contentWidth int) int {
+	rowKeyWidth := lipgloss.Width("output_dir  ")
+	maxLen := contentWidth - rowKeyWidth
 	if maxLen < 4 {
 		maxLen = 4
 	}
+	return maxLen
+}
+
+func shortenPath(p string, maxLen int) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return truncate(p, maxLen)
@@ -96,33 +120,22 @@ func shortenPath(p string, cardWidth int) string {
 	return truncate(p, maxLen)
 }
 
-func displayWidth(s string) int {
-	w := 0
-	for _, r := range s {
-		if r > '\U0000FFFF' {
-			w += 2
-		} else {
-			w++
-		}
-	}
-	return w
-}
-
 func truncate(s string, max int) string {
-	if displayWidth(s) <= max {
+	if max <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= max {
 		return s
+	}
+	if max <= 3 {
+		return strings.Repeat(".", max)
 	}
 	runes := []rune(s)
-	for displayWidth(string(runes))+3 > max && len(runes) > 0 {
+	for len(runes) > 0 && lipgloss.Width(string(runes))+3 > max {
 		runes = runes[:len(runes)-1]
 	}
-	return string(runes) + "..."
-}
-
-func padRight(s string, width int) string {
-	dw := displayWidth(s)
-	if dw >= width {
-		return s
+	if len(runes) == 0 {
+		return strings.Repeat(".", 3)
 	}
-	return s + strings.Repeat(" ", width-dw)
+	return string(runes) + "..."
 }

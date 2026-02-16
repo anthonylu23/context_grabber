@@ -31,6 +31,7 @@ The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI 
   - styled no-color help/usage layout
   - `docs` command (open GitHub repo with URL fallback)
   - `config` command for managed capture output path under `~/contextgrabber`
+  - browser capture now auto-launches `ContextGrabber.app` when it is not already running
 - Phase 4 deferred: MCP server support has been removed from the CLI for now.
 - Remaining Milestone G work: packaging polish, CLI UX hardening, and docs closeout.
 
@@ -142,6 +143,7 @@ Environment variables:
   CONTEXT_GRABBER_BROWSER_TARGET   Force browser target (safari|chrome)
   CONTEXT_GRABBER_HOST_BIN         Override ContextGrabberHost binary path (for CLI mode capture)
   CONTEXT_GRABBER_CLI_HOME         Override CLI storage home (default: ~/contextgrabber)
+  CONTEXT_GRABBER_APP_BUNDLE_PATH  Override ContextGrabber.app path for browser-capture auto-launch
 ```
 
 ### Capture Flow: `capture --tab`

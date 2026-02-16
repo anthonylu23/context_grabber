@@ -100,9 +100,14 @@ func TestCaptureRequestValidateRejectsMixedSelectors(t *testing.T) {
 
 func TestCaptureBrowserWithFallbackUsesSecondTargetOnUnavailable(t *testing.T) {
 	previousCaptureBrowserFunc := captureBrowserFunc
+	previousEnsureHostAppRunningFunc := ensureHostAppRunningFunc
 	t.Cleanup(func() {
 		captureBrowserFunc = previousCaptureBrowserFunc
+		ensureHostAppRunningFunc = previousEnsureHostAppRunningFunc
 	})
+	ensureHostAppRunningFunc = func(context.Context) (bool, error) {
+		return false, nil
+	}
 
 	captureBrowserFunc = func(
 		_ context.Context,
@@ -141,6 +146,45 @@ func TestCaptureBrowserWithFallbackUsesSecondTargetOnUnavailable(t *testing.T) {
 	}
 	if attempt.ExtractionMethod != "browser_extension" {
 		t.Fatalf("expected browser_extension extraction, got %q", attempt.ExtractionMethod)
+	}
+}
+
+func TestRunBrowserCaptureContinuesWhenHostAppAutolaunchFails(t *testing.T) {
+	previousCaptureBrowserFunc := captureBrowserFunc
+	previousEnsureHostAppRunningFunc := ensureHostAppRunningFunc
+	t.Cleanup(func() {
+		captureBrowserFunc = previousCaptureBrowserFunc
+		ensureHostAppRunningFunc = previousEnsureHostAppRunningFunc
+	})
+
+	ensureHostAppRunningFunc = func(context.Context) (bool, error) {
+		return false, os.ErrNotExist
+	}
+	captureBrowserFunc = func(
+		_ context.Context,
+		_ bridge.BrowserTarget,
+		_ bridge.BrowserCaptureSource,
+		_ int,
+		_ bridge.BrowserCaptureMetadata,
+	) (bridge.BrowserCaptureAttempt, error) {
+		return bridge.BrowserCaptureAttempt{
+			ExtractionMethod: "browser_extension",
+			Warnings:         []string{},
+			Markdown:         "# Browser Capture\n",
+		}, nil
+	}
+
+	rendered, err := runBrowserCapture(context.Background(), captureRequest{
+		focused:      true,
+		method:       "auto",
+		timeoutMs:    1200,
+		outputFormat: formatMarkdown,
+	})
+	if err != nil {
+		t.Fatalf("runBrowserCapture returned error: %v", err)
+	}
+	if string(rendered) != "# Browser Capture\n" {
+		t.Fatalf("unexpected rendered output: %q", string(rendered))
 	}
 }
 

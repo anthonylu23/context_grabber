@@ -118,7 +118,7 @@ func CaptureBrowser(
 		return BrowserCaptureAttempt{}, fmt.Errorf("bun not found; browser capture is unavailable")
 	}
 
-	scriptPath := filepath.Join(repoRoot, "cli", "internal", "bridge", "browser_capture.ts")
+	scriptPath := filepath.Join(repoRoot, "cgrab", "internal", "bridge", "browser_capture.ts")
 	if _, statErr := os.Stat(scriptPath); statErr != nil {
 		return BrowserCaptureAttempt{}, fmt.Errorf("browser capture bridge script not found: %s", scriptPath)
 	}
