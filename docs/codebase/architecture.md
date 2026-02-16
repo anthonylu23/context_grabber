@@ -6,4 +6,5 @@ Use the handbook pages below for full architecture details:
 - Overview: `docs/codebase/architecture/overview.md`
 - Capture pipeline: `docs/codebase/architecture/capture-pipeline.md`
 - Repository map: `docs/codebase/architecture/repository-map.md`
+- Architecture review: `docs/codebase/architecture/review.md`
 - Handbook index: `docs/codebase/README.md`

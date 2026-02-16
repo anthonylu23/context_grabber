@@ -11,6 +11,7 @@ This handbook is the canonical technical reference for Context Grabber.
 - System overview: `docs/codebase/architecture/overview.md`
 - Capture pipeline details: `docs/codebase/architecture/capture-pipeline.md`
 - Repository map: `docs/codebase/architecture/repository-map.md`
+- Architecture review: `docs/codebase/architecture/review.md`
 
 ## Components
 - macOS host app: `docs/codebase/components/macos-host.md`
