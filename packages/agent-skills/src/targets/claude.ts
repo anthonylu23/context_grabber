@@ -1,8 +1,9 @@
-import { type InstallResult, type InstallScope, SKILL_FILES } from "../types.js";
+import type { InstallResult, InstallScope } from "../types.js";
 import {
   copySkillFiles,
   ensureSymlink,
   globalSkillRoot,
+  hasOtherGlobalSymlinks,
   removeSkillFiles,
   removeSymlink,
   resolveTargetDir,
@@ -40,7 +41,7 @@ export function installClaude(scope: InstallScope, cwd: string): InstallResult {
  */
 export function uninstallClaude(scope: InstallScope, cwd: string): InstallResult {
   const symlinks: string[] = [];
-  let paths: string[];
+  let paths: string[] = [];
 
   if (scope === "global") {
     const agentDir = resolveTargetDir("claude", "global", cwd);
@@ -48,8 +49,11 @@ export function uninstallClaude(scope: InstallScope, cwd: string): InstallResult
       symlinks.push(agentDir);
     }
 
-    const canonical = globalSkillRoot();
-    paths = removeSkillFiles(canonical);
+    // Only remove canonical files if no other agent symlinks still point to them.
+    if (!hasOtherGlobalSymlinks("claude")) {
+      const canonical = globalSkillRoot();
+      paths = removeSkillFiles(canonical);
+    }
   } else {
     const targetDir = resolveTargetDir("claude", "project", cwd);
     paths = removeSkillFiles(targetDir);

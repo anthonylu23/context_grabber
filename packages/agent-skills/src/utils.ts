@@ -1,4 +1,12 @@
-import { cpSync, existsSync, mkdirSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type AgentTarget, type InstallScope, SKILL_FILES } from "./types.js";
@@ -76,16 +84,18 @@ export function copySkillFiles(sourceDir: string, targetDir: string): string[] {
  * If it exists as something else, remove and recreate.
  */
 export function ensureSymlink(targetPath: string, linkPath: string): void {
-  if (existsSync(linkPath)) {
-    try {
+  try {
+    const stat = lstatSync(linkPath);
+    if (stat.isSymbolicLink()) {
       const current = readlinkSync(linkPath);
       if (resolve(current) === resolve(targetPath)) {
         return; // Already correct.
       }
-    } catch {
-      // Not a symlink — remove it.
     }
+    // Wrong target or not a symlink — remove.
     rmSync(linkPath, { recursive: true, force: true });
+  } catch {
+    // Path doesn't exist — proceed to create.
   }
 
   mkdirSync(dirname(linkPath), { recursive: true });
@@ -95,8 +105,11 @@ export function ensureSymlink(targetPath: string, linkPath: string): void {
 /**
  * Remove installed skill files from a target directory.
  * Returns the list of removed file paths.
+ *
+ * @param skipDirCleanup If true, don't remove the target directory itself after
+ *   removing files. Used for Cursor's shared `.cursor/rules/` directory.
  */
-export function removeSkillFiles(targetDir: string): string[] {
+export function removeSkillFiles(targetDir: string, skipDirCleanup = false): string[] {
   const removed: string[] = [];
 
   for (const relPath of SKILL_FILES) {
@@ -117,8 +130,8 @@ export function removeSkillFiles(targetDir: string): string[] {
     }
   }
 
-  // Clean up the target directory itself if empty (only for non-cursor agents).
-  if (existsSync(targetDir) && !targetDir.endsWith("rules")) {
+  // Clean up the target directory itself if empty, unless caller opted out.
+  if (!skipDirCleanup && existsSync(targetDir)) {
     try {
       rmSync(targetDir, { recursive: false });
     } catch {
@@ -133,16 +146,50 @@ export function removeSkillFiles(targetDir: string): string[] {
  * Remove a symlink if it exists and points to globalSkillRoot().
  */
 export function removeSymlink(linkPath: string): boolean {
-  if (!existsSync(linkPath)) return false;
-
   try {
+    const stat = lstatSync(linkPath);
+    if (!stat.isSymbolicLink()) return false;
+
     const target = readlinkSync(linkPath);
     if (resolve(target) === resolve(globalSkillRoot())) {
       rmSync(linkPath);
       return true;
     }
   } catch {
-    // Not a symlink — don't remove.
+    // Path doesn't exist or can't be read — nothing to remove.
+  }
+
+  return false;
+}
+
+/** All agents that use global symlinks (not Cursor — it has no global symlink). */
+const SYMLINK_AGENTS: AgentTarget[] = ["claude", "opencode"];
+
+/**
+ * Check whether any agent other than `excludeAgent` still has a global symlink
+ * pointing to the canonical skill root.
+ *
+ * Used during global uninstall to decide whether canonical files can be safely
+ * removed: if another agent still references them, we must leave them in place.
+ */
+export function hasOtherGlobalSymlinks(excludeAgent: AgentTarget): boolean {
+  const canonical = globalSkillRoot();
+
+  for (const agent of SYMLINK_AGENTS) {
+    if (agent === excludeAgent) continue;
+
+    const agentDir = resolveTargetDir(agent, "global", "");
+    try {
+      const stat = lstatSync(agentDir);
+      if (!stat.isSymbolicLink()) continue;
+
+      const target = readlinkSync(agentDir);
+      if (resolve(target) === resolve(canonical)) {
+        return true; // Another agent still points here.
+      }
+    } catch {
+      // Doesn't exist or not a symlink — skip.
+    }
   }
 
   return false;

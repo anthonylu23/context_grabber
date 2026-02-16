@@ -3,6 +3,7 @@ import {
   copySkillFiles,
   ensureSymlink,
   globalSkillRoot,
+  hasOtherGlobalSymlinks,
   removeSkillFiles,
   removeSymlink,
   resolveTargetDir,
@@ -40,7 +41,7 @@ export function installOpenCode(scope: InstallScope, cwd: string): InstallResult
  */
 export function uninstallOpenCode(scope: InstallScope, cwd: string): InstallResult {
   const symlinks: string[] = [];
-  let paths: string[];
+  let paths: string[] = [];
 
   if (scope === "global") {
     const agentDir = resolveTargetDir("opencode", "global", cwd);
@@ -48,8 +49,11 @@ export function uninstallOpenCode(scope: InstallScope, cwd: string): InstallResu
       symlinks.push(agentDir);
     }
 
-    const canonical = globalSkillRoot();
-    paths = removeSkillFiles(canonical);
+    // Only remove canonical files if no other agent symlinks still point to them.
+    if (!hasOtherGlobalSymlinks("opencode")) {
+      const canonical = globalSkillRoot();
+      paths = removeSkillFiles(canonical);
+    }
   } else {
     const targetDir = resolveTargetDir("opencode", "project", cwd);
     paths = removeSkillFiles(targetDir);

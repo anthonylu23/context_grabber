@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { installForAgent, uninstallForAgent } from "../src/dispatch.js";
@@ -8,6 +17,7 @@ import { type AgentTarget, SKILL_FILES } from "../src/types.js";
 import {
   copySkillFiles,
   ensureSymlink,
+  globalSkillRoot,
   removeSkillFiles,
   removeSymlink,
   resolveTargetDir,
@@ -149,6 +159,23 @@ describe("ensureSymlink", () => {
 
     expect(resolve(readlinkSync(link))).toBe(resolve(newTarget));
   });
+
+  it("replaces a broken (dangling) symlink", () => {
+    const brokenTarget = join(testDir, "does-not-exist");
+    const newTarget = join(testDir, "new");
+    mkdirSync(newTarget, { recursive: true });
+    const link = join(testDir, "link");
+
+    // Create a dangling symlink manually.
+    symlinkSync(brokenTarget, link);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(existsSync(link)).toBe(false); // Broken — target doesn't exist.
+
+    // ensureSymlink should handle this and replace it.
+    ensureSymlink(newTarget, link);
+
+    expect(resolve(readlinkSync(link))).toBe(resolve(newTarget));
+  });
 });
 
 describe("removeSkillFiles", () => {
@@ -172,6 +199,66 @@ describe("removeSkillFiles", () => {
     const removed = removeSkillFiles(emptyDir);
 
     expect(removed).toHaveLength(0);
+  });
+
+  it("preserves target directory when skipDirCleanup is true", () => {
+    const sourceDir = createFakeSkillSource(testDir);
+    const targetDir = join(testDir, "cursor-rules");
+    copySkillFiles(sourceDir, targetDir);
+
+    // Add an extra file to simulate Cursor's shared rules/ dir.
+    writeFileSync(join(targetDir, "other-rule.mdc"), "other rule");
+
+    const removed = removeSkillFiles(targetDir, true);
+
+    expect(removed).toHaveLength(SKILL_FILES.length);
+    // Target directory should still exist because we opted out of cleanup.
+    expect(existsSync(targetDir)).toBe(true);
+    // The extra file should be untouched.
+    expect(existsSync(join(targetDir, "other-rule.mdc"))).toBe(true);
+  });
+});
+
+describe("removeSymlink", () => {
+  it("removes symlink pointing to globalSkillRoot", () => {
+    const target = globalSkillRoot();
+    mkdirSync(target, { recursive: true });
+    const link = join(testDir, "link");
+    symlinkSync(target, link);
+
+    const removed = removeSymlink(link);
+
+    expect(removed).toBe(true);
+    // lstatSync should throw since the symlink is gone.
+    expect(() => lstatSync(link)).toThrow();
+  });
+
+  it("does not remove symlink pointing elsewhere", () => {
+    const otherTarget = join(testDir, "other");
+    mkdirSync(otherTarget, { recursive: true });
+    const link = join(testDir, "link");
+    symlinkSync(otherTarget, link);
+
+    const removed = removeSymlink(link);
+
+    expect(removed).toBe(false);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  });
+
+  it("handles broken symlink gracefully", () => {
+    const brokenTarget = join(testDir, "does-not-exist");
+    const link = join(testDir, "link");
+    symlinkSync(brokenTarget, link);
+
+    // Should not throw, and should return false (target isn't globalSkillRoot).
+    const removed = removeSymlink(link);
+
+    expect(removed).toBe(false);
+  });
+
+  it("returns false when path does not exist", () => {
+    const result = removeSymlink(join(testDir, "nonexistent"));
+    expect(result).toBe(false);
   });
 });
 
