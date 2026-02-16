@@ -26,11 +26,18 @@ Use one canonical release artifact and multiple distribution channels that point
 
 Target installation layout:
 - `/Applications/ContextGrabber.app`
-- `/usr/local/bin/cgrab` (or architecture-appropriate symlink/shim)
+- `/usr/local/bin/cgrab` — **standalone binary** (not a symlink into the .app bundle)
+
+Decisions finalized:
+- **CLI packaging style**: standalone Go binary installed directly to `/usr/local/bin/`. The Go binary resolves the host at `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost` as a fallback. No symlink means no breakage if the app is relocated.
+- **Version strategy**: semantic versioning starting at `0.1.0`. Single `VERSION` file at repo root consumed by both Swift and Go build scripts. Go CLI injects via `-ldflags`, Swift app via `Info.plist` during staging.
+- **Pkg identifiers**: `com.contextgrabber.pkg` (product), `com.contextgrabber.app` (app component), `com.contextgrabber.cli` (CLI component).
 
 Desktop capture path must preserve the single-binary permission model:
 - CLI desktop capture routes to `ContextGrabberHost --capture ...`
 - keep binary-path behavior stable so Accessibility/Screen Recording grants remain predictable.
+
+Detailed implementation plan: `docs/plans/distribution-packaging-implementation.md`.
 
 ## Distribution Flow
 

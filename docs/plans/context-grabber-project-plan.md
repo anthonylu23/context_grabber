@@ -633,12 +633,20 @@ Lightweight settings popover or small window accessible from the menu:
   - CLI reuses the same pipeline code as the host app with no duplicated capture logic.
 
 ## Next Steps (Implementation Queue)
-1. Distribution + packaging plan execution — ship one macOS installer artifact for app + CLI and wire Brew distribution. See `docs/plans/distribution-packaging-plan.md`.
-2. Milestone G agent integration closeout — add skill manifests/docs for CLI-first workflows.
-3. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
-4. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
-5. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
-6. Browser capture host-first follow-up — add explicit host IPC request/response path so `cgrab` can request extension capture through the running menu bar app before Bun direct fallback.
+
+### Active (in parallel)
+
+1. **Distribution + packaging (Phases 1-3)** — build unsigned `.pkg` installer for app + CLI. Standalone Go binary to `/usr/local/bin/cgrab`, app to `/Applications/ContextGrabber.app`. Semver starting at `0.1.0`. See `docs/plans/distribution-packaging-implementation.md`.
+2. **Agent integration** — skill definition (SKILL.md + references), interactive installer via `npx @context-grabber/agent-skills` and `cgrab skills install`, support for Claude Code / OpenCode / Cursor / Codex. Publish to skills.sh ecosystem. See `docs/plans/agent-integration-plan.md`.
+
+### Queued
+
+3. Distribution Phase 4 — Homebrew Cask (after Phase 3 dogfood is validated). See `docs/plans/distribution-packaging-plan.md`.
+4. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
+5. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
+6. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
+7. Browser capture host-first follow-up — add explicit host IPC request/response path so `cgrab` can request extension capture through the running menu bar app before Bun direct fallback.
+8. Distribution Phase 6 — signing + notarization (requires Apple Developer account).
 
 ## Progress Notes (Milestone G CLI Rebuild)
 56. The Bun/TS companion CLI (`packages/companion-cli`) has been removed in favor of a Go + Swift hybrid architecture:
