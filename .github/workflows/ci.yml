@@ -24,6 +24,28 @@ jobs:
       - name: Run workspace checks
         run: bun run check
 
+      - name: Check skill file sync
+        run: bash scripts/check-skill-sync.sh
+
+  go-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build Go CLI
+        run: go build ./...
+        working-directory: cgrab
+
+      - name: Run Go tests
+        run: go test ./...
+        working-directory: cgrab
+
   swift-host-build:
     runs-on: macos-latest
     steps:
