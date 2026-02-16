@@ -10,7 +10,9 @@
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
 - `packages/agent-skills`: agent skill definition and reference docs for AI coding agents (SKILL.md + CLI reference, output schema, workflow patterns).
 - `packages/companion-cli`: removed.
-- `cgrab`: Go Context Grabber CLI (`list`, `capture`, `doctor`, `config`, `docs`). Directory named `cgrab` so `go install` produces the `cgrab` binary automatically.
+- `cgrab`: Go Context Grabber CLI (`list`, `capture`, `doctor`, `config`, `docs`, `skills`). Directory named `cgrab` so `go install` produces the `cgrab` binary automatically.
+  - `cgrab/internal/skills/`: embedded skill files (`go:embed`) for the CLI fallback installer. Synced copy of `packages/agent-skills/skill/`.
+- `skills/context-grabber`: skills.sh ecosystem discovery directory. Synced copy of `packages/agent-skills/skill/`.
 - `docs`: plans + handbook.
 
 ## macOS Host Source Modules
@@ -29,3 +31,4 @@
 ## Test Locations
 - Swift host tests: `apps/macos-host/Tests/ContextGrabberHostTests/CapturePipelineTests.swift`
 - TS package tests: `packages/*/test/**/*.test.ts`
+- Go CLI tests: `cgrab/cmd/*_test.go`, `cgrab/internal/**/*_test.go`

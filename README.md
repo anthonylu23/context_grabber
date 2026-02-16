@@ -4,17 +4,11 @@ A local-first macOS menu bar app that captures active browser tabs and desktop a
 
 ## Installation & Usage
 
-### Package Installer (Recommended)
-
-Build the `.pkg` installer that installs both the menu bar app and CLI:
+### Homebrew (Recommended)
 
 ```bash
-# Build and stage release artifacts, then assemble .pkg
-STAGING_DIR=$(scripts/release/stage-macos-artifacts.sh)
-scripts/release/build-macos-package.sh "$STAGING_DIR"
-
-# Install (unsigned — right-click → Open to bypass Gatekeeper)
-open .tmp/context-grabber-macos-0.1.0.pkg
+brew tap anthonylu23/context-grabber
+brew install --cask context-grabber
 ```
 
 This installs:
@@ -22,6 +16,19 @@ This installs:
 - **cgrab CLI** → `/usr/local/bin/cgrab`
 
 After install, verify with `cgrab --version` and `cgrab doctor`.
+
+### Direct Download
+
+Download `context-grabber-macos-0.1.0.pkg` from [GitHub Releases](https://github.com/anthonylu23/context_grabber/releases) and open it. Right-click → Open if Gatekeeper blocks (unsigned).
+
+### Build from Source
+
+```bash
+# Build and stage release artifacts, then assemble .pkg
+STAGING_DIR=$(scripts/release/stage-macos-artifacts.sh)
+scripts/release/build-macos-package.sh "$STAGING_DIR"
+open .tmp/context-grabber-macos-0.1.0.pkg
+```
 
 ### Development Setup
 ```bash
@@ -97,6 +104,8 @@ cgrab --version
 | `cgrab config set-output-dir <subdir>` | Set capture output subdirectory |
 | `cgrab doctor` | Run system health checks |
 | `cgrab docs` | Open docs in browser |
+| `cgrab skills install` | Install agent skill definitions |
+| `cgrab skills uninstall` | Remove agent skill definitions |
 
 Examples:
 
@@ -128,6 +137,20 @@ For browser capture, `cgrab` attempts to auto-launch `ContextGrabber.app` before
 
 - Desktop capture host resolution: `CONTEXT_GRABBER_HOST_BIN` env override -> repo debug host -> installed app fallback (`/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`).
 - Browser capture and diagnostics require repo assets — set `CONTEXT_GRABBER_REPO_ROOT=/path/to/context_grabber`.
+
+### Agent Skills
+
+Install skill definitions so AI coding agents (Claude Code, OpenCode, Cursor) can discover and use `cgrab`:
+
+```bash
+# skills.sh ecosystem (recommended)
+npx skills add anthonylu23/context_grabber
+
+# Or via cgrab itself
+cgrab skills install
+```
+
+The skill teaches agents when and how to use `cgrab` for context capture, including the full command reference, output format, and common workflows. See `docs/codebase/usage/agent-workflows.md` for details.
 
 ### Scripts
 | Command | Description |
@@ -165,6 +188,7 @@ The system follows a trigger → routing → capture → render pipeline. Browse
 | Component docs | `docs/codebase/components/` |
 | Local dev | `docs/codebase/usage/local-dev.md` |
 | Environment variables | `docs/codebase/usage/environment-variables.md` |
+| Agent integration | `docs/codebase/usage/agent-workflows.md` |
 | Testing strategy | `docs/codebase/operations/testing.md` |
 | Limits & defaults | `docs/codebase/reference/limits-and-defaults.md` |
 | Project plan | `docs/plans/context-grabber-project-plan.md` |
@@ -207,11 +231,14 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 │   └── codebase            # Technical handbook
 ├── cgrab                   # Go CLI — `go install` produces `cgrab` binary
 ├── packages
+│   ├── agent-skills        # Agent skill definitions + interactive installer
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension
 │   ├── extension-shared    # Shared extension transport, payload, and sanitization
 │   ├── native-host-bridge  # Native messaging bridge
 │   └── shared-types        # Shared contracts and types
+├── skills
+│   └── context-grabber     # skills.sh ecosystem discovery
 ├── packaging               # macOS .pkg installer metadata
 ├── scripts                 # Build, install, and release scripts
 ├── biome.json

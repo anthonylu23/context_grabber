@@ -3,11 +3,12 @@
 Context Grabber is a local-first macOS menu bar app that captures active context and writes deterministic markdown.
 
 ## Runtime Topology
-1. Trigger source: menu action or global hotkey.
+1. Trigger source: menu action, global hotkey, or CLI command (`cgrab capture`).
 2. Host app routes capture by effective frontmost app.
-3. Browser path: Safari or Chrome native-messaging transport.
+3. Browser path: Safari or Chrome native-messaging transport (or AppleScript live extraction via CLI).
 4. Desktop path: Accessibility extraction first, OCR fallback second.
 5. Output path: deterministic markdown file + clipboard + status diagnostics.
+6. CLI path: Go CLI (`cgrab`) orchestrates capture via subprocess dispatch to host binary (desktop) and Bun bridge (browser).
 
 ## Primary Design Goals
 1. Deterministic output shape for downstream LLM workflows.
@@ -25,6 +26,12 @@ Context Grabber is a local-first macOS menu bar app that captures active context
 - Attempt AX focused-element extraction.
 - If AX text is below app-aware threshold, attempt OCR via ScreenCaptureKit + Vision.
 - If OCR unavailable, produce metadata-only desktop capture with warning.
+
+## Agent Integration
+
+Agent skill definitions (`packages/agent-skills/skill/`) make `cgrab` discoverable by AI coding agents (Claude Code, OpenCode, Cursor). Skills are installed via:
+- `npx skills add anthonylu23/context_grabber` (skills.sh ecosystem, from `skills/context-grabber/`)
+- `cgrab skills install` (Bun delegation or `go:embed` fallback from `cgrab/internal/skills/`)
 
 ## Reliability Guards
 1. Protocol version pinning (`1`) for host/extension envelopes.

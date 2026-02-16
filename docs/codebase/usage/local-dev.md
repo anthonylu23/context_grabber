@@ -179,3 +179,31 @@ export CONTEXT_GRABBER_HOST_BIN="/absolute/path/to/ContextGrabberHost"
 ## Browser Source Defaults
 - Safari and Chrome CLI source `auto` now prefer AppleScript live extraction first, with runtime payload fallback only when runtime payload env vars are configured.
 - Fixture capture remains explicit (`CONTEXT_GRABBER_*_SOURCE=fixture`) for deterministic testing.
+
+## Agent Skills Development
+
+Edit skill content in the canonical source at `packages/agent-skills/skill/`, then sync to both copies:
+
+```bash
+# After editing packages/agent-skills/skill/**
+cp packages/agent-skills/skill/SKILL.md cgrab/internal/skills/SKILL.md
+cp -r packages/agent-skills/skill/references/ cgrab/internal/skills/references/
+cp packages/agent-skills/skill/SKILL.md skills/context-grabber/SKILL.md
+cp -r packages/agent-skills/skill/references/ skills/context-grabber/references/
+
+# Verify sync
+bash scripts/check-skill-sync.sh
+```
+
+Test the interactive installer locally:
+```bash
+bun run packages/agent-skills/src/install.ts
+bun test --cwd packages/agent-skills
+```
+
+Test the Go embed fallback:
+```bash
+cd cgrab
+go test ./internal/skills/...
+go test ./cmd/ -run Skills
+```

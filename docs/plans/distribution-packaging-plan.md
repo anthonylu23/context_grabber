@@ -73,10 +73,13 @@ flowchart LR
   - postinstall script included
 - Known: `com.apple.provenance` xattrs on macOS 15+ produce cosmetic `._*` files in payload (does not affect install).
 
-### Phase 4: Homebrew Cask
-- Add/update cask manifest in tap repo.
-- Point cask to the canonical `.pkg` artifact.
-- Validate install/uninstall behavior.
+### Phase 4: Homebrew Cask ✓
+- Created tap repo: `anthonylu23/homebrew-context-grabber`
+- Cask formula: `Casks/context-grabber.rb` pointing to GitHub Release asset
+- GitHub Release `v0.1.0` with `.pkg` artifact uploaded
+- `brew style` and `brew audit` pass with zero offenses
+- Install: `brew tap anthonylu23/context-grabber && brew install --cask context-grabber`
+- Uninstall: `brew uninstall --cask context-grabber`
 
 ### Phase 5: Release Automation + Docs
 - Add CI checks for package contents and smoke tests.

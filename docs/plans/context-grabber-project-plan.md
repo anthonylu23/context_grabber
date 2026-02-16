@@ -637,11 +637,11 @@ Lightweight settings popover or small window accessible from the menu:
 ### Active (in parallel)
 
 1. ~~**Distribution + packaging (Phases 1-3)**~~ ✓ — unsigned `.pkg` installer built and validated. Standalone Go binary to `/usr/local/bin/cgrab`, app to `/Applications/ContextGrabber.app`. Version `0.1.0`. See `docs/plans/distribution-packaging-implementation.md`.
-2. **Agent integration** — Phase 1 (skill content) complete: `SKILL.md` + reference docs (`cli-reference.md`, `output-schema.md`, `workflows.md`) written and validated against CLI source. Remaining: Phase 2 (npx installer), Phase 3 (`cgrab skills install` subcommand), Phase 4 (skills.sh publishing), Phase 5 (documentation updates). See `docs/plans/agent-integration-plan.md`.
+2. ~~**Agent integration (Phases 1-5)**~~ ✓ — skill content, npx interactive installer, `cgrab skills install/uninstall` CLI subcommand, skills.sh ecosystem discovery (`skills/context-grabber/`), and documentation updates all complete. See `docs/plans/agent-integration-plan.md`.
 
 ### Queued
 
-3. Distribution Phase 4 — Homebrew Cask (after dogfood install is validated end-to-end). See `docs/plans/distribution-packaging-plan.md`.
+3. ~~Distribution Phase 4 — Homebrew Cask~~ ✓ — tap repo at `anthonylu23/homebrew-context-grabber`, GitHub Release `v0.1.0` with `.pkg` asset, `brew install --cask context-grabber` works. See `docs/plans/distribution-packaging-plan.md`.
 4. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 5. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 6. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
@@ -710,3 +710,43 @@ Lightweight settings popover or small window accessible from the menu:
   - `packages/agent-skills/skill/references/workflows.md` — agent workflow patterns: multi-tab research, focused capture, desktop context, diagnostics, JSON mode, clipboard, tab search, error recovery
   - validated against CLI source code; 6 inaccuracies identified and corrected (host binary repo path, doctor repo_root check, output routing rules, chunk header token count divergence, errorCode omitempty, warnings YAML format divergence)
   - next: Phase 2 (npx interactive installer), Phase 3 (`cgrab skills install` CLI subcommand)
+67. Agent integration Phase 2 (npx interactive installer) was already complete:
+  - `packages/agent-skills/package.json` — `@context-grabber/agent-skills` bin entry with `@inquirer/prompts`
+  - `packages/agent-skills/src/install.ts` — interactive CLI with agent selection, scope selection, confirmation
+  - `packages/agent-skills/src/targets/` — Claude Code, OpenCode, Cursor install/uninstall logic (with .mdc conversion for Cursor)
+  - `packages/agent-skills/src/utils.ts` — file copy, symlink, removal helpers
+  - `packages/agent-skills/test/installer.test.ts` — 17 tests covering resolveTargetDir, copySkillFiles, ensureSymlink, removeSkillFiles, convertToMdc, and per-agent install/uninstall
+68. Agent integration Phase 3 (`cgrab skills install/uninstall` CLI subcommand) is now complete:
+  - `cgrab/cmd/skills.go` — `cgrab skills install` and `cgrab skills uninstall` subcommands
+  - Bun delegation path: when Bun is available, execs `bunx @context-grabber/agent-skills` for full interactive experience (Claude, OpenCode, Cursor)
+  - Embedded fallback path: when Bun is unavailable, copies `go:embed` skill files directly (Claude Code + OpenCode; Cursor excluded with message that Bun is required for .mdc conversion)
+  - `--agent` flag (supports comma-separated values) and `--scope` flag for the embedded fallback path
+  - `cgrab/internal/skills/install.go` — Install/Uninstall functions with path resolution, symlink management, and cleanup
+  - `cgrab/internal/skills/install_test.go` — 12 tests: path resolution, validation, embedded file readability, install/uninstall round-trip, overwrite, symlink idempotency
+  - `cgrab/cmd/skills_test.go` — 10 tests: resolveAgents (defaults, explicit, comma-separated, invalid, empty), full install/uninstall via embedded fallback, invalid scope/agent validation, agentLabel
+  - `scripts/check-skill-sync.sh` — CI script to verify embedded Go copies match canonical TS source
+  - `.github/workflows/ci.yml` — added skill file sync check step and new `go-checks` job (build + test)
+  - validation passed: `go build ./...`, `go test ./...` (56 tests), `bash scripts/check-skill-sync.sh`
+  - next: Phase 4 (skills.sh publishing), Phase 5 (documentation updates)
+69. Agent integration Phase 4 (skills.sh publishing) is now complete:
+  - skills.sh ecosystem is GitHub-repo-based (not npm-based) — `npx skills add <owner/repo>` fetches from GitHub directly
+  - created `skills/context-grabber/` directory at repo root with SKILL.md + references/, following the convention from `vercel-labs/agent-skills` and `anthropics/skills`
+  - updated `scripts/check-skill-sync.sh` to verify all 3 skill file locations (canonical, go:embed, skills.sh) stay in sync
+  - updated `docs/plans/agent-integration-plan.md` with corrected skills.sh architecture notes, install channels, and exit criteria
+  - install command: `npx skills add anthonylu23/context_grabber` (requires public repo)
+70. Agent integration Phase 5 (documentation) is now complete:
+  - created `docs/codebase/usage/agent-workflows.md` — human-readable guide covering installation methods (skills.sh, cgrab CLI, npx, manual), what the skill teaches agents, file structure, sync workflow
+  - updated `README.md` — added "Agent Skills" section, `skills install/uninstall` to command table, agent-workflows doc link, `packages/agent-skills` and `skills/context-grabber` to project layout
+  - updated `docs/codebase/components/companion-cli.md` — already updated in Phase 3 with skills command table entries and installation section
+  - updated `docs/codebase/architecture/repository-map.md` — already updated in Phase 1 with agent-skills entry
+  - all 5 phases of agent integration are now complete
+71. Distribution Phase 4 (Homebrew Cask) is now complete:
+  - created GitHub Release `v0.1.0` with `context-grabber-macos-0.1.0.pkg` asset (5.8MB)
+  - release notes describe full feature set (menu bar app, CLI commands, system requirements)
+  - created Homebrew tap repo: `anthonylu23/homebrew-context-grabber`
+  - cask formula at `Casks/context-grabber.rb` — passes `brew style` and `brew audit` with zero offenses
+  - install: `brew tap anthonylu23/context-grabber && brew install --cask context-grabber`
+  - uninstall: `brew uninstall --cask context-grabber` (pkgutil forget + file delete)
+  - `zap trash` cleans `~/.contextgrabber` and `~/contextgrabber` on deep clean
+  - download + SHA256 verification confirmed working; actual install requires interactive terminal (sudo)
+  - next: Phase 5 (release automation), Phase 6 (signing + notarization)

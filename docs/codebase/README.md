@@ -28,6 +28,7 @@ This handbook is the canonical technical reference for Context Grabber.
 ## Usage
 - Local development: `docs/codebase/usage/local-dev.md`
 - Capture workflows: `docs/codebase/usage/capture-workflows.md`
+- Agent integration: `docs/codebase/usage/agent-workflows.md`
 - Environment variables: `docs/codebase/usage/environment-variables.md`
 
 ## Reference

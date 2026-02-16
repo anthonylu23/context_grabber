@@ -46,3 +46,16 @@ bun run safari:container:build
 3. Shared packages
 - Envelope and payload validation.
 - Timeout/unavailable fallback determinism.
+
+4. Go CLI (`cgrab/`)
+- List/capture command parsing and flag validation.
+- Osascript tab/app enumeration and partial-failure handling.
+- Desktop/browser bridge subprocess dispatch and host auto-launch.
+- Skills install/uninstall path resolution, embed fallback, round-trip.
+- Config store persistence and path traversal rejection.
+
+## Skill File Sync Check
+```bash
+bash scripts/check-skill-sync.sh
+```
+Verifies all 3 skill file locations (`packages/agent-skills/skill/`, `cgrab/internal/skills/`, `skills/context-grabber/`) are byte-identical. Run by CI in the `js-checks` job.

@@ -71,6 +71,17 @@ The new CLI is a Go binary (`cgrab/`) that orchestrates capture via subprocesses
 | `config set-output-dir <subdir>` | Set capture output subdirectory under `~/contextgrabber` |
 | `config reset-output-dir` | Reset capture output path to default (`captures`) |
 | `docs` | Open the GitHub repository in browser (fallback prints URL) |
+| `skills install` | Install agent skill definitions (Bun → interactive; fallback → embedded) |
+| `skills uninstall` | Remove installed agent skill definitions |
+
+## Agent Skill Installation
+
+`cgrab skills install` provides two paths:
+
+1. **Bun available:** delegates to `bunx @context-grabber/agent-skills` for the full interactive experience (Claude Code, OpenCode, Cursor with .mdc conversion, global/project scope selection).
+2. **No Bun:** uses `go:embed` fallback to copy skill files directly. Supports Claude Code and OpenCode only (Cursor requires Bun for .mdc format conversion). Uses `--agent` and `--scope` flags.
+
+Embedded skill files at `cgrab/internal/skills/` must stay in sync with the canonical source at `packages/agent-skills/skill/`. CI enforces this via `scripts/check-skill-sync.sh`.
 
 ## Dependencies
 

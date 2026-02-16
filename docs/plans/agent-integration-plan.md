@@ -1,5 +1,7 @@
 # Agent Integration Plan
 
+**Status: All phases complete.**
+
 ## Goal
 
 Make `cgrab` discoverable and usable by AI coding agents (Claude Code, Cursor, Codex, and others) through a standard skill definition and interactive installer. Distribution should work via both `npx` (npm ecosystem) and `cgrab skills install` (CLI-native).
@@ -46,9 +48,9 @@ Global installs use `~/.agents/skills/` as the canonical location with symlinks 
 ### Install Channels
 
 ```
-npx @context-grabber/agent-skills          # npm ecosystem
-cgrab skills install                       # CLI-native (prefers bunx delegation, go:embed fallback)
-npx skills add <owner/repo>@context-grabber  # skills.sh ecosystem discovery
+npx skills add anthonylu23/context_grabber  # skills.sh ecosystem (GitHub-based)
+npx @context-grabber/agent-skills           # npm interactive installer (if published)
+cgrab skills install                        # CLI-native (prefers bunx delegation, go:embed fallback)
 ```
 
 ## Package Layout
@@ -163,7 +165,7 @@ Same interactive prompts: which agents, which scope. Removes the installed skill
 
 ## Implementation Phases
 
-### Phase 1: Skill Content
+### Phase 1: Skill Content ✓
 
 Write the SKILL.md and reference documents. This is the core deliverable — everything else is distribution.
 
@@ -174,7 +176,7 @@ Tasks:
 4. Create `packages/agent-skills/skill/references/workflows.md` — agent workflow patterns
 5. Review skill content against actual CLI behavior (`cgrab --help`, `cgrab list --help`, etc.)
 
-### Phase 2: npx Installer
+### Phase 2: npx Installer ✓
 
 Build the interactive installer as an npm package.
 
@@ -187,7 +189,7 @@ Tasks:
 6. Test: `bun run packages/agent-skills/src/install.ts` locally
 7. Validate install paths for each agent target
 
-### Phase 3: cgrab CLI Subcommand
+### Phase 3: cgrab CLI Subcommand ✓
 
 Add `cgrab skills install` and `cgrab skills uninstall`.
 
@@ -199,17 +201,22 @@ Tasks:
 5. Add CI sync check script to verify embedded files match canonical source
 6. Tests for install path resolution and embed fallback logic
 
-### Phase 4: skills.sh Publishing
+### Phase 4: skills.sh Publishing ✓
 
 Make the skill discoverable in the skills.sh ecosystem.
 
-Tasks:
-1. Verify skill format is compatible with `npx skills add`
-2. Publish to npm (or configure repo for skills.sh discovery)
-3. Test: `npx skills find context-grabber` returns the skill
-4. Test: `npx skills add <owner/repo>@context-grabber` installs correctly
+The skills.sh ecosystem is GitHub-repo-based, not npm-based. The CLI (`npx skills add <owner/repo>`) fetches directly from GitHub. Skills must be in a `skills/<name>/SKILL.md` directory at the repo root, following the convention established by `vercel-labs/agent-skills` and `anthropics/skills`.
 
-### Phase 5: Documentation
+Tasks:
+1. ~~Verify skill format is compatible with `npx skills add`~~ ✓ — SKILL.md format (YAML frontmatter + markdown) matches the convention
+2. ~~Create `skills/context-grabber/` directory at repo root with SKILL.md + references/~~ ✓
+3. ~~Update sync check script to verify all 3 skill file locations match~~ ✓
+4. Test: `npx skills add anthonylu23/context_grabber` installs correctly (requires public repo)
+5. Leaderboard ranking will auto-populate as users install via `npx skills add`
+
+Note: the original plan assumed npm publishing was needed. In practice, skills.sh pulls from GitHub directly. The npm package (`@context-grabber/agent-skills`) remains useful for the interactive installer (`npx @context-grabber/agent-skills`) but is not required for skills.sh discovery.
+
+### Phase 5: Documentation ✓
 
 Tasks:
 1. Create `docs/codebase/usage/agent-workflows.md` — human-readable guide
@@ -224,8 +231,9 @@ Tasks:
 
 ## Exit Criteria
 
-- `npx @context-grabber/agent-skills` installs a working skill for Claude Code, OpenCode, Cursor
+- `npx skills add anthonylu23/context_grabber` installs skill files for the detected agent
+- `npx @context-grabber/agent-skills` (if published to npm) installs a working skill for Claude Code, OpenCode, Cursor
 - `cgrab skills install` works with bun present and without (embedded fallback)
 - Installed skill is picked up by the target agent and triggers on relevant queries
-- `npx skills find context-grabber` returns the skill (after skills.sh publishing)
 - Skill content accurately reflects current CLI capabilities and output format
+- All 3 skill file locations (canonical, go:embed, skills.sh) stay in sync via CI check
