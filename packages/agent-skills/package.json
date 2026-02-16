@@ -1,0 +1,25 @@
+{
+  "name": "@context-grabber/agent-skills",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "context-grabber-skills": "./src/install.ts"
+  },
+  "main": "./dist/install.js",
+  "types": "./src/install.ts",
+  "exports": {
+    ".": {
+      "types": "./src/install.ts",
+      "bun": "./src/install.ts",
+      "default": "./dist/install.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.5.1"
+  }
+}
