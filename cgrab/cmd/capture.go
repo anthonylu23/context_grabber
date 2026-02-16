@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -72,10 +73,11 @@ func newCaptureCommand(global *globalOptions) *cobra.Command {
 				return err
 			}
 
+			stderr := cmd.ErrOrStderr()
 			var rendered []byte
 			switch mode {
 			case captureModeBrowser:
-				rendered, err = runBrowserCapture(cmd.Context(), request)
+				rendered, err = runBrowserCapture(cmd.Context(), request, stderr)
 			case captureModeDesktop:
 				rendered, err = runDesktopCapture(cmd.Context(), request)
 			default:
@@ -203,10 +205,10 @@ func (r captureRequest) validate() (captureMode, error) {
 	return captureModeDesktop, nil
 }
 
-func runBrowserCapture(ctx context.Context, request captureRequest) ([]byte, error) {
+func runBrowserCapture(ctx context.Context, request captureRequest, stderr io.Writer) ([]byte, error) {
 	if _, launchErr := ensureHostAppRunningFunc(ctx); launchErr != nil {
 		fmt.Fprintf(
-			os.Stderr,
+			stderr,
 			"warning: unable to auto-launch ContextGrabber app before browser capture (%v)\n",
 			launchErr,
 		)
@@ -244,7 +246,7 @@ func runBrowserCapture(ctx context.Context, request captureRequest) ([]byte, err
 		return encodeBrowserCaptureOutput(request.outputFormat, target, attempt)
 	}
 
-	selectedTab, err := resolveTargetTab(ctx, request, targetOverride)
+	selectedTab, err := resolveTargetTab(ctx, request, targetOverride, stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -414,6 +416,7 @@ func resolveTargetTab(
 	ctx context.Context,
 	request captureRequest,
 	targetOverride bridge.BrowserTarget,
+	stderr io.Writer,
 ) (*osascript.TabEntry, error) {
 	browserFilter := ""
 	if targetOverride != "" {
@@ -421,9 +424,7 @@ func resolveTargetTab(
 	}
 
 	tabs, warnings, err := listTabsFunc(ctx, browserFilter)
-	for _, warning := range warnings {
-		fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
-	}
+	writeWarnings(stderr, warnings)
 	if err != nil {
 		return nil, err
 	}

@@ -43,9 +43,5 @@ func openURL(ctx context.Context, url string) error {
 			lastErr = err
 		}
 	}
-
-	if lastErr == nil {
-		lastErr = fmt.Errorf("no URL opener found")
-	}
 	return lastErr
 }

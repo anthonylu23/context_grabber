@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,7 +180,7 @@ func TestRunBrowserCaptureContinuesWhenHostAppAutolaunchFails(t *testing.T) {
 		method:       "auto",
 		timeoutMs:    1200,
 		outputFormat: formatMarkdown,
-	})
+	}, io.Discard)
 	if err != nil {
 		t.Fatalf("runBrowserCapture returned error: %v", err)
 	}

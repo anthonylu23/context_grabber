@@ -296,9 +296,6 @@ func resolveHostBinaryPath(repoRoot string) (string, bool) {
 			return candidate, true
 		}
 	}
-	if len(candidates) == 0 {
-		return "", false
-	}
 	return candidates[0], false
 }
 

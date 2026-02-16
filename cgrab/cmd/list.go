@@ -126,7 +126,7 @@ func newListTabsCommand(global *globalOptions) *cobra.Command {
 		Use:   "tabs",
 		Short: "Show open browser tabs",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			tabs, warnings, err := osascript.ListTabs(cmd.Context(), browser)
+			tabs, warnings, err := listTabsFunc(cmd.Context(), browser)
 			writeWarnings(cmd.ErrOrStderr(), warnings)
 			if err != nil {
 				return err
@@ -154,7 +154,7 @@ func newListAppsCommand(global *globalOptions) *cobra.Command {
 		Use:   "apps",
 		Short: "Show running desktop apps",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			apps, err := osascript.ListApps(cmd.Context())
+			apps, err := listAppsFunc(cmd.Context())
 			if err != nil {
 				return err
 			}
