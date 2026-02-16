@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      font-size: 13px;
+      color: #333;
+      padding: 10px;
+    }
+    h1 { font-size: 18px; margin-bottom: 8px; }
+    p { line-height: 1.5; margin: 6px 0; }
+    code {
+      background: #f0f0f0;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    ul { padding-left: 18px; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>Context Grabber</h1>
+  <p>This installer will set up:</p>
+  <ul>
+    <li><strong>ContextGrabber.app</strong> in <code>/Applications</code></li>
+    <li><strong>cgrab</strong> CLI in <code>/usr/local/bin</code></li>
+  </ul>
+  <p>After installation:</p>
+  <ul>
+    <li>Open <strong>ContextGrabber.app</strong> from Applications to start the menu bar agent.</li>
+    <li>Use <code>cgrab --help</code> in your terminal for CLI usage.</li>
+    <li>Run <code>cgrab doctor</code> to verify your setup.</li>
+  </ul>
+  <p>
+    The app will request <strong>Accessibility</strong> and <strong>Screen Recording</strong>
+    permissions on first use for desktop capture.
+  </p>
+</body>
+</html>

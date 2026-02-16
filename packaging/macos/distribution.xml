@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Context Grabber</title>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_localSystem="true"/>
+    <pkg-ref id="com.contextgrabber.app"/>
+    <pkg-ref id="com.contextgrabber.cli"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.contextgrabber.app"/>
+            <line choice="com.contextgrabber.cli"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.contextgrabber.app" visible="false">
+        <pkg-ref id="com.contextgrabber.app"/>
+    </choice>
+    <choice id="com.contextgrabber.cli" visible="false">
+        <pkg-ref id="com.contextgrabber.cli"/>
+    </choice>
+    <pkg-ref id="com.contextgrabber.app" version="__VERSION__" onConclusion="none">app.pkg</pkg-ref>
+    <pkg-ref id="com.contextgrabber.cli" version="__VERSION__" onConclusion="none">cli.pkg</pkg-ref>
+</installer-gui-script>
