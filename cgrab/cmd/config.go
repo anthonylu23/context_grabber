@@ -84,7 +84,11 @@ func newConfigResetOutputDirCommand() *cobra.Command {
 		Use:   "reset-output-dir",
 		Short: "Reset capture output subdirectory to default",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			settings := config.DefaultSettings()
+			settings, err := config.LoadSettings()
+			if err != nil {
+				return err
+			}
+			settings.CaptureOutputSubdir = config.DefaultSettings().CaptureOutputSubdir
 			if err := config.SaveSettings(settings); err != nil {
 				return err
 			}

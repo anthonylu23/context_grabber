@@ -52,7 +52,7 @@ func TestCaptureDesktopBuildsExpectedHostCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CaptureDesktop returned error: %v", err)
 	}
-	if string(output) != "markdown output\n" {
+	if string(output) != "markdown output" {
 		t.Fatalf("unexpected output: %q", string(output))
 	}
 	if capturedName != hostPath {

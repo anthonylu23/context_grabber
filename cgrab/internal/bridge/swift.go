@@ -118,5 +118,5 @@ func CaptureDesktop(ctx context.Context, request DesktopCaptureRequest) ([]byte,
 		return nil, fmt.Errorf("desktop capture produced empty output")
 	}
 
-	return []byte(stdout), nil
+	return []byte(trimmed), nil
 }
