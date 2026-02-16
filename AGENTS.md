@@ -6,7 +6,7 @@ Update next steps in docs.
 
 If you are an agent working in parallel with another, be aware of the work the other agents will/are doing
 
-**Feel free to modify AGENTS.md if necessary whenever, use your best judgemenet**. Reread AGENTS.md whenever there are changes made. If there aren't changes to AGENTS.md, no need to read it to avoid context bloat.
+**Feel free to modify AGENTS.md if necessary whenever, use your best judgement**. Reread AGENTS.md whenever there are changes made. If there aren't changes to AGENTS.md, no need to read it to avoid context bloat.
 
 Be sensible with typing, file naming, file organization, etc.
 
@@ -30,4 +30,4 @@ When commiting to git, avoid bulk commiting. Commit files together or seperately
 
 No need for branching, this is a side project that I'm working on until it gets to a place where I can use it with the features I need for my personal workflow.
 
-Follow stand good git practices
+Follow standard good git practices
