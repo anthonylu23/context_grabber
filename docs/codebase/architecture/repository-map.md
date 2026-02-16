@@ -6,6 +6,7 @@
 - `packages/shared-types`: protocol contracts and validators.
 - `packages/extension-safari`: Safari bridge + runtime modules.
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
+- `packages/extension-shared`: shared extension transport, payload construction, sanitization, and document-script modules.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
 - `packages/companion-cli`: removed.
 - `cgrab`: Go Context Grabber CLI (`list`, `capture`, `doctor`, `config`, `docs`). Directory named `cgrab` so `go install` produces the `cgrab` binary automatically.

@@ -13,6 +13,12 @@ swift build
 swift test
 ```
 
+## CLI Validation
+```bash
+cd cgrab
+go test ./...
+```
+
 ## Safari Container Validation
 ```bash
 bun run safari:container:sync

@@ -190,6 +190,7 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 ├── packages
 │   ├── extension-chrome    # Chrome extension
 │   ├── extension-safari    # Safari extension
+│   ├── extension-shared    # Shared extension transport, payload, and sanitization
 │   ├── native-host-bridge  # Native messaging bridge
 │   └── shared-types        # Shared contracts and types
 ├── scripts                 # Build and workspace scripts

@@ -9,7 +9,7 @@ The previous Bun/TS CLI (`packages/companion-cli`) has been removed. The Go CLI 
 ## Status Update
 
 - Phase 1 complete: `ContextGrabberHost` now supports headless CLI mode via `--capture`.
-- Phase 2 complete: `cli/` Go scaffold is implemented with:
+- Phase 2 complete: `cgrab/` Go scaffold is implemented with:
   - `list tabs`
   - `list apps`
   - `doctor`
@@ -64,7 +64,7 @@ Optional:  bun + browser extensions (for rich browser capture)
 | ----------------------------- | ---------------------------------------------------- | ---------------- |
 | Go → osascript                | `list tabs`, `list apps`, tab/app activation         | ~150-300ms       |
 | Go → Bun                      | Browser extension capture (`capture --focused/--tab`)| ~400-700ms       |
-| Go → ContextGrabberHost --cli | Desktop capture (`capture --app`)                    | ~200-2200ms      |
+| Go → ContextGrabberHost --capture | Desktop capture (`capture --app`)                | ~200-2200ms      |
 
 ### Rendering Ownership
 
@@ -80,7 +80,7 @@ The Go CLI works without Bun installed for: `list tabs`, `list apps`, `capture -
 ## Go CLI Structure
 
 ```
-cli/
+cgrab/
   go.mod
   go.sum
   main.go
@@ -91,6 +91,8 @@ cli/
     doctor.go            diagnostics
     config.go            config management (`show`, `set-output-dir`, `reset-output-dir`)
     docs.go              open repository docs URL
+    card.go              styled product info card
+    style.go             styled help/usage templates
   internal/
     config/
       store.go           persisted config in ~/contextgrabber/config.json
@@ -98,10 +100,12 @@ cli/
       tabs.go            AppleScript for tab enumeration + parsing
       apps.go            AppleScript for app enumeration + parsing
       activate.go        Tab/app activation via AppleScript
+      exec.go            osascript subprocess execution
     bridge/
       bun.go             Bun subprocess: spawn, read stdout, error handling
       swift.go           ContextGrabberHost --capture subprocess: spawn, read stdout, error handling
       detect.go          Capability detection (Bun available? ContextGrabberHost built?)
+      host_app.go        ContextGrabber.app auto-launch for browser capture
     bridge/browser_capture.ts  Bun helper script that runs requestBrowserCapture + markdown rendering
     output/
       writer.go          stdout / --file / --clipboard routing
@@ -110,6 +114,7 @@ cli/
 ### Dependencies
 
 - `github.com/spf13/cobra` — CLI framework
+- `github.com/charmbracelet/lipgloss` — styled terminal output
 - Standard library for everything else (`os/exec`, `encoding/json`, `strings`, `fmt`)
 
 ### CLI Surface
@@ -282,7 +287,7 @@ Tasks:
 **Goal:** `go build` produces a `cgrab` binary with `list tabs`, `list apps`, and `doctor`.
 
 Tasks:
-1. Initialize `cli/` with `go mod init`, add cobra dependency
+1. Initialize `cgrab/` with `go mod init`, add cobra dependency
 2. Implement `cmd/root.go` — root command, global flags, version
 3. Implement `internal/osascript/tabs.go` — port tab enumeration AppleScript + parsing
 4. Implement `internal/osascript/apps.go` — port app enumeration AppleScript + parsing
