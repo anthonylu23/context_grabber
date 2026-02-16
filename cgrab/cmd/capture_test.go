@@ -73,16 +73,34 @@ func TestToDesktopCaptureMethod(t *testing.T) {
 }
 
 func TestParseTabReference(t *testing.T) {
-	windowIndex, tabIndex, err := parseTabReference("2:7")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if windowIndex != 2 || tabIndex != 7 {
-		t.Fatalf("unexpected parsed value: %d:%d", windowIndex, tabIndex)
+	tests := []struct {
+		input   string
+		wantWin int
+		wantTab int
+		wantErr bool
+	}{
+		{input: "2:7", wantWin: 2, wantTab: 7},
+		{input: "w2:t7", wantWin: 2, wantTab: 7},
+		{input: "w1:t1", wantWin: 1, wantTab: 1},
+		{input: "w0:t1", wantErr: true},
+		{input: "chrome", wantErr: true},
+		{input: "bad", wantErr: true},
 	}
 
-	if _, _, err := parseTabReference("bad"); err == nil {
-		t.Fatalf("expected error for invalid tab reference")
+	for _, tc := range tests {
+		windowIndex, tabIndex, err := parseTabReference(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("expected error for input=%q", tc.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("unexpected error for input=%q: %v", tc.input, err)
+		}
+		if windowIndex != tc.wantWin || tabIndex != tc.wantTab {
+			t.Fatalf("input=%q: want %d:%d, got %d:%d", tc.input, tc.wantWin, tc.wantTab, windowIndex, tabIndex)
+		}
 	}
 }
 

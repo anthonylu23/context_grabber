@@ -46,7 +46,7 @@ func newCaptureCommand(global *globalOptions) *cobra.Command {
 		Use:   "capture",
 		Short: "Capture browser or desktop context",
 		Example: "  cgrab capture --focused\n" +
-			"  cgrab capture --tab 1:2 --browser safari\n" +
+			"  cgrab capture --tab w1:t2 --browser safari\n" +
 			"  cgrab capture --app Finder --method auto\n" +
 			"  cgrab capture --app --name-match xcode --format json",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -109,7 +109,7 @@ func newCaptureCommand(global *globalOptions) *cobra.Command {
 	}
 
 	captureCmd.Flags().BoolVar(&focused, "focused", false, "focused browser tab")
-	captureCmd.Flags().StringVar(&tabReference, "tab", "", "tab by window:tab index")
+	captureCmd.Flags().StringVar(&tabReference, "tab", "", "tab by window:tab index (e.g. 1:2 or w1:t2)")
 	captureCmd.Flags().StringVar(&urlMatch, "url-match", "", "match tab by URL substring")
 	captureCmd.Flags().StringVar(&titleMatch, "title-match", "", "match tab by title substring")
 	captureCmd.Flags().StringVar(&appName, "app", "", "app by exact name")
@@ -493,13 +493,19 @@ func filterTabsByTarget(tabs []osascript.TabEntry, target bridge.BrowserTarget) 
 func parseTabReference(reference string) (windowIndex int, tabIndex int, err error) {
 	parts := strings.Split(strings.TrimSpace(reference), ":")
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid --tab value %q (expected <windowIndex:tabIndex>)", reference)
+		return 0, 0, fmt.Errorf("invalid --tab value %q (expected <windowIndex:tabIndex>, e.g. 1:2 or w1:t2)", reference)
 	}
-	windowIndex, err = strconv.Atoi(strings.TrimSpace(parts[0]))
+	winStr := strings.TrimSpace(parts[0])
+	tabStr := strings.TrimSpace(parts[1])
+	// Strip optional w/t prefixes (produced by `cgrab list`)
+	winStr = strings.TrimPrefix(winStr, "w")
+	tabStr = strings.TrimPrefix(tabStr, "t")
+
+	windowIndex, err = strconv.Atoi(winStr)
 	if err != nil || windowIndex <= 0 {
 		return 0, 0, fmt.Errorf("invalid window index in --tab value %q", reference)
 	}
-	tabIndex, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+	tabIndex, err = strconv.Atoi(tabStr)
 	if err != nil || tabIndex <= 0 {
 		return 0, 0, fmt.Errorf("invalid tab index in --tab value %q", reference)
 	}
