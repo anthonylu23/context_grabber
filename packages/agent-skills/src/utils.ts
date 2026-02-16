@@ -163,7 +163,7 @@ export function removeSymlink(linkPath: string): boolean {
 }
 
 /** All agents that use global symlinks (not Cursor — it has no global symlink). */
-const SYMLINK_AGENTS: AgentTarget[] = ["claude", "opencode"];
+const SYMLINK_AGENTS = ["claude", "opencode"] as const satisfies readonly AgentTarget[];
 
 /**
  * Check whether any agent other than `excludeAgent` still has a global symlink

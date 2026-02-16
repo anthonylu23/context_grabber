@@ -18,6 +18,7 @@ import {
   copySkillFiles,
   ensureSymlink,
   globalSkillRoot,
+  hasOtherGlobalSymlinks,
   removeSkillFiles,
   removeSymlink,
   resolveTargetDir,
@@ -220,8 +221,17 @@ describe("removeSkillFiles", () => {
 });
 
 describe("removeSymlink", () => {
+  // globalSkillRoot() resolves to a real path under $HOME. Tests that create
+  // it must clean up after themselves to avoid side effects.
+  const globalRoot = globalSkillRoot();
+
+  afterEach(() => {
+    // Clean up any real directories created under ~/.agents/skills/context-grabber/.
+    rmSync(globalRoot, { recursive: true, force: true });
+  });
+
   it("removes symlink pointing to globalSkillRoot", () => {
-    const target = globalSkillRoot();
+    const target = globalRoot;
     mkdirSync(target, { recursive: true });
     const link = join(testDir, "link");
     symlinkSync(target, link);
@@ -339,4 +349,60 @@ describe("installForAgent + uninstallForAgent (project scope)", () => {
       }
     });
   }
+});
+
+describe("hasOtherGlobalSymlinks", () => {
+  // These tests create real symlinks under $HOME agent directories and
+  // must clean up after themselves.
+  const globalRoot = globalSkillRoot();
+  const claudeDir = resolveTargetDir("claude", "global", "");
+  const opencodeDir = resolveTargetDir("opencode", "global", "");
+
+  beforeEach(() => {
+    mkdirSync(globalRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    // Clean up all directories that may have been created.
+    for (const dir of [claudeDir, opencodeDir]) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    rmSync(globalRoot, { recursive: true, force: true });
+  });
+
+  it("returns false when no symlinks exist", () => {
+    expect(hasOtherGlobalSymlinks("claude")).toBe(false);
+    expect(hasOtherGlobalSymlinks("opencode")).toBe(false);
+  });
+
+  it("returns true when another agent's symlink exists", () => {
+    // Create opencode symlink pointing to canonical root.
+    mkdirSync(join(opencodeDir, ".."), { recursive: true });
+    symlinkSync(globalRoot, opencodeDir);
+
+    // Excluding claude — opencode symlink is still present.
+    expect(hasOtherGlobalSymlinks("claude")).toBe(true);
+  });
+
+  it("returns false when only the excluded agent's symlink exists", () => {
+    // Create claude symlink pointing to canonical root.
+    mkdirSync(join(claudeDir, ".."), { recursive: true });
+    symlinkSync(globalRoot, claudeDir);
+
+    // Excluding claude — no other symlinks.
+    expect(hasOtherGlobalSymlinks("claude")).toBe(false);
+  });
+
+  it("returns false when symlink points elsewhere", () => {
+    // Create opencode symlink pointing to a different directory.
+    const otherDir = join(globalRoot, "..", "other-skill");
+    mkdirSync(otherDir, { recursive: true });
+    mkdirSync(join(opencodeDir, ".."), { recursive: true });
+    symlinkSync(otherDir, opencodeDir);
+
+    // The symlink exists but doesn't point to canonical root.
+    expect(hasOtherGlobalSymlinks("claude")).toBe(false);
+
+    rmSync(otherDir, { recursive: true, force: true });
+  });
 });
