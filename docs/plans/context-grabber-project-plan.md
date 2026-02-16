@@ -703,3 +703,10 @@ Lightweight settings popover or small window accessible from the menu:
   - known: macOS 15+ `com.apple.provenance` xattrs produce cosmetic `._*` files in payload — does not affect installation
   - ldflags path documented using actual Go module path (`github.com/anthonylu23/context_grabber/cgrab/cmd.Version`)
   - next: dogfood install on a real system, then Homebrew Cask (Phase 4)
+66. Agent integration Phase 1 (skill content) is now complete:
+  - `packages/agent-skills/skill/SKILL.md` — YAML frontmatter + agent instructions covering: when/when-not to use, prerequisites, core workflow (inventory → select → capture → use), command examples, output format, selectors, error handling, env vars
+  - `packages/agent-skills/skill/references/cli-reference.md` — complete command/flag/env var reference with output routing, validation rules, and common errors
+  - `packages/agent-skills/skill/references/output-schema.md` — markdown frontmatter fields, content sections, content limits, JSON output structure, renderer divergences (TS vs Swift)
+  - `packages/agent-skills/skill/references/workflows.md` — agent workflow patterns: multi-tab research, focused capture, desktop context, diagnostics, JSON mode, clipboard, tab search, error recovery
+  - validated against CLI source code; 6 inaccuracies identified and corrected (host binary repo path, doctor repo_root check, output routing rules, chunk header token count divergence, errorCode omitempty, warnings YAML format divergence)
+  - next: Phase 2 (npx interactive installer), Phase 3 (`cgrab skills install` CLI subcommand)

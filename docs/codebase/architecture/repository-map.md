@@ -8,6 +8,7 @@
 - `packages/extension-chrome`: Chrome bridge + extraction helpers.
 - `packages/extension-shared`: shared extension transport, payload construction, sanitization, and document-script modules.
 - `packages/native-host-bridge`: normalization and markdown helpers (TS side).
+- `packages/agent-skills`: agent skill definition and reference docs for AI coding agents (SKILL.md + CLI reference, output schema, workflow patterns).
 - `packages/companion-cli`: removed.
 - `cgrab`: Go Context Grabber CLI (`list`, `capture`, `doctor`, `config`, `docs`). Directory named `cgrab` so `go install` produces the `cgrab` binary automatically.
 - `docs`: plans + handbook.
