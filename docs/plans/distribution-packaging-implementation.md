@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a working unsigned `.pkg` installer that installs both `ContextGrabber.app` and `cgrab` CLI on macOS. This covers Phases 1-3 of the distribution plan (contract, scripts, dogfood). Signing/notarization and Homebrew Cask are deferred.
+Build a working unsigned `.pkg` installer that installs both `ContextGrabber.app` and `cgrab` CLI on macOS. Phases 1-5 are complete: packaging contract, build scripts, dogfood validation, Homebrew Cask, and release automation. Signing/notarization is deferred (Phase 6).
 
 ## Finalized Contract
 
@@ -212,9 +212,61 @@ scripts/release/build-macos-package.sh "$STAGING_DIR"
 - **Existing install conflict**: if a dev build of `ContextGrabberHost` already has permission grants, the installed `.app` may need separate grants (different binary path)
 - **`/usr/local/bin` permissions**: some systems may not have `/usr/local/bin` writable without sudo. The `.pkg` installer handles this via system-level install.
 
+## Phase 4: Homebrew Cask ✓
+
+Completed. Implementation:
+
+1. Created GitHub Release `v0.1.0` with `.pkg` asset
+2. Created Homebrew tap repo: `anthonylu23/homebrew-context-grabber`
+3. Cask formula: `Casks/context-grabber.rb` (passes `brew style` and `brew audit`)
+4. Install: `brew tap anthonylu23/context-grabber && brew install --cask context-grabber`
+5. Uninstall: `brew uninstall --cask context-grabber`
+
+## Phase 5: Release Automation ✓
+
+Completed. Implementation:
+
+1. Created `.github/workflows/release.yml` — tag-triggered release workflow:
+   - Triggers on `v*` tags pushed to the repo
+   - Validates tag version matches `VERSION` file (prevents drift)
+   - Runs on `macos-15` runner (required for `swift build`, `pkgbuild`, `productbuild`)
+   - Calls existing `stage-macos-artifacts.sh` and `build-macos-package.sh` scripts
+   - Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture
+   - Computes SHA256 checksum and includes it in release notes
+   - Creates GitHub Release with install instructions and asset upload via `gh release create`
+
+### Release Flow
+
+```
+git tag v0.2.0 && git push origin v0.2.0
+  → release.yml triggers
+  → validates VERSION file = 0.2.0
+  → builds Swift app + Go CLI
+  → stages + packages .pkg
+  → runs smoke tests (payload, version, plist, arch)
+  → creates GitHub Release with .pkg + SHA256
+```
+
+### Smoke Tests
+
+| Test | Validates |
+|------|-----------|
+| Package payload structure | `ContextGrabberHost`, `Info.plist`, `cgrab` all present in `.pkg` |
+| CLI version injection | Staged `cgrab --version` matches `VERSION` file |
+| Info.plist fields | `CFBundleShortVersionString`, `CFBundleIdentifier`, `LSUIElement` correct |
+| Binary architecture | App binary is Mach-O executable |
+
+### Release Checklist (Manual)
+
+Before tagging a release:
+1. Update `VERSION` file to new semver
+2. Commit the version bump
+3. Tag: `git tag v<version>`
+4. Push: `git push origin v<version>`
+5. After release: update Homebrew cask SHA256 in `anthonylu23/homebrew-context-grabber`
+
 ## Deferred
 
-- **Phase 4: Homebrew Cask** — requires a tap repo and hosting the `.pkg` artifact (e.g., GitHub Releases)
-- **Phase 5: Release automation** — CI build + smoke test pipeline
 - **Phase 6: Signing + notarization** — requires Apple Developer account and certificates
 - **Universal binary**: `lipo` to combine arm64 + x86_64 builds (nice-to-have, most users are on Apple Silicon)
+- **Homebrew cask auto-update**: auto-PR to tap repo with new SHA256 on release (requires a separate GH Action or script)

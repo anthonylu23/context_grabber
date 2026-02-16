@@ -81,13 +81,12 @@ flowchart LR
 - Install: `brew tap anthonylu23/context-grabber && brew install --cask context-grabber`
 - Uninstall: `brew uninstall --cask context-grabber`
 
-### Phase 5: Release Automation + Docs
-- Add CI checks for package contents and smoke tests.
-- Update:
-  - `README.md`
-  - `docs/codebase/components/companion-cli.md`
-  - `docs/codebase/usage/local-dev.md`
-  - `docs/plans/context-grabber-project-plan.md`
+### Phase 5: Release Automation ✓
+- Tag-triggered GitHub Actions workflow (`.github/workflows/release.yml`)
+- Validates tag matches `VERSION` file, builds `.pkg`, runs smoke tests
+- Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture
+- Creates GitHub Release with `.pkg` asset, install instructions, and SHA256 checksum
+- Manual step after release: update Homebrew cask SHA256 in tap repo
 
 ### Phase 6: Signing + Notarization
 - Add Developer ID signing + notarization pipeline.

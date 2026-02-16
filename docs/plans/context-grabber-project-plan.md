@@ -634,14 +634,14 @@ Lightweight settings popover or small window accessible from the menu:
 
 ## Next Steps (Implementation Queue)
 
-### Active (in parallel)
+### Completed
 
-1. ~~**Distribution + packaging (Phases 1-3)**~~ ✓ — unsigned `.pkg` installer built and validated. Standalone Go binary to `/usr/local/bin/cgrab`, app to `/Applications/ContextGrabber.app`. Version `0.1.0`. See `docs/plans/distribution-packaging-implementation.md`.
+1. ~~**Distribution + packaging (Phases 1-5)**~~ ✓ — unsigned `.pkg` installer built, validated, Homebrew Cask created, and tag-triggered release automation pipeline in place. See `docs/plans/distribution-packaging-plan.md` and `docs/plans/distribution-packaging-implementation.md`.
 2. ~~**Agent integration (Phases 1-5)**~~ ✓ — skill content, npx interactive installer, `cgrab skills install/uninstall` CLI subcommand, skills.sh ecosystem discovery (`skills/context-grabber/`), and documentation updates all complete. See `docs/plans/agent-integration-plan.md`.
 
 ### Queued
 
-3. ~~Distribution Phase 4 — Homebrew Cask~~ ✓ — tap repo at `anthonylu23/homebrew-context-grabber`, GitHub Release `v0.1.0` with `.pkg` asset, `brew install --cask context-grabber` works. See `docs/plans/distribution-packaging-plan.md`.
+3. Dogfood install validation — full `.pkg` install on real system, `cd /tmp && cgrab doctor` to verify outside-repo host resolution, full validation checklist from implementation docs.
 4. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 5. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 6. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
@@ -750,3 +750,13 @@ Lightweight settings popover or small window accessible from the menu:
   - `zap trash` cleans `~/.contextgrabber` and `~/contextgrabber` on deep clean
   - download + SHA256 verification confirmed working; actual install requires interactive terminal (sudo)
   - next: Phase 5 (release automation), Phase 6 (signing + notarization)
+72. Distribution Phase 5 (Release Automation) is now complete:
+  - created `.github/workflows/release.yml` — tag-triggered release workflow on `macos-15` runner
+  - validates pushed tag version matches `VERSION` file (prevents tag/version drift)
+  - calls existing `stage-macos-artifacts.sh` and `build-macos-package.sh` scripts
+  - smoke tests run in CI: package payload structure, CLI version injection, Info.plist fields (version, bundle ID, LSUIElement), binary architecture (Mach-O)
+  - computes SHA256 checksum and includes it in release notes
+  - creates GitHub Release via `gh release create` with `.pkg` asset and install instructions
+  - release flow: `git tag v0.x.0 && git push origin v0.x.0` triggers full pipeline
+  - manual post-release step: update SHA256 in `anthonylu23/homebrew-context-grabber` cask formula
+  - next: Phase 6 (signing + notarization, requires Apple Developer account)
