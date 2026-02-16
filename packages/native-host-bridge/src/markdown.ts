@@ -328,7 +328,13 @@ export const normalizeBrowserContext = (
 };
 
 const yamlQuote = (value: string): string => {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${escaped}"`;
 };
 
 export const renderNormalizedContextMarkdown = (
@@ -347,12 +353,12 @@ export const renderNormalizedContextMarkdown = (
     `confidence: ${context.confidence.toFixed(2)}`,
     `truncated: ${context.truncated ? "true" : "false"}`,
     `token_estimate: ${context.tokenEstimate}`,
-    "warnings:",
   ];
 
   if (context.captureWarnings.length === 0) {
-    frontmatterLines.push('  - ""');
+    frontmatterLines.push("warnings: []");
   } else {
+    frontmatterLines.push("warnings:");
     for (const warning of context.captureWarnings) {
       frontmatterLines.push(`  - ${yamlQuote(warning)}`);
     }
