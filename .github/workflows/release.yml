@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-package:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Validate tag matches VERSION file
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match VERSION file ($FILE_VERSION)"
+            exit 1
+          fi
+          echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Stage release artifacts
+        run: |
+          STAGING_DIR=$(scripts/release/stage-macos-artifacts.sh)
+          echo "STAGING_DIR=$STAGING_DIR" >> "$GITHUB_ENV"
+
+      - name: Build .pkg installer
+        run: |
+          PKG_PATH=$(scripts/release/build-macos-package.sh "$STAGING_DIR")
+          echo "PKG_PATH=$PKG_PATH" >> "$GITHUB_ENV"
+
+      - name: Smoke test — package structure
+        run: |
+          set -euo pipefail
+
+          # Expand the product archive to inspect component packages
+          EXPAND_DIR="$(mktemp -d -t pkg-inspect)"
+          pkgutil --expand "$PKG_PATH" "$EXPAND_DIR/expanded"
+
+          echo "--- Expanded structure ---"
+          find "$EXPAND_DIR/expanded" -type f | head -20
+
+          # Verify component packages exist
+          [[ -f "$EXPAND_DIR/expanded/app.pkg/Payload" ]] \
+            || { echo "::error::app.pkg component not found in product archive"; exit 1; }
+          [[ -f "$EXPAND_DIR/expanded/cli.pkg/Payload" ]] \
+            || { echo "::error::cli.pkg component not found in product archive"; exit 1; }
+
+          # Verify distribution.xml is present
+          [[ -f "$EXPAND_DIR/expanded/Distribution" ]] \
+            || { echo "::error::Distribution descriptor not found in product archive"; exit 1; }
+
+          # Verify distribution references both components
+          grep -q "com.contextgrabber.app" "$EXPAND_DIR/expanded/Distribution" \
+            || { echo "::error::Distribution does not reference app component"; exit 1; }
+          grep -q "com.contextgrabber.cli" "$EXPAND_DIR/expanded/Distribution" \
+            || { echo "::error::Distribution does not reference CLI component"; exit 1; }
+
+          rm -rf "$EXPAND_DIR"
+          echo "Package structure OK"
+
+      - name: Smoke test — staged artifact structure
+        run: |
+          set -euo pipefail
+          # Verify staged artifacts directly (more reliable than extracting .pkg payloads)
+          [[ -f "$STAGING_DIR/app/ContextGrabber.app/Contents/MacOS/ContextGrabberHost" ]] \
+            || { echo "::error::App binary missing from staged artifacts"; exit 1; }
+          [[ -f "$STAGING_DIR/app/ContextGrabber.app/Contents/Info.plist" ]] \
+            || { echo "::error::Info.plist missing from staged artifacts"; exit 1; }
+          [[ -f "$STAGING_DIR/cli/cgrab" ]] \
+            || { echo "::error::CLI binary missing from staged artifacts"; exit 1; }
+          echo "Staged artifact structure OK"
+
+      - name: Smoke test — CLI version from staged binary
+        run: |
+          CLI_BIN="$STAGING_DIR/cli/cgrab"
+          REPORTED="$("$CLI_BIN" --version 2>/dev/null | awk '{print $NF}')"
+          if [[ "$REPORTED" != "$VERSION" ]]; then
+            echo "::error::CLI binary reports version '$REPORTED', expected '$VERSION'"
+            exit 1
+          fi
+          echo "CLI version OK: $REPORTED"
+
+      - name: Smoke test — Info.plist version
+        run: |
+          PLIST="$STAGING_DIR/app/ContextGrabber.app/Contents/Info.plist"
+          PLIST_VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
+          if [[ "$PLIST_VER" != "$VERSION" ]]; then
+            echo "::error::Info.plist version '$PLIST_VER' does not match expected '$VERSION'"
+            exit 1
+          fi
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")"
+          if [[ "$BUNDLE_ID" != "com.contextgrabber.app" ]]; then
+            echo "::error::Bundle identifier '$BUNDLE_ID' does not match expected 'com.contextgrabber.app'"
+            exit 1
+          fi
+          LSUI="$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$PLIST")"
+          if [[ "$LSUI" != "true" ]]; then
+            echo "::error::LSUIElement is '$LSUI', expected 'true'"
+            exit 1
+          fi
+          echo "Info.plist OK: version=$PLIST_VER, bundleId=$BUNDLE_ID, LSUIElement=$LSUI"
+
+      - name: Smoke test — binary architecture
+        run: |
+          APP_BIN="$STAGING_DIR/app/ContextGrabber.app/Contents/MacOS/ContextGrabberHost"
+          file "$APP_BIN" | grep -q "Mach-O" \
+            || { echo "::error::App binary is not a Mach-O executable"; exit 1; }
+          echo "Binary architecture OK: $(file "$APP_BIN")"
+
+      - name: Compute SHA256
+        run: |
+          SHA256="$(shasum -a 256 "$PKG_PATH" | awk '{print $1}')"
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          echo "SHA256: $SHA256"
+
+      - name: Rename package for release
+        run: |
+          RELEASE_NAME="context-grabber-macos-${VERSION}.pkg"
+          RELEASE_PATH="$(dirname "$PKG_PATH")/$RELEASE_NAME"
+          if [[ "$PKG_PATH" != "$RELEASE_PATH" ]]; then
+            mv "$PKG_PATH" "$RELEASE_PATH"
+          fi
+          echo "RELEASE_PKG=$RELEASE_PATH" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > /tmp/release-notes.md <<'NOTES_EOF'
+          ## Context Grabber v__VERSION__
+
+          ### Install
+
+          **Homebrew (recommended):**
+          ```bash
+          brew tap anthonylu23/context-grabber
+          brew install --cask context-grabber
+          ```
+
+          **Direct download:** Install `__RELEASE_NAME__` below. Right-click → Open if Gatekeeper blocks (unsigned).
+
+          ### What's included
+          - **ContextGrabber.app** → `/Applications/ContextGrabber.app`
+          - **cgrab CLI** → `/usr/local/bin/cgrab`
+
+          ### Checksums
+          | File | SHA256 |
+          |------|--------|
+          | `__RELEASE_NAME__` | `__SHA256__` |
+
+          ---
+          **Note:** This release is unsigned. macOS will show an "unidentified developer" warning — right-click → Open to bypass.
+          NOTES_EOF
+
+          # Strip leading whitespace from HEREDOC and substitute placeholders
+          sed -i '' 's/^          //' /tmp/release-notes.md
+          sed -i '' "s/__VERSION__/${VERSION}/g" /tmp/release-notes.md
+          sed -i '' "s/__RELEASE_NAME__/${RELEASE_NAME}/g" /tmp/release-notes.md
+          sed -i '' "s/__SHA256__/${SHA256}/g" /tmp/release-notes.md
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${VERSION}" \
+            --draft \
+            --notes-file /tmp/release-notes.md \
+            "$RELEASE_PKG"
