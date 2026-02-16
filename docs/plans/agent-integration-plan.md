@@ -4,7 +4,7 @@
 
 ## Goal
 
-Make `cgrab` discoverable and usable by AI coding agents (Claude Code, Cursor, Codex, and others) through a standard skill definition and interactive installer. Distribution should work via both `npx` (npm ecosystem) and `cgrab skills install` (CLI-native).
+Make `cgrab` discoverable and usable by AI coding agents (Claude Code, Cursor, and others) through a standard skill definition and interactive installer. Distribution should work via both `npx` (npm ecosystem) and `cgrab skills install` (CLI-native).
 
 ## Architecture
 
@@ -41,7 +41,6 @@ description: >
 | Claude Code | `~/.agents/skills/context-grabber/` + symlink `~/.claude/skills/context-grabber` | `.claude/skills/context-grabber/`  |
 | OpenCode   | `~/.agents/skills/context-grabber/` + symlink `~/.config/opencode/skills/context-grabber` | `.opencode/skills/context-grabber/`  |
 | Cursor     | `~/.cursor/rules/context-grabber.mdc` (adapted format)                   | `.cursor/rules/context-grabber.mdc` |
-| Codex      | TBD — research Codex agent skill conventions before implementation       | TBD                                |
 
 Global installs use `~/.agents/skills/` as the canonical location with symlinks into each agent's skill directory. This mirrors how existing Vercel skills are installed.
 
@@ -70,7 +69,6 @@ packages/agent-skills/
       claude.ts             # Claude Code install/uninstall logic
       opencode.ts           # OpenCode install/uninstall logic
       cursor.ts             # Cursor install/uninstall logic (SKILL.md -> .mdc adapter)
-      codex.ts              # Codex install/uninstall logic (TBD)
     utils.ts                # Shared fs/path helpers
 ```
 
@@ -116,7 +114,6 @@ Context Grabber — Agent Skill Installer
   [x] Claude Code
   [ ] OpenCode
   [ ] Cursor
-  [ ] Codex
 
 ? Install scope?
   ( ) Global — available in all projects
@@ -142,7 +139,6 @@ Context Grabber — Agent Skill Installer
   [x] Claude Code
   [ ] OpenCode
   [ ] Cursor
-  [ ] Codex
 
 ? Install scope?
   ( ) Global — available in all projects

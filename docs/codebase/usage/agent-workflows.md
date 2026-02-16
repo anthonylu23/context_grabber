@@ -38,13 +38,19 @@ Interactive prompt-based installer with agent and scope selection.
 
 ### Manual installation
 
-Copy the skill files from `packages/agent-skills/skill/` to the agent-specific directory:
+Copy the skill files from `packages/agent-skills/skill/` to the appropriate directory:
 
 | Agent      | Global path                                          | Project path                          |
 | ---------- | ---------------------------------------------------- | ------------------------------------- |
 | Claude Code | `~/.claude/skills/context-grabber/`                    | `.claude/skills/context-grabber/`       |
 | OpenCode   | `~/.config/opencode/skills/context-grabber/`           | `.opencode/skills/context-grabber/`     |
 | Cursor     | `~/.cursor/rules/context-grabber.mdc` (adapted format) | `.cursor/rules/context-grabber.mdc`     |
+
+> **Note:** The automated installers use `~/.agents/skills/context-grabber/` as the
+> canonical location for global installs and create symlinks into each agent's
+> directory. For manual global installs, you can copy files directly to the
+> agent-specific paths listed above, or replicate the canonical+symlink layout
+> yourself.
 
 ## What the Skill Teaches Agents
 
