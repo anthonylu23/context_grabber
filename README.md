@@ -4,7 +4,26 @@ A local-first macOS menu bar app that captures active browser tabs and desktop a
 
 ## Installation & Usage
 
-### Quick Start
+### Package Installer (Recommended)
+
+Build the `.pkg` installer that installs both the menu bar app and CLI:
+
+```bash
+# Build and stage release artifacts, then assemble .pkg
+STAGING_DIR=$(scripts/release/stage-macos-artifacts.sh)
+scripts/release/build-macos-package.sh "$STAGING_DIR"
+
+# Install (unsigned — right-click → Open to bypass Gatekeeper)
+open .tmp/context-grabber-macos-0.1.0.pkg
+```
+
+This installs:
+- **ContextGrabber.app** → `/Applications/ContextGrabber.app`
+- **cgrab CLI** → `/usr/local/bin/cgrab`
+
+After install, verify with `cgrab --version` and `cgrab doctor`.
+
+### Development Setup
 ```bash
 bun install
 bun run check          # lint + typecheck + test
@@ -193,7 +212,8 @@ LLM providers require corresponding API key environment variables. See `docs/cod
 │   ├── extension-shared    # Shared extension transport, payload, and sanitization
 │   ├── native-host-bridge  # Native messaging bridge
 │   └── shared-types        # Shared contracts and types
-├── scripts                 # Build and workspace scripts
+├── packaging               # macOS .pkg installer metadata
+├── scripts                 # Build, install, and release scripts
 ├── biome.json
 ├── bunfig.toml
 ├── package.json
