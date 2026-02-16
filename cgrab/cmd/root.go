@@ -85,6 +85,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newDoctorCommand(opts))
 	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newDocsCommand())
+	rootCmd.AddCommand(newSkillsCommand())
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	applyCommandStyle(rootCmd)
 	initRootHelp(rootCmd)
