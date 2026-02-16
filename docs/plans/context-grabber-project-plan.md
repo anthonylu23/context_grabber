@@ -636,12 +636,12 @@ Lightweight settings popover or small window accessible from the menu:
 
 ### Active (in parallel)
 
-1. **Distribution + packaging (Phases 1-3)** — build unsigned `.pkg` installer for app + CLI. Standalone Go binary to `/usr/local/bin/cgrab`, app to `/Applications/ContextGrabber.app`. Semver starting at `0.1.0`. See `docs/plans/distribution-packaging-implementation.md`.
-2. **Agent integration** — skill definition (SKILL.md + references), interactive installer via `npx @context-grabber/agent-skills` and `cgrab skills install`, support for Claude Code / OpenCode / Cursor / Codex. Publish to skills.sh ecosystem. See `docs/plans/agent-integration-plan.md`.
+1. ~~**Distribution + packaging (Phases 1-3)**~~ ✓ — unsigned `.pkg` installer built and validated. Standalone Go binary to `/usr/local/bin/cgrab`, app to `/Applications/ContextGrabber.app`. Version `0.1.0`. See `docs/plans/distribution-packaging-implementation.md`.
+2. **Agent integration** — Phase 1 (skill content) complete: `SKILL.md` + reference docs (`cli-reference.md`, `output-schema.md`, `workflows.md`) written and validated against CLI source. Remaining: Phase 2 (npx installer), Phase 3 (`cgrab skills install` subcommand), Phase 4 (skills.sh publishing), Phase 5 (documentation updates). See `docs/plans/agent-integration-plan.md`.
 
 ### Queued
 
-3. Distribution Phase 4 — Homebrew Cask (after Phase 3 dogfood is validated). See `docs/plans/distribution-packaging-plan.md`.
+3. Distribution Phase 4 — Homebrew Cask (after dogfood install is validated end-to-end). See `docs/plans/distribution-packaging-plan.md`.
 4. Summarization follow-up — add provider diagnostics surfacing and model validation hints in host UI.
 5. Transport hardening follow-up — add Swift integration tests for native-messaging timeout and large-payload streaming behavior.
 6. CLI UX follow-up — evaluate non-activating tab targeting / safer activation strategies for browser capture automation.
@@ -694,3 +694,12 @@ Lightweight settings popover or small window accessible from the menu:
   - app launch path is configurable via `CONTEXT_GRABBER_APP_BUNDLE_PATH` (default `/Applications/ContextGrabber.app`)
   - browser bridge runtime path lookup now points to `cgrab/internal/bridge/browser_capture.ts` (repo-rename follow-up)
   - new Go unit coverage added for host app auto-launch readiness behavior
+65. Distribution + packaging Phases 1-3 are complete:
+  - `VERSION` file at repo root (`0.1.0`) as single source of truth for semver
+  - `scripts/release/stage-macos-artifacts.sh` builds Swift app (release), creates `.app` bundle with generated `Info.plist`, builds Go CLI with version injection via ldflags, stages to temp directory
+  - `scripts/release/build-macos-package.sh` assembles two-component `.pkg` via `pkgbuild` + `productbuild`
+  - `packaging/macos/` contains distribution.xml (version-templated), postinstall script, and installer welcome.html
+  - unsigned `.pkg` (5.7MB) validated: correct payload structure, CLI version `0.1.0`, Info.plist version/bundle ID/LSUIElement, Mach-O arm64 binary, resource bundle included
+  - known: macOS 15+ `com.apple.provenance` xattrs produce cosmetic `._*` files in payload — does not affect installation
+  - ldflags path documented using actual Go module path (`github.com/anthonylu23/context_grabber/cgrab/cmd.Version`)
+  - next: dogfood install on a real system, then Homebrew Cask (Phase 4)

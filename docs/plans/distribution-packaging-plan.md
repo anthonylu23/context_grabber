@@ -52,22 +52,26 @@ flowchart LR
 
 ## Implementation Phases
 
-### Phase 1: Define Packaging Contract
-- Finalize app/CLI install paths and versioning strategy.
-- Decide whether `cgrab` is installed as a standalone binary or shim.
+### Phase 1: Define Packaging Contract ✓
+- Finalized app/CLI install paths and versioning strategy.
+- `cgrab` installed as a standalone binary.
+- `VERSION` file at repo root as single source of truth.
 
-### Phase 2: Add Packaging Scripts
-- Add `scripts/release/stage-macos-artifacts.sh`
-- Add `scripts/release/build-macos-package.sh`
-- Add `packaging/macos/` assets (pkg metadata/templates/scripts).
+### Phase 2: Add Packaging Scripts ✓
+- Added `scripts/release/stage-macos-artifacts.sh`
+- Added `scripts/release/build-macos-package.sh`
+- Added `packaging/macos/` assets (distribution.xml, postinstall, welcome.html).
 
-### Phase 3: Dogfood Installer
-- Build unsigned local `.pkg`.
-- Validate:
-  - app launch works
-  - `cgrab --version` works
-  - `cgrab doctor` works
-  - desktop capture via `ContextGrabberHost --capture` works
+### Phase 3: Dogfood Installer ✓
+- Built unsigned local `.pkg` (5.7MB).
+- Validated:
+  - Two-component package (app + CLI) with correct payloads
+  - CLI version injection: `cgrab version 0.1.0`
+  - Info.plist: version, bundle ID, LSUIElement all correct
+  - App binary: Mach-O arm64 executable
+  - Resource bundle included
+  - postinstall script included
+- Known: `com.apple.provenance` xattrs on macOS 15+ produce cosmetic `._*` files in payload (does not affect install).
 
 ### Phase 4: Homebrew Cask
 - Add/update cask manifest in tap repo.

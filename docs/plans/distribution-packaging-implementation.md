@@ -27,7 +27,7 @@ Rationale:
 ### Version Strategy
 
 - **Scheme**: semantic versioning, starting at `0.1.0`
-- **Go CLI**: inject at build time via `-ldflags "-X github.com/context-grabber/cgrab/cmd.Version=0.1.0"`
+- **Go CLI**: inject at build time via `-ldflags "-X github.com/anthonylu23/context_grabber/cgrab/cmd.Version=0.1.0"`
 - **Swift app**: set `CFBundleShortVersionString` and `CFBundleVersion` in the app bundle's `Info.plist` during staging
 - **Single source of truth**: version is read from a `VERSION` file at the repo root, consumed by both build scripts
 - **Pkg identifier**: `com.contextgrabber.pkg` (product), `com.contextgrabber.app` (app component), `com.contextgrabber.cli` (CLI component)
@@ -56,15 +56,17 @@ scripts/
     build-macos-package.sh                # assemble .pkg from staged artifacts
 ```
 
-## Phase 1: Packaging Contract
+## Phase 1: Packaging Contract ✓
 
-Already finalized above. Implementation tasks:
+Completed. Implementation:
 
-1. Create `VERSION` file at repo root with `0.1.0`
-2. Update Go CLI build to read version from `VERSION` file (or accept as argument to build scripts)
-3. Document the contract in this file (done)
+1. Created `VERSION` file at repo root with `0.1.0`
+2. Go CLI reads version via `-ldflags "-X github.com/anthonylu23/context_grabber/cgrab/cmd.Version=$VERSION"`
+3. Swift app version set via generated `Info.plist` (`CFBundleShortVersionString` and `CFBundleVersion`)
 
-## Phase 2: Packaging Scripts
+## Phase 2: Packaging Scripts ✓
+
+All scripts and metadata files have been created and tested.
 
 ### `scripts/release/stage-macos-artifacts.sh`
 
@@ -89,7 +91,7 @@ Steps:
        Info.plist               # generated with version, bundle ID, LSUIElement=1
        Resources/
    ```
-4. Build Go CLI: `go build -ldflags "-X github.com/context-grabber/cgrab/cmd.Version=$VERSION" -o cgrab .` from `cgrab/`
+4. Build Go CLI: `go build -ldflags "-X github.com/anthonylu23/context_grabber/cgrab/cmd.Version=$VERSION" -o cgrab .` from `cgrab/`
 5. Stage both into `$STAGING_DIR/`:
    ```
    $STAGING_DIR/
