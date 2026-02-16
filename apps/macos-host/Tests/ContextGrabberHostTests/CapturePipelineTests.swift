@@ -1116,7 +1116,7 @@ final class CapturePipelineTests: XCTestCase {
   func testResolveBrowserCaptureMapsTimeoutToMetadataFallback() {
     let resolution = resolveBrowserCapture(
       target: .safari,
-      bridgeResult: .failure(SafariNativeMessagingTransportError.timedOut),
+      bridgeResult: .failure(NativeMessagingTransportError.timedOut(browser: "Safari")),
       frontAppName: "Safari"
     )
 
@@ -1129,7 +1129,7 @@ final class CapturePipelineTests: XCTestCase {
   func testResolveBrowserCaptureMapsUnavailableToMetadataFallback() {
     let resolution = resolveBrowserCapture(
       target: .chrome,
-      bridgeResult: .failure(ChromeNativeMessagingTransportError.emptyOutput),
+      bridgeResult: .failure(NativeMessagingTransportError.emptyOutput(browser: "Chrome")),
       frontAppName: "Google Chrome"
     )
 

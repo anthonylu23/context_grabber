@@ -109,20 +109,8 @@ public func resolveBrowserCapture(
     }
 
   case .failure(let error):
-    if let safariTransportError = error as? SafariNativeMessagingTransportError,
-      case .timedOut = safariTransportError
-    {
-      return createBrowserMetadataFallbackResolution(
-        target: target,
-        code: "ERR_TIMEOUT",
-        message: "Timed out waiting for extension response.",
-        details: nil,
-        frontAppName: frontAppName
-      )
-    }
-
-    if let chromeTransportError = error as? ChromeNativeMessagingTransportError,
-      case .timedOut = chromeTransportError
+    if let transportError = error as? NativeMessagingTransportError,
+      transportError.isTimeout
     {
       return createBrowserMetadataFallbackResolution(
         target: target,

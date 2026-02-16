@@ -1,62 +1,50 @@
 import Foundation
 
-public enum SafariNativeMessagingTransportError: LocalizedError, Sendable {
-  case repoRootNotFound
-  case extensionPackageNotFound
-  case launchFailed(String)
-  case timedOut
-  case processFailed(exitCode: Int32, stderr: String)
-  case emptyOutput
-  case invalidJSON(String)
+// MARK: - Unified transport error
+
+/// Unified error type for Safari and Chrome native messaging transports.
+/// The `browser` field carries context about which transport raised the error.
+public enum NativeMessagingTransportError: LocalizedError, Sendable {
+  case repoRootNotFound(browser: String)
+  case extensionPackageNotFound(browser: String)
+  case launchFailed(browser: String, reason: String)
+  case timedOut(browser: String)
+  case processFailed(browser: String, exitCode: Int32, stderr: String)
+  case emptyOutput(browser: String)
+  case invalidJSON(browser: String, reason: String)
 
   public var errorDescription: String? {
     switch self {
-    case .repoRootNotFound:
-      return "Unable to locate repository root for Safari extension bridge."
-    case .extensionPackageNotFound:
-      return "Safari extension package was not found."
-    case .launchFailed(let reason):
-      return "Failed to launch Safari extension bridge: \(reason)"
-    case .timedOut:
-      return "Timed out waiting for extension response."
-    case .processFailed(let exitCode, let stderr):
-      return "Extension bridge failed with exit code \(exitCode): \(stderr)"
-    case .emptyOutput:
-      return "Extension bridge returned no output."
-    case .invalidJSON(let reason):
-      return "Extension bridge returned invalid JSON: \(reason)"
+    case .repoRootNotFound(let browser):
+      return "Unable to locate repository root for \(browser) extension bridge."
+    case .extensionPackageNotFound(let browser):
+      return "\(browser) extension package was not found."
+    case .launchFailed(let browser, let reason):
+      return "Failed to launch \(browser) extension bridge: \(reason)"
+    case .timedOut(let browser):
+      return "Timed out waiting for \(browser) extension response."
+    case .processFailed(let browser, let exitCode, let stderr):
+      return "\(browser) extension bridge failed with exit code \(exitCode): \(stderr)"
+    case .emptyOutput(let browser):
+      return "\(browser) extension bridge returned no output."
+    case .invalidJSON(let browser, let reason):
+      return "\(browser) extension bridge returned invalid JSON: \(reason)"
     }
+  }
+
+  /// Whether this error represents a timeout.
+  public var isTimeout: Bool {
+    if case .timedOut = self { return true }
+    return false
   }
 }
 
-public enum ChromeNativeMessagingTransportError: LocalizedError, Sendable {
-  case repoRootNotFound
-  case extensionPackageNotFound
-  case launchFailed(String)
-  case timedOut
-  case processFailed(exitCode: Int32, stderr: String)
-  case emptyOutput
-  case invalidJSON(String)
+// MARK: - Legacy type aliases (preserved for backward compatibility)
 
-  public var errorDescription: String? {
-    switch self {
-    case .repoRootNotFound:
-      return "Unable to locate repository root for Chrome extension bridge."
-    case .extensionPackageNotFound:
-      return "Chrome extension package was not found."
-    case .launchFailed(let reason):
-      return "Failed to launch Chrome extension bridge: \(reason)"
-    case .timedOut:
-      return "Timed out waiting for extension response."
-    case .processFailed(let exitCode, let stderr):
-      return "Chrome extension bridge failed with exit code \(exitCode): \(stderr)"
-    case .emptyOutput:
-      return "Chrome extension bridge returned no output."
-    case .invalidJSON(let reason):
-      return "Chrome extension bridge returned invalid JSON: \(reason)"
-    }
-  }
-}
+public typealias SafariNativeMessagingTransportError = NativeMessagingTransportError
+public typealias ChromeNativeMessagingTransportError = NativeMessagingTransportError
+
+// MARK: - Shared transport infrastructure
 
 struct ProcessExecutionResult {
   let stdout: Data
@@ -64,58 +52,35 @@ struct ProcessExecutionResult {
   let exitCode: Int32
 }
 
-public final class SafariNativeMessagingTransport: @unchecked Sendable {
-  private let jsonEncoder = JSONEncoder()
-  private let jsonDecoder = JSONDecoder()
-  private let fileManager = FileManager.default
+/// Shared implementation for native-messaging transport operations.
+/// Safari and Chrome transports delegate to this for process management,
+/// JSON decoding, bun resolution, and repo root lookup.
+final class NativeMessagingTransportCore {
+  let browser: String
+  let extensionPackageSubpath: String
+  let repoMarkerSubpath: String
+  let jsonEncoder = JSONEncoder()
+  let jsonDecoder = JSONDecoder()
+  let fileManager = FileManager.default
 
-  public init() {}
-
-  public func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
-    let requestData = try jsonEncoder.encode(request)
-    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs)
-
-    if !processResult.stdout.isEmpty, let decodedMessage = try? decodeBridgeMessage(processResult.stdout) {
-      return decodedMessage
-    }
-
-    if processResult.exitCode != 0 {
-      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      throw SafariNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
-    }
-
-    return try decodeBridgeMessage(processResult.stdout)
+  init(browser: String, extensionPackageSubpath: String) {
+    self.browser = browser
+    self.extensionPackageSubpath = extensionPackageSubpath
+    self.repoMarkerSubpath = "\(extensionPackageSubpath)/package.json"
   }
 
-  public func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
-    let processResult = try runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
+  // MARK: - Bridge message decoding
 
-    if processResult.exitCode != 0 {
-      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      throw SafariNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
-    }
-
-    guard !processResult.stdout.isEmpty else {
-      throw SafariNativeMessagingTransportError.emptyOutput
-    }
-
-    do {
-      return try jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
-    } catch {
-      throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
-    }
-  }
-
-  private func decodeBridgeMessage(_ data: Data) throws -> ExtensionBridgeMessage {
+  func decodeBridgeMessage(_ data: Data) throws -> ExtensionBridgeMessage {
     guard !data.isEmpty else {
-      throw SafariNativeMessagingTransportError.emptyOutput
+      throw NativeMessagingTransportError.emptyOutput(browser: browser)
     }
 
     let envelope: GenericEnvelope
     do {
       envelope = try jsonDecoder.decode(GenericEnvelope.self, from: data)
     } catch {
-      throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+      throw NativeMessagingTransportError.invalidJSON(browser: browser, reason: error.localizedDescription)
     }
 
     switch envelope.type {
@@ -124,21 +89,23 @@ public final class SafariNativeMessagingTransport: @unchecked Sendable {
         let capture = try jsonDecoder.decode(ExtensionCaptureResponseMessage.self, from: data)
         return .captureResult(capture)
       } catch {
-        throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+        throw NativeMessagingTransportError.invalidJSON(browser: browser, reason: error.localizedDescription)
       }
     case "extension.error":
       do {
         let errorMessage = try jsonDecoder.decode(ExtensionErrorMessage.self, from: data)
         return .error(errorMessage)
       } catch {
-        throw SafariNativeMessagingTransportError.invalidJSON(error.localizedDescription)
+        throw NativeMessagingTransportError.invalidJSON(browser: browser, reason: error.localizedDescription)
       }
     default:
-      throw SafariNativeMessagingTransportError.invalidJSON("Unsupported message type: \(envelope.type)")
+      throw NativeMessagingTransportError.invalidJSON(browser: browser, reason: "Unsupported message type: \(envelope.type)")
     }
   }
 
-  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int) throws -> ProcessExecutionResult {
+  // MARK: - Process execution
+
+  func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int, additionalEnv: [String: String]? = nil) throws -> ProcessExecutionResult {
     let packagePath = try extensionPackagePath()
     let bunExecutablePath = try resolveBunExecutablePath()
 
@@ -148,256 +115,11 @@ public final class SafariNativeMessagingTransport: @unchecked Sendable {
     let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
     process.arguments = [cliPath.path] + arguments
 
-    let stdoutPipe = Pipe()
-    let stderrPipe = Pipe()
-    process.standardOutput = stdoutPipe
-    process.standardError = stderrPipe
-
-    let stdinPipe = Pipe()
-    process.standardInput = stdinPipe
-    let processExited = DispatchSemaphore(value: 0)
-    process.terminationHandler = { _ in
-      processExited.signal()
-    }
-
-    do {
-      try process.run()
-    } catch {
-      throw SafariNativeMessagingTransportError.launchFailed(error.localizedDescription)
-    }
-
-    let stdoutResult = SynchronousResultBox<Data>()
-    let stderrResult = SynchronousResultBox<Data>()
-    let stdoutReadDone = DispatchSemaphore(value: 0)
-    let stderrReadDone = DispatchSemaphore(value: 0)
-
-    DispatchQueue.global(qos: .utility).async {
-      let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-      stdoutResult.set(data)
-      stdoutReadDone.signal()
-    }
-    DispatchQueue.global(qos: .utility).async {
-      let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-      stderrResult.set(data)
-      stderrReadDone.signal()
-    }
-
-    if let stdinData {
-      do {
-        try stdinPipe.fileHandleForWriting.write(contentsOf: stdinData)
-      } catch {
-        if process.isRunning {
-          process.terminate()
-          _ = processExited.wait(timeout: .now() + .milliseconds(200))
-        }
-        throw SafariNativeMessagingTransportError.launchFailed("Failed to write request payload: \(error.localizedDescription)")
-      }
-    }
-    stdinPipe.fileHandleForWriting.closeFile()
-
-    let waitResult = processExited.wait(timeout: .now() + .milliseconds(max(1, timeoutMs)))
-    if waitResult == .timedOut {
-      process.terminate()
-      _ = processExited.wait(timeout: .now() + .milliseconds(200))
-      throw SafariNativeMessagingTransportError.timedOut
-    }
-
-    _ = stdoutReadDone.wait(timeout: .now() + .milliseconds(500))
-    _ = stderrReadDone.wait(timeout: .now() + .milliseconds(500))
-    let stdoutData = stdoutResult.get() ?? stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let stderrData = stderrResult.get() ?? stderrPipe.fileHandleForReading.readDataToEndOfFile()
-
-    return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
-  }
-
-  private func extensionPackagePath() throws -> URL {
-    let repoRoot = try resolveRepoRoot()
-    let packagePath = repoRoot.appendingPathComponent("packages/extension-safari", isDirectory: true)
-    let packageManifest = packagePath.appendingPathComponent("package.json", isDirectory: false)
-
-    guard fileManager.fileExists(atPath: packageManifest.path) else {
-      throw SafariNativeMessagingTransportError.extensionPackageNotFound
-    }
-
-    return packagePath
-  }
-
-  private func resolveRepoRoot() throws -> URL {
-    if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
-      let explicitRoot = URL(fileURLWithPath: envRoot, isDirectory: true)
-      if hasRepoMarker(at: explicitRoot) {
-        return explicitRoot
-      }
-    }
-
-    var candidates: [URL] = [
-      URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true),
-      URL(fileURLWithPath: #filePath, isDirectory: false).deletingLastPathComponent(),
-      Bundle.main.bundleURL,
-    ]
-    if let executableURL = Bundle.main.executableURL {
-      candidates.append(executableURL.deletingLastPathComponent())
-    }
-
-    var visited = Set<String>()
-    for candidate in candidates {
-      if visited.contains(candidate.path) {
-        continue
-      }
-      visited.insert(candidate.path)
-
-      if let resolvedRoot = findRepoRoot(startingAt: candidate, maxDepth: 12) {
-        return resolvedRoot
-      }
-    }
-
-    throw SafariNativeMessagingTransportError.repoRootNotFound
-  }
-
-  private func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
-    var current = startURL
-    for _ in 0..<maxDepth {
-      if hasRepoMarker(at: current) {
-        return current
-      }
-
-      let parent = current.deletingLastPathComponent()
-      if parent.path == current.path {
-        break
-      }
-
-      current = parent
-    }
-
-    return nil
-  }
-
-  private func hasRepoMarker(at rootURL: URL) -> Bool {
-    let marker = rootURL.appendingPathComponent("packages/extension-safari/package.json", isDirectory: false)
-    return fileManager.fileExists(atPath: marker.path)
-  }
-
-  private func resolveBunExecutablePath() throws -> String {
-    if let explicitPath = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_BUN_BIN"], !explicitPath.isEmpty {
-      if fileManager.isExecutableFile(atPath: explicitPath) {
-        return explicitPath
-      }
-      throw SafariNativeMessagingTransportError.launchFailed(
-        "CONTEXT_GRABBER_BUN_BIN is set but not executable: \(explicitPath)"
-      )
-    }
-
-    if let pathValue = ProcessInfo.processInfo.environment["PATH"], !pathValue.isEmpty {
-      for directory in pathValue.split(separator: ":").map(String.init) where !directory.isEmpty {
-        let candidate = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("bun", isDirectory: false)
-        if fileManager.isExecutableFile(atPath: candidate.path) {
-          return candidate.path
-        }
-      }
-    }
-
-    var fallbackPaths: [String] = ["/opt/homebrew/bin/bun", "/usr/local/bin/bun"]
-    let homeBunPath = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-      .appendingPathComponent(".bun/bin/bun", isDirectory: false).path
-    fallbackPaths.append(homeBunPath)
-
-    for candidate in fallbackPaths where fileManager.isExecutableFile(atPath: candidate) {
-      return candidate
-    }
-
-    throw SafariNativeMessagingTransportError.launchFailed(
-      "Unable to locate bun executable. Set CONTEXT_GRABBER_BUN_BIN to the bun binary path."
-    )
-  }
-}
-
-public final class ChromeNativeMessagingTransport: @unchecked Sendable {
-  private let jsonEncoder = JSONEncoder()
-  private let jsonDecoder = JSONDecoder()
-  private let fileManager = FileManager.default
-
-  public init() {}
-
-  public func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int, chromeAppName: String? = nil) throws -> ExtensionBridgeMessage {
-    let requestData = try jsonEncoder.encode(request)
-    let processResult = try runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs, chromeAppName: chromeAppName)
-
-    if !processResult.stdout.isEmpty, let decodedMessage = try? decodeBridgeMessage(processResult.stdout) {
-      return decodedMessage
-    }
-
-    if processResult.exitCode != 0 {
-      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      throw ChromeNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
-    }
-
-    return try decodeBridgeMessage(processResult.stdout)
-  }
-
-  public func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
-    let processResult = try runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
-
-    if processResult.exitCode != 0 {
-      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      throw ChromeNativeMessagingTransportError.processFailed(exitCode: processResult.exitCode, stderr: stderr)
-    }
-
-    guard !processResult.stdout.isEmpty else {
-      throw ChromeNativeMessagingTransportError.emptyOutput
-    }
-
-    do {
-      return try jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
-    } catch {
-      throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
-    }
-  }
-
-  private func decodeBridgeMessage(_ data: Data) throws -> ExtensionBridgeMessage {
-    guard !data.isEmpty else {
-      throw ChromeNativeMessagingTransportError.emptyOutput
-    }
-
-    let envelope: GenericEnvelope
-    do {
-      envelope = try jsonDecoder.decode(GenericEnvelope.self, from: data)
-    } catch {
-      throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
-    }
-
-    switch envelope.type {
-    case "extension.capture.result":
-      do {
-        let capture = try jsonDecoder.decode(ExtensionCaptureResponseMessage.self, from: data)
-        return .captureResult(capture)
-      } catch {
-        throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
-      }
-    case "extension.error":
-      do {
-        let errorMessage = try jsonDecoder.decode(ExtensionErrorMessage.self, from: data)
-        return .error(errorMessage)
-      } catch {
-        throw ChromeNativeMessagingTransportError.invalidJSON(error.localizedDescription)
-      }
-    default:
-      throw ChromeNativeMessagingTransportError.invalidJSON("Unsupported message type: \(envelope.type)")
-    }
-  }
-
-  private func runNativeMessaging(arguments: [String], stdinData: Data?, timeoutMs: Int, chromeAppName: String? = nil) throws -> ProcessExecutionResult {
-    let packagePath = try extensionPackagePath()
-    let bunExecutablePath = try resolveBunExecutablePath()
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: bunExecutablePath)
-    process.currentDirectoryURL = packagePath
-    let cliPath = packagePath.appendingPathComponent("src/native-messaging-cli.ts", isDirectory: false)
-    process.arguments = [cliPath.path] + arguments
-
-    if let chromeAppName {
+    if let additionalEnv, !additionalEnv.isEmpty {
       var env = ProcessInfo.processInfo.environment
-      env["CONTEXT_GRABBER_CHROME_APP_NAME"] = chromeAppName
+      for (key, value) in additionalEnv {
+        env[key] = value
+      }
       process.environment = env
     }
 
@@ -416,7 +138,7 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
     do {
       try process.run()
     } catch {
-      throw ChromeNativeMessagingTransportError.launchFailed(error.localizedDescription)
+      throw NativeMessagingTransportError.launchFailed(browser: browser, reason: error.localizedDescription)
     }
 
     let stdoutResult = SynchronousResultBox<Data>()
@@ -443,7 +165,7 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
           process.terminate()
           _ = processExited.wait(timeout: .now() + .milliseconds(200))
         }
-        throw ChromeNativeMessagingTransportError.launchFailed("Failed to write request payload: \(error.localizedDescription)")
+        throw NativeMessagingTransportError.launchFailed(browser: browser, reason: "Failed to write request payload: \(error.localizedDescription)")
       }
     }
     stdinPipe.fileHandleForWriting.closeFile()
@@ -452,7 +174,7 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
     if waitResult == .timedOut {
       process.terminate()
       _ = processExited.wait(timeout: .now() + .milliseconds(200))
-      throw ChromeNativeMessagingTransportError.timedOut
+      throw NativeMessagingTransportError.timedOut(browser: browser)
     }
 
     _ = stdoutReadDone.wait(timeout: .now() + .milliseconds(500))
@@ -463,19 +185,21 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
     return ProcessExecutionResult(stdout: stdoutData, stderr: stderrData, exitCode: process.terminationStatus)
   }
 
-  private func extensionPackagePath() throws -> URL {
+  // MARK: - Path resolution
+
+  func extensionPackagePath() throws -> URL {
     let repoRoot = try resolveRepoRoot()
-    let packagePath = repoRoot.appendingPathComponent("packages/extension-chrome", isDirectory: true)
+    let packagePath = repoRoot.appendingPathComponent(extensionPackageSubpath, isDirectory: true)
     let packageManifest = packagePath.appendingPathComponent("package.json", isDirectory: false)
 
     guard fileManager.fileExists(atPath: packageManifest.path) else {
-      throw ChromeNativeMessagingTransportError.extensionPackageNotFound
+      throw NativeMessagingTransportError.extensionPackageNotFound(browser: browser)
     }
 
     return packagePath
   }
 
-  private func resolveRepoRoot() throws -> URL {
+  func resolveRepoRoot() throws -> URL {
     if let envRoot = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_REPO_ROOT"], !envRoot.isEmpty {
       let explicitRoot = URL(fileURLWithPath: envRoot, isDirectory: true)
       if hasRepoMarker(at: explicitRoot) {
@@ -504,10 +228,10 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
       }
     }
 
-    throw ChromeNativeMessagingTransportError.repoRootNotFound
+    throw NativeMessagingTransportError.repoRootNotFound(browser: browser)
   }
 
-  private func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
+  func findRepoRoot(startingAt startURL: URL, maxDepth: Int) -> URL? {
     var current = startURL
     for _ in 0..<maxDepth {
       if hasRepoMarker(at: current) {
@@ -525,18 +249,19 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
     return nil
   }
 
-  private func hasRepoMarker(at rootURL: URL) -> Bool {
-    let marker = rootURL.appendingPathComponent("packages/extension-chrome/package.json", isDirectory: false)
+  func hasRepoMarker(at rootURL: URL) -> Bool {
+    let marker = rootURL.appendingPathComponent(repoMarkerSubpath, isDirectory: false)
     return fileManager.fileExists(atPath: marker.path)
   }
 
-  private func resolveBunExecutablePath() throws -> String {
+  func resolveBunExecutablePath() throws -> String {
     if let explicitPath = ProcessInfo.processInfo.environment["CONTEXT_GRABBER_BUN_BIN"], !explicitPath.isEmpty {
       if fileManager.isExecutableFile(atPath: explicitPath) {
         return explicitPath
       }
-      throw ChromeNativeMessagingTransportError.launchFailed(
-        "CONTEXT_GRABBER_BUN_BIN is set but not executable: \(explicitPath)"
+      throw NativeMessagingTransportError.launchFailed(
+        browser: browser,
+        reason: "CONTEXT_GRABBER_BUN_BIN is set but not executable: \(explicitPath)"
       )
     }
 
@@ -558,8 +283,99 @@ public final class ChromeNativeMessagingTransport: @unchecked Sendable {
       return candidate
     }
 
-    throw ChromeNativeMessagingTransportError.launchFailed(
-      "Unable to locate bun executable. Set CONTEXT_GRABBER_BUN_BIN to the bun binary path."
+    throw NativeMessagingTransportError.launchFailed(
+      browser: browser,
+      reason: "Unable to locate bun executable. Set CONTEXT_GRABBER_BUN_BIN to the bun binary path."
     )
+  }
+}
+
+// MARK: - Safari transport
+
+public final class SafariNativeMessagingTransport: @unchecked Sendable {
+  private let core = NativeMessagingTransportCore(browser: "Safari", extensionPackageSubpath: "packages/extension-safari")
+
+  public init() {}
+
+  public func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int) throws -> ExtensionBridgeMessage {
+    let requestData = try core.jsonEncoder.encode(request)
+    let processResult = try core.runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs)
+
+    if !processResult.stdout.isEmpty, let decodedMessage = try? core.decodeBridgeMessage(processResult.stdout) {
+      return decodedMessage
+    }
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw NativeMessagingTransportError.processFailed(browser: "Safari", exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    return try core.decodeBridgeMessage(processResult.stdout)
+  }
+
+  public func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
+    let processResult = try core.runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw NativeMessagingTransportError.processFailed(browser: "Safari", exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    guard !processResult.stdout.isEmpty else {
+      throw NativeMessagingTransportError.emptyOutput(browser: "Safari")
+    }
+
+    do {
+      return try core.jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
+    } catch {
+      throw NativeMessagingTransportError.invalidJSON(browser: "Safari", reason: error.localizedDescription)
+    }
+  }
+}
+
+// MARK: - Chrome transport
+
+public final class ChromeNativeMessagingTransport: @unchecked Sendable {
+  private let core = NativeMessagingTransportCore(browser: "Chrome", extensionPackageSubpath: "packages/extension-chrome")
+
+  public init() {}
+
+  public func sendCaptureRequest(_ request: HostCaptureRequestMessage, timeoutMs: Int, chromeAppName: String? = nil) throws -> ExtensionBridgeMessage {
+    let requestData = try core.jsonEncoder.encode(request)
+    var additionalEnv: [String: String]?
+    if let chromeAppName {
+      additionalEnv = ["CONTEXT_GRABBER_CHROME_APP_NAME": chromeAppName]
+    }
+    let processResult = try core.runNativeMessaging(arguments: [], stdinData: requestData, timeoutMs: timeoutMs, additionalEnv: additionalEnv)
+
+    if !processResult.stdout.isEmpty, let decodedMessage = try? core.decodeBridgeMessage(processResult.stdout) {
+      return decodedMessage
+    }
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw NativeMessagingTransportError.processFailed(browser: "Chrome", exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    return try core.decodeBridgeMessage(processResult.stdout)
+  }
+
+  public func ping(timeoutMs: Int = 800) throws -> NativeMessagingPingResponse {
+    let processResult = try core.runNativeMessaging(arguments: ["--ping"], stdinData: nil, timeoutMs: timeoutMs)
+
+    if processResult.exitCode != 0 {
+      let stderr = String(data: processResult.stderr, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      throw NativeMessagingTransportError.processFailed(browser: "Chrome", exitCode: processResult.exitCode, stderr: stderr)
+    }
+
+    guard !processResult.stdout.isEmpty else {
+      throw NativeMessagingTransportError.emptyOutput(browser: "Chrome")
+    }
+
+    do {
+      return try core.jsonDecoder.decode(NativeMessagingPingResponse.self, from: processResult.stdout)
+    } catch {
+      throw NativeMessagingTransportError.invalidJSON(browser: "Chrome", reason: error.localizedDescription)
+    }
   }
 }
