@@ -170,6 +170,7 @@ func resolveAgents(agentFlag []string) ([]skills.AgentTarget, error) {
 		return skills.EmbeddedAgents, nil
 	}
 
+	seen := make(map[skills.AgentTarget]bool)
 	var agents []skills.AgentTarget
 	for _, raw := range agentFlag {
 		// Support comma-separated: --agent claude,opencode
@@ -182,6 +183,10 @@ func resolveAgents(agentFlag []string) ([]skills.AgentTarget, error) {
 			if err != nil {
 				return nil, err
 			}
+			if seen[agent] {
+				continue
+			}
+			seen[agent] = true
 			agents = append(agents, agent)
 		}
 	}

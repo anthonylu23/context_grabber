@@ -125,6 +125,13 @@ func Install(agents []AgentTarget, scope InstallScope, cwd string) ([]InstallRes
 func Uninstall(agents []AgentTarget, scope InstallScope, cwd string) ([]InstallResult, error) {
 	var results []InstallResult
 
+	// NOTE: Iteration order matters for multi-agent global uninstall.
+	// When uninstalling multiple agents (e.g. [claude, opencode]), the first
+	// agent's hasOtherGlobalSymlinks check sees the second agent's symlink
+	// still present, so canonical files are preserved. After the first agent's
+	// symlink is removed, the second agent sees no remaining symlinks and
+	// removes the canonical files. This is correct behavior — canonical files
+	// are only removed when the last symlink is gone.
 	for _, agent := range agents {
 		result := InstallResult{Agent: agent, Scope: scope}
 
@@ -255,7 +262,9 @@ func removeSymlink(linkPath string) bool {
 	if absExisting != absCanonical {
 		return false
 	}
-	_ = os.Remove(linkPath)
+	if err := os.Remove(linkPath); err != nil {
+		return false
+	}
 	return true
 }
 
@@ -269,9 +278,17 @@ func removeSkillFiles(targetDir string) []string {
 		}
 	}
 
-	// Clean up references/ if empty.
-	refsDir := filepath.Join(targetDir, "references")
-	_ = os.Remove(refsDir) // Fails silently if not empty or missing.
+	// Clean up any subdirectories created for skill files (e.g. references/).
+	// Derived from SkillFileList to avoid hardcoding directory names.
+	subdirs := make(map[string]struct{})
+	for _, relPath := range SkillFileList {
+		if d := filepath.Dir(relPath); d != "." {
+			subdirs[d] = struct{}{}
+		}
+	}
+	for d := range subdirs {
+		_ = os.Remove(filepath.Join(targetDir, d)) // Fails silently if not empty or missing.
+	}
 
 	// Clean up target dir if empty.
 	_ = os.Remove(targetDir)
