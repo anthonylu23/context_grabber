@@ -70,6 +70,34 @@ jobs:
           rm -rf "$EXPAND_DIR"
           echo "Package structure OK"
 
+      - name: Smoke test — postinstall script user/home resolution
+        run: |
+          set -euo pipefail
+
+          EXPAND_DIR="$(mktemp -d -t pkg-postinstall)"
+          MOCK_BIN="$(mktemp -d -t postinstall-mock)"
+          FAKE_HOME="$(mktemp -d -t postinstall-home)"
+          POSTINSTALL_PATH="$EXPAND_DIR/expanded/cli.pkg/Scripts/postinstall"
+
+          pkgutil --expand "$PKG_PATH" "$EXPAND_DIR/expanded"
+          [[ -f "$POSTINSTALL_PATH" ]] \
+            || { echo "::error::postinstall script not found in CLI package"; exit 1; }
+
+          # Mock system tools so we can verify behavior deterministically in CI.
+          printf '%s\n' '#!/bin/bash' 'echo "testuser"' > "$MOCK_BIN/stat"
+          printf '%s\n' '#!/bin/bash' "echo \"NFSHomeDirectory: $FAKE_HOME\"" > "$MOCK_BIN/dscl"
+          printf '%s\n' '#!/bin/bash' 'exit 0' > "$MOCK_BIN/chown"
+
+          chmod +x "$MOCK_BIN/stat" "$MOCK_BIN/dscl" "$MOCK_BIN/chown"
+
+          PATH="$MOCK_BIN:/usr/bin:/bin:/usr/sbin:/sbin" USER=root "$POSTINSTALL_PATH"
+
+          [[ -d "$FAKE_HOME/contextgrabber" ]] \
+            || { echo "::error::postinstall did not create expected user context directory"; exit 1; }
+
+          rm -rf "$EXPAND_DIR" "$MOCK_BIN" "$FAKE_HOME"
+          echo "Postinstall behavior OK"
+
       - name: Smoke test — staged artifact structure
         run: |
           set -euo pipefail

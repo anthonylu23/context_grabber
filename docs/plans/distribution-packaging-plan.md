@@ -10,7 +10,7 @@ Use one canonical release artifact and multiple distribution channels that point
 
 ## Recommended Approach
 
-1. Canonical artifact: `context-grabber-macos-universal.pkg`
+1. Canonical artifact: `context-grabber-macos-<version>.pkg`
 2. Primary distribution channel: Homebrew Cask
 3. Delivery maturity: start unsigned/local dogfood, then add signing + notarization
 4. npm/bun: optional later wrapper (not primary for app distribution)
@@ -43,7 +43,7 @@ Detailed implementation plan: `docs/plans/distribution-packaging-implementation.
 
 ```mermaid
 flowchart LR
-  buildPipeline[BuildPipeline] --> pkgArtifact[context-grabber-macos-universal.pkg]
+  buildPipeline[BuildPipeline] --> pkgArtifact[context-grabber-macos-<version>.pkg]
   pkgArtifact --> directInstall[DirectDownloadInstall]
   pkgArtifact --> brewCask[HomebrewCaskInstall]
   brewCask --> appInstall[ContextGrabber.app]
@@ -66,7 +66,7 @@ flowchart LR
 - Built unsigned local `.pkg` (5.7MB).
 - Validated:
   - Two-component package (app + CLI) with correct payloads
-  - CLI version injection: `cgrab version 0.1.0`
+  - CLI version injection: `cgrab --version` prints `0.1.0`
   - Info.plist: version, bundle ID, LSUIElement all correct
   - App binary: Mach-O arm64 executable
   - Resource bundle included
@@ -84,13 +84,14 @@ flowchart LR
 ### Phase 5: Release Automation ✓
 - Tag-triggered GitHub Actions workflow (`.github/workflows/release.yml`)
 - Validates tag matches `VERSION` file, builds `.pkg`, runs smoke tests
-- Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture
+- Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture, postinstall user/home resolution
 - Creates GitHub Release with `.pkg` asset, install instructions, and SHA256 checksum
 - Manual step after release: update Homebrew cask SHA256 in tap repo
 
 ### Phase 6: Signing + Notarization
 - Add Developer ID signing + notarization pipeline.
 - Gate production/public links on notarized artifacts.
+- Investigate provenance-related AppleDouble (`._*`) payload noise reduction on newer macOS versions.
 
 ## Optional Later: npm/bun Wrapper
 

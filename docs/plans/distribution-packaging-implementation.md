@@ -166,8 +166,8 @@ Steps:
     <choice id="com.contextgrabber.cli" visible="false">
         <pkg-ref id="com.contextgrabber.cli"/>
     </choice>
-    <pkg-ref id="com.contextgrabber.app" version="VERSION" onConclusion="none">app.pkg</pkg-ref>
-    <pkg-ref id="com.contextgrabber.cli" version="VERSION" onConclusion="none">cli.pkg</pkg-ref>
+    <pkg-ref id="com.contextgrabber.app" version="__VERSION__" onConclusion="none">app.pkg</pkg-ref>
+    <pkg-ref id="com.contextgrabber.cli" version="__VERSION__" onConclusion="none">cli.pkg</pkg-ref>
 </installer-gui-script>
 ```
 
@@ -175,8 +175,15 @@ Steps:
 
 ```bash
 #!/bin/bash
-# Create default CLI storage directory
-mkdir -p "$HOME/contextgrabber"
+# Resolve active console user and create CLI storage directory there.
+CONSOLE_USER="$(stat -f '%Su' /dev/console 2>/dev/null)"
+if [[ -z "$CONSOLE_USER" || "$CONSOLE_USER" == "root" || "$CONSOLE_USER" == "loginwindow" ]]; then
+  exit 0
+fi
+REAL_HOME="$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+[[ -z "$REAL_HOME" ]] && exit 0
+mkdir -p "$REAL_HOME/contextgrabber"
+chown "$CONSOLE_USER" "$REAL_HOME/contextgrabber"
 exit 0
 ```
 
@@ -194,7 +201,7 @@ scripts/release/build-macos-package.sh "$STAGING_DIR"
 
 | Check | Command | Expected |
 | ----- | ------- | -------- |
-| Installer runs | `open .tmp/context-grabber-macos-0.1.0.pkg` | macOS installer GUI opens |
+| Installer runs | `open .tmp/context-grabber-macos-<version>.pkg` | macOS installer GUI opens |
 | App installed | `ls /Applications/ContextGrabber.app` | App bundle exists |
 | CLI installed | `command -v cgrab` | `/usr/local/bin/cgrab` |
 | CLI version | `cgrab --version` | `0.1.0` |
@@ -203,7 +210,7 @@ scripts/release/build-macos-package.sh "$STAGING_DIR"
 | Desktop capture | `cgrab capture --app Finder` | Captures Finder via host |
 | Browser capture | `cgrab capture --focused` | Captures active tab |
 | App launch | Open ContextGrabber.app | Menu bar icon appears |
-| Host path resolution | `cgrab doctor --format json \| jq .hostBinary` | Points to installed app |
+| Host path resolution | `cgrab doctor --format json \| jq .hostBinaryPath` | Points to installed app |
 
 ### Known Issues to Watch
 
@@ -211,6 +218,7 @@ scripts/release/build-macos-package.sh "$STAGING_DIR"
 - **Permission grants**: fresh install will need Accessibility/Screen Recording grants for the new binary path at `/Applications/ContextGrabber.app/Contents/MacOS/ContextGrabberHost`
 - **Existing install conflict**: if a dev build of `ContextGrabberHost` already has permission grants, the installed `.app` may need separate grants (different binary path)
 - **`/usr/local/bin` permissions**: some systems may not have `/usr/local/bin` writable without sudo. The `.pkg` installer handles this via system-level install.
+- **AppleDouble payload noise on newer macOS**: `com.apple.provenance` xattrs can still materialize as `._*` entries in pkg payloads. Current impact is cosmetic.
 
 ## Phase 4: Homebrew Cask ✓
 
@@ -231,7 +239,7 @@ Completed. Implementation:
    - Validates tag version matches `VERSION` file (prevents drift)
    - Runs on `macos-15` runner (required for `swift build`, `pkgbuild`, `productbuild`)
    - Calls existing `stage-macos-artifacts.sh` and `build-macos-package.sh` scripts
-   - Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture
+   - Smoke tests: package payload structure, CLI version injection, Info.plist fields, binary architecture, postinstall user/home resolution
    - Computes SHA256 checksum and includes it in release notes
    - Creates GitHub Release with install instructions and asset upload via `gh release create`
 

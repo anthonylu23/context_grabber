@@ -3,11 +3,42 @@
 # Note: installer scripts run as root, so $HOME is /var/root.
 # Resolve the real user's home directory instead.
 
-REAL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
-REAL_HOME=$(dscl . -read "/Users/$REAL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+resolve_home_for_user() {
+  local user="$1"
+  dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}'
+}
+
+is_valid_user() {
+  local user="$1"
+  [[ -n "$user" && "$user" != "root" && "$user" != "loginwindow" ]]
+}
+
+CONSOLE_USER="$(stat -f '%Su' /dev/console 2>/dev/null)"
+SUDO_USER_NAME="${SUDO_USER:-}"
+ENV_USER_NAME="${USER:-}"
+
+# Prefer the active console user.
+if is_valid_user "$CONSOLE_USER"; then
+  REAL_USER="$CONSOLE_USER"
+# Fallback to sudo user in non-console installs.
+elif is_valid_user "$SUDO_USER_NAME"; then
+  REAL_USER="$SUDO_USER_NAME"
+# Final fallback to USER when it resolves to a non-root account.
+elif is_valid_user "$ENV_USER_NAME"; then
+  REAL_USER="$ENV_USER_NAME"
+else
+  REAL_USER=""
+fi
+
+if [[ -z "$REAL_USER" ]]; then
+  # Fallback: skip directory creation rather than writing under /var/root.
+  exit 0
+fi
+
+REAL_HOME="$(resolve_home_for_user "$REAL_USER")"
 
 if [[ -z "$REAL_HOME" ]]; then
-  # Fallback: skip directory creation rather than writing to /var/root
+  # Fallback: skip directory creation rather than writing under /var/root.
   exit 0
 fi
 

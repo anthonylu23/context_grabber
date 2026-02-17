@@ -22,11 +22,11 @@ If you have `cgrab` installed:
 # Interactive installer (requires Bun)
 cgrab skills install
 
-# Embedded fallback (no Bun needed, Claude Code + OpenCode only)
+# Non-interactive install (works with Bun, or embedded fallback if Bun unavailable)
 cgrab skills install --agent claude --scope project
 ```
 
-When Bun is available, `cgrab skills install` launches a full interactive experience supporting Claude Code, OpenCode, and Cursor. Without Bun, it falls back to a non-interactive embedded installer for Claude Code and OpenCode (Cursor requires Bun for `.mdc` format conversion).
+When Bun is available, `cgrab skills install` launches the TS installer with support for Claude Code, OpenCode, and Cursor. Explicit `--agent`/`--scope` flags are forwarded and run non-interactively. If Bun is unavailable, `cgrab` falls back to the embedded non-interactive installer for Claude Code and OpenCode (Cursor requires Bun for `.mdc` format conversion). If non-interactive Bun delegation fails, `cgrab` attempts the same embedded fallback; interactive Bun failures are returned as errors.
 
 ### npx interactive installer
 

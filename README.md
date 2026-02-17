@@ -4,7 +4,7 @@ A local-first macOS menu bar app that captures active browser tabs and desktop a
 
 ## Installation & Usage
 
-### Homebrew (Recommended)
+### Homebrew (Recommended for app + CLI install)
 
 ```bash
 brew tap anthonylu23/context-grabber
@@ -16,10 +16,11 @@ This installs:
 - **cgrab CLI** → `/usr/local/bin/cgrab`
 
 After install, verify with `cgrab --version` and `cgrab doctor`.
+For browser bridge capture outside the repository tree, also set `CONTEXT_GRABBER_REPO_ROOT=/path/to/context_grabber` and ensure Bun is installed.
 
 ### Direct Download
 
-Download `context-grabber-macos-0.1.0.pkg` from [GitHub Releases](https://github.com/anthonylu23/context_grabber/releases) and open it. Right-click → Open if Gatekeeper blocks (unsigned).
+Download the latest `context-grabber-macos-<version>.pkg` from [GitHub Releases](https://github.com/anthonylu23/context_grabber/releases) and open it. Right-click → Open if Gatekeeper blocks (unsigned).
 
 ### Build from Source
 
@@ -27,7 +28,7 @@ Download `context-grabber-macos-0.1.0.pkg` from [GitHub Releases](https://github
 # Build and stage release artifacts, then assemble .pkg
 STAGING_DIR=$(scripts/release/stage-macos-artifacts.sh)
 scripts/release/build-macos-package.sh "$STAGING_DIR"
-open .tmp/context-grabber-macos-0.1.0.pkg
+open .tmp/context-grabber-macos-<version>.pkg
 ```
 
 ### Development Setup
@@ -148,6 +149,9 @@ npx skills add anthonylu23/context_grabber
 
 # Or via cgrab itself
 cgrab skills install
+
+# Optional non-interactive mode
+cgrab skills install --agent claude --scope project
 ```
 
 The skill teaches agents when and how to use `cgrab` for context capture, including the full command reference, output format, and common workflows. See `docs/codebase/usage/agent-workflows.md` for details.
