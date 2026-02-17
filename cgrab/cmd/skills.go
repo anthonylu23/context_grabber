@@ -41,7 +41,7 @@ for .mdc format conversion).`,
 		},
 	}
 
-	cmd.Flags().StringSliceVar(&agentFlag, "agent", nil, "agent targets: claude, opencode (embedded fallback only; Bun path is interactive)")
+	cmd.Flags().StringSliceVar(&agentFlag, "agent", nil, "agent targets: claude, opencode, cursor")
 	cmd.Flags().StringVar(&scopeFlag, "scope", "global", "install scope: global or project")
 	return cmd
 }
@@ -60,7 +60,7 @@ func newSkillsUninstallCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVar(&agentFlag, "agent", nil, "agent targets: claude, opencode (embedded fallback only)")
+	cmd.Flags().StringSliceVar(&agentFlag, "agent", nil, "agent targets: claude, opencode, cursor")
 	cmd.Flags().StringVar(&scopeFlag, "scope", "global", "install scope: global or project")
 	return cmd
 }
@@ -68,10 +68,23 @@ func newSkillsUninstallCommand() *cobra.Command {
 // runSkillsAction attempts Bun delegation first, falling back to embedded install.
 func runSkillsAction(cmd *cobra.Command, agentFlag []string, scopeFlag string, uninstall bool) error {
 	bunPath := resolveBunPathForSkills()
+	agentFlagChanged := cmd.Flags().Changed("agent")
+	scopeFlagChanged := cmd.Flags().Changed("scope")
+	hasExplicitSelection := agentFlagChanged || scopeFlagChanged
 
 	// Bun available: delegate to the interactive TS installer.
 	if bunPath != "" {
-		return runBunInstaller(cmd, bunPath, uninstall)
+		err := runBunInstaller(cmd, bunPath, agentFlag, scopeFlag, agentFlagChanged, scopeFlagChanged, uninstall)
+		if err == nil {
+			return nil
+		}
+		if !hasExplicitSelection {
+			return fmt.Errorf("bun installer failed: %w", err)
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "Bun installer failed (%v)\n", err)
+		fmt.Fprintln(cmd.ErrOrStderr(), "Falling back to embedded installer (Claude Code + OpenCode only).")
+		fmt.Fprintln(cmd.ErrOrStderr())
+		return runEmbeddedInstaller(cmd, agentFlag, scopeFlag, uninstall)
 	}
 
 	// Bun unavailable: use embedded fallback.
@@ -83,10 +96,31 @@ func runSkillsAction(cmd *cobra.Command, agentFlag []string, scopeFlag string, u
 }
 
 // runBunInstaller executes the TS interactive installer via bunx.
-func runBunInstaller(cmd *cobra.Command, bunPath string, uninstall bool) error {
+func runBunInstaller(
+	cmd *cobra.Command,
+	bunPath string,
+	agentFlag []string,
+	scopeFlag string,
+	agentFlagChanged bool,
+	scopeFlagChanged bool,
+	uninstall bool,
+) error {
 	args := []string{"x", "@context-grabber/agent-skills"}
 	if uninstall {
 		args = append(args, "--uninstall")
+	}
+	if agentFlagChanged {
+		agents := normalizeAgentValues(agentFlag)
+		for _, agent := range agents {
+			args = append(args, "--agent", agent)
+		}
+	}
+	if scopeFlagChanged {
+		args = append(args, "--scope", strings.TrimSpace(scopeFlag))
+	}
+	if agentFlagChanged || scopeFlagChanged {
+		// Explicit flags indicate non-interactive intent.
+		args = append(args, "--yes")
 	}
 
 	proc := exec.Command(bunPath, args...)
@@ -98,6 +132,22 @@ func runBunInstaller(cmd *cobra.Command, bunPath string, uninstall bool) error {
 		return fmt.Errorf("interactive installer failed: %w", err)
 	}
 	return nil
+}
+
+func normalizeAgentValues(agentFlag []string) []string {
+	seen := make(map[string]bool)
+	var agents []string
+	for _, raw := range agentFlag {
+		for _, part := range strings.Split(raw, ",") {
+			value := strings.ToLower(strings.TrimSpace(part))
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			agents = append(agents, value)
+		}
+	}
+	return agents
 }
 
 // runEmbeddedInstaller uses go:embed skill files as a non-interactive fallback.

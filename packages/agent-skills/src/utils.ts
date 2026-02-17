@@ -9,18 +9,25 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type AgentTarget, type InstallScope, SKILL_FILES } from "./types.js";
+
+function installerHomeDir(): string {
+  const override = process.env.CONTEXT_GRABBER_SKILLS_HOME?.trim();
+  if (override) return override;
+  return homedir();
+}
 
 /** Resolve the directory containing bundled skill files (sibling to src/). */
 export function skillSourceDir(): string {
-  // When run via `bun run` or `bunx`, __dirname points to src/.
+  // When run via `bun run` or `bunx`, the source path points to src/.
   // Skill files live at ../skill/ relative to this file.
-  return resolve(dirname(new URL(import.meta.url).pathname), "..", "skill");
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "skill");
 }
 
 /** Canonical global skill root (~/.agents/skills/context-grabber). */
 export function globalSkillRoot(): string {
-  return join(homedir(), ".agents", "skills", "context-grabber");
+  return join(installerHomeDir(), ".agents", "skills", "context-grabber");
 }
 
 /**
@@ -47,11 +54,11 @@ export function resolveTargetDir(agent: AgentTarget, scope: InstallScope, cwd: s
   // The canonical files go to globalSkillRoot(), symlinks go here.
   switch (agent) {
     case "claude":
-      return join(homedir(), ".claude", "skills", "context-grabber");
+      return join(installerHomeDir(), ".claude", "skills", "context-grabber");
     case "opencode":
-      return join(homedir(), ".config", "opencode", "skills", "context-grabber");
+      return join(installerHomeDir(), ".config", "opencode", "skills", "context-grabber");
     case "cursor":
-      return join(homedir(), ".cursor", "rules");
+      return join(installerHomeDir(), ".cursor", "rules");
   }
 }
 

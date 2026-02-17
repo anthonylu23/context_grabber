@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parseInstallerCliArgs } from "../src/cli-args.js";
 import { installForAgent, uninstallForAgent } from "../src/dispatch.js";
 import { convertToMdc } from "../src/targets/cursor.js";
 import { type AgentTarget, SKILL_FILES } from "../src/types.js";
@@ -39,6 +40,7 @@ function createFakeSkillSource(baseDir: string): string {
 }
 
 let testDir: string;
+const originalSkillsHome = process.env.CONTEXT_GRABBER_SKILLS_HOME;
 
 beforeEach(() => {
   testDir = join(
@@ -46,9 +48,13 @@ beforeEach(() => {
     `agent-skills-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(testDir, { recursive: true });
+  const testHome = join(testDir, "home");
+  mkdirSync(testHome, { recursive: true });
+  process.env.CONTEXT_GRABBER_SKILLS_HOME = testHome;
 });
 
 afterEach(() => {
+  process.env.CONTEXT_GRABBER_SKILLS_HOME = originalSkillsHome;
   rmSync(testDir, { recursive: true, force: true });
 });
 
@@ -221,17 +227,12 @@ describe("removeSkillFiles", () => {
 });
 
 describe("removeSymlink", () => {
-  // globalSkillRoot() resolves to a real path under $HOME. Tests that create
-  // it must clean up after themselves to avoid side effects.
-  const globalRoot = globalSkillRoot();
-
   afterEach(() => {
-    // Clean up any real directories created under ~/.agents/skills/context-grabber/.
-    rmSync(globalRoot, { recursive: true, force: true });
+    rmSync(globalSkillRoot(), { recursive: true, force: true });
   });
 
   it("removes symlink pointing to globalSkillRoot", () => {
-    const target = globalRoot;
+    const target = globalSkillRoot();
     mkdirSync(target, { recursive: true });
     const link = join(testDir, "link");
     symlinkSync(target, link);
@@ -352,22 +353,18 @@ describe("installForAgent + uninstallForAgent (project scope)", () => {
 });
 
 describe("hasOtherGlobalSymlinks", () => {
-  // These tests create real symlinks under $HOME agent directories and
-  // must clean up after themselves.
-  const globalRoot = globalSkillRoot();
-  const claudeDir = resolveTargetDir("claude", "global", "");
-  const opencodeDir = resolveTargetDir("opencode", "global", "");
-
   beforeEach(() => {
-    mkdirSync(globalRoot, { recursive: true });
+    mkdirSync(globalSkillRoot(), { recursive: true });
   });
 
   afterEach(() => {
+    const claudeDir = resolveTargetDir("claude", "global", "");
+    const opencodeDir = resolveTargetDir("opencode", "global", "");
     // Clean up all directories that may have been created.
     for (const dir of [claudeDir, opencodeDir]) {
       rmSync(dir, { recursive: true, force: true });
     }
-    rmSync(globalRoot, { recursive: true, force: true });
+    rmSync(globalSkillRoot(), { recursive: true, force: true });
   });
 
   it("returns false when no symlinks exist", () => {
@@ -376,6 +373,8 @@ describe("hasOtherGlobalSymlinks", () => {
   });
 
   it("returns true when another agent's symlink exists", () => {
+    const globalRoot = globalSkillRoot();
+    const opencodeDir = resolveTargetDir("opencode", "global", "");
     // Create opencode symlink pointing to canonical root.
     mkdirSync(join(opencodeDir, ".."), { recursive: true });
     symlinkSync(globalRoot, opencodeDir);
@@ -385,6 +384,8 @@ describe("hasOtherGlobalSymlinks", () => {
   });
 
   it("returns false when only the excluded agent's symlink exists", () => {
+    const globalRoot = globalSkillRoot();
+    const claudeDir = resolveTargetDir("claude", "global", "");
     // Create claude symlink pointing to canonical root.
     mkdirSync(join(claudeDir, ".."), { recursive: true });
     symlinkSync(globalRoot, claudeDir);
@@ -394,6 +395,8 @@ describe("hasOtherGlobalSymlinks", () => {
   });
 
   it("returns false when symlink points elsewhere", () => {
+    const globalRoot = globalSkillRoot();
+    const opencodeDir = resolveTargetDir("opencode", "global", "");
     // Create opencode symlink pointing to a different directory.
     const otherDir = join(globalRoot, "..", "other-skill");
     mkdirSync(otherDir, { recursive: true });
@@ -404,5 +407,46 @@ describe("hasOtherGlobalSymlinks", () => {
     expect(hasOtherGlobalSymlinks("claude")).toBe(false);
 
     rmSync(otherDir, { recursive: true, force: true });
+  });
+});
+
+describe("parseInstallerCliArgs", () => {
+  it("parses help flags", () => {
+    expect(parseInstallerCliArgs(["--help"]).showHelp).toBe(true);
+    expect(parseInstallerCliArgs(["-h"]).showHelp).toBe(true);
+  });
+
+  it("parses uninstall and assume-yes flags", () => {
+    const parsed = parseInstallerCliArgs(["--uninstall", "--yes"]);
+    expect(parsed.isUninstall).toBe(true);
+    expect(parsed.assumeYes).toBe(true);
+    expect(parsed.showHelp).toBe(false);
+  });
+
+  it("parses and deduplicates agent flags", () => {
+    const parsed = parseInstallerCliArgs([
+      "--agent",
+      "claude,cursor",
+      "--agent",
+      "opencode",
+      "--agent",
+      "claude",
+    ]);
+    expect(parsed.agents).toEqual(["claude", "cursor", "opencode"]);
+  });
+
+  it("parses scoped non-interactive args", () => {
+    const parsed = parseInstallerCliArgs(["--scope=project", "--agent=cursor", "-y"]);
+    expect(parsed.scope).toBe("project");
+    expect(parsed.agents).toEqual(["cursor"]);
+    expect(parsed.assumeYes).toBe(true);
+  });
+
+  it("throws on unsupported agent", () => {
+    expect(() => parseInstallerCliArgs(["--agent", "unknown"])).toThrow("Unsupported agent");
+  });
+
+  it("throws on unsupported scope", () => {
+    expect(() => parseInstallerCliArgs(["--scope", "team"])).toThrow("Unsupported scope");
   });
 });

@@ -216,3 +216,158 @@ func TestAgentLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillsInstall_BunFailureFallsBackToEmbedded(t *testing.T) {
+	tmpDir := t.TempDir()
+	cwd := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Fake bun executable that always fails.
+	failingBun := filepath.Join(tmpDir, "bun-fail.sh")
+	if err := os.WriteFile(failingBun, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONTEXT_GRABBER_BUN_BIN", failingBun)
+
+	cmd := newSkillsInstallCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--agent", "claude", "--scope", "project"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("expected fallback to succeed, got error: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+	}
+
+	if !strings.Contains(stderr.String(), "Bun installer failed") {
+		t.Fatalf("expected bun failure warning in stderr, got: %s", stderr.String())
+	}
+
+	// Embedded fallback should have installed files.
+	skillDir := filepath.Join(cwd, ".claude", "skills", "context-grabber")
+	for _, relPath := range skills.SkillFileList {
+		p := filepath.Join(skillDir, relPath)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("expected fallback to create file %s", p)
+		}
+	}
+}
+
+func TestSkillsInstall_BunReceivesExplicitFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	cwd := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	argsFile := filepath.Join(tmpDir, "bun-args.txt")
+	fakeBun := filepath.Join(tmpDir, "bun-ok.sh")
+	script := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"" + argsFile + "\"\nexit 0\n"
+	if err := os.WriteFile(fakeBun, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONTEXT_GRABBER_BUN_BIN", fakeBun)
+
+	cmd := newSkillsInstallCommand()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--agent", "cursor", "--agent", "claude,opencode", "--scope", "project"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("expected bun path to succeed, got: %v", err)
+	}
+
+	data, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("expected bun args file to exist: %v", err)
+	}
+	got := strings.Fields(string(data))
+	wantParts := []string{
+		"x",
+		"@context-grabber/agent-skills",
+		"--agent", "cursor",
+		"--agent", "claude",
+		"--agent", "opencode",
+		"--scope", "project",
+		"--yes",
+	}
+	for _, part := range wantParts {
+		found := false
+		for _, token := range got {
+			if token == part {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected bun args to contain %q, got %v", part, got)
+		}
+	}
+
+	// Bun success path should not run embedded installer.
+	if _, err := os.Stat(filepath.Join(cwd, ".claude", "skills", "context-grabber")); !os.IsNotExist(err) {
+		t.Fatalf("expected no embedded install on successful bun execution")
+	}
+}
+
+func TestSkillsInstall_BunFailureWithoutExplicitFlagsDoesNotFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	cwd := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Fake bun executable that always fails.
+	failingBun := filepath.Join(tmpDir, "bun-fail.sh")
+	if err := os.WriteFile(failingBun, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONTEXT_GRABBER_BUN_BIN", failingBun)
+
+	cmd := newSkillsInstallCommand()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err = cmd.Execute()
+	if err == nil {
+		t.Fatal("expected bun failure in interactive mode")
+	}
+	if !strings.Contains(err.Error(), "bun installer failed") {
+		t.Fatalf("expected bun installer failure, got: %v", err)
+	}
+
+	// Interactive mode bun failure should not silently run embedded fallback.
+	if _, statErr := os.Stat(filepath.Join(cwd, ".claude", "skills", "context-grabber")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no embedded install after interactive bun failure")
+	}
+}
