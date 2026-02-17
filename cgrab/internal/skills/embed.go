@@ -5,17 +5,45 @@
 // to prevent drift.
 package skills
 
-import "embed"
+import (
+	"embed"
+	"fmt"
+	"io/fs"
+	"sort"
+)
 
 // SkillFiles embeds the full skill directory (SKILL.md + references/).
 //
 //go:embed SKILL.md references
 var SkillFiles embed.FS
 
-// SkillFileList is the list of files that should be installed.
-var SkillFileList = []string{
-	"SKILL.md",
-	"references/cli-reference.md",
-	"references/output-schema.md",
-	"references/workflows.md",
+// SkillFileList is the list of embedded files that should be installed.
+// It is derived from the embedded tree at startup to avoid stale hardcoded lists.
+var SkillFileList = mustSkillFileList()
+
+func mustSkillFileList() []string {
+	paths, err := loadSkillFileList()
+	if err != nil {
+		panic(fmt.Sprintf("load embedded skill file list: %v", err))
+	}
+	return paths
+}
+
+func loadSkillFileList() ([]string, error) {
+	var paths []string
+	err := fs.WalkDir(SkillFiles, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "." || d.IsDir() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	return paths, nil
 }

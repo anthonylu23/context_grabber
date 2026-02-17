@@ -15,14 +15,15 @@ CANONICAL="$REPO_ROOT/packages/agent-skills/skill"
 EMBEDDED="$REPO_ROOT/cgrab/internal/skills"
 SKILLSSH="$REPO_ROOT/skills/context-grabber"
 
-FILES=(
-  "SKILL.md"
-  "references/cli-reference.md"
-  "references/output-schema.md"
-  "references/workflows.md"
-)
-
 failed=0
+
+list_files() {
+  local dir="$1"
+  (
+    cd "$dir"
+    find . -type f ! -name "*.go" ! -name ".DS_Store" | sed 's|^\./||' | LC_ALL=C sort
+  )
+}
 
 check_copy() {
   local label="$1"
@@ -34,19 +35,22 @@ check_copy() {
     return
   fi
 
-  for file in "${FILES[@]}"; do
+  local canonical_files copy_files
+  canonical_files="$(list_files "$CANONICAL")"
+  copy_files="$(list_files "$copy_dir")"
+
+  if ! diff -u <(printf "%s\n" "$canonical_files") <(printf "%s\n" "$copy_files") > /dev/null 2>&1; then
+    echo "DRIFT: file tree differs between canonical and $label"
+    diff -u <(printf "%s\n" "$canonical_files") <(printf "%s\n" "$copy_files") || true
+    failed=1
+  fi
+
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
     canonical_file="$CANONICAL/$file"
     copy_file="$copy_dir/$file"
 
-    if [ ! -f "$canonical_file" ]; then
-      echo "MISSING: canonical file $canonical_file"
-      failed=1
-      continue
-    fi
-
     if [ ! -f "$copy_file" ]; then
-      echo "MISSING: $label file $copy_file"
-      failed=1
       continue
     fi
 
@@ -55,7 +59,7 @@ check_copy() {
       diff --unified=3 "$canonical_file" "$copy_file" || true
       failed=1
     fi
-  done
+  done <<< "$canonical_files"
 }
 
 # Verify canonical source exists.
