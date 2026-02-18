@@ -170,6 +170,7 @@ The skill teaches agents when and how to use `cgrab` for context capture, includ
 ## Features
 
 - **Menu bar capture** — one-click or hotkey (`⌃⌥⌘C`) context capture
+- **Menu bar quick actions** — right-click the status icon for a lightweight Quit menu
 - **Browser extraction** — Safari and Chrome tab content via AppleScript
 - **Desktop extraction** — AX focused-element extraction with Vision OCR fallback
 - **Deterministic markdown** — structured output with frontmatter, summary, key points, and chunked content

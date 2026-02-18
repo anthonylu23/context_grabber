@@ -1,9 +1,9 @@
 import AppKit
+import Combine
 import ContextGrabberCore
 import Foundation
 import SwiftUI
 
-private let advancedSettingsWindowID = "advanced-settings"
 private let defaultCaptureTimeoutMs = 1_200
 // Hotkey rebinding is deferred to Milestone G; keep fixed chord for now.
 private let hotkeyKeyCodeC: UInt16 = 8
@@ -1148,213 +1148,200 @@ final class ContextGrabberModel: ObservableObject {
   }
 }
 
-struct ContextGrabberHostApp: App {
-  @StateObject private var model = ContextGrabberModel()
-  @Environment(\.openWindow) private var openWindow
+private struct MenuBarPopoverView: View {
+  @ObservedObject var model: ContextGrabberModel
+  let onOpenAdvancedSettings: () -> Void
 
-  var body: some Scene {
-    MenuBarExtra {
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Context Grabber 🤏")
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Context Grabber 🤏")
+        .font(.headline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 2)
+
+      Text(model.lastCaptureLabel)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 4)
+
+      if let feedback = model.feedbackState {
+        captureFeedbackView(feedback)
+      }
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Button("Capture Now (⌃⌥⌘C)") {
+        model.captureNow()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Menu("Recent Captures") {
+        if model.recentCaptures.isEmpty {
+          Text("No captures yet")
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(model.recentCaptures) { entry in
+            Button(entry.menuLabel) {
+              model.openCaptureFile(entry.fileURL)
+            }
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button("Copy Last Capture To Clipboard") {
+        model.copyLastCaptureToClipboard()
+      }
+      .disabled(model.recentCaptures.isEmpty)
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button("Open Capture History Folder") {
+        model.openRecentCaptures()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Menu("System Readiness") {
+        Text("Safari Extension: \(model.safariDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Chrome Extension: \(model.chromeDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Desktop Accessibility: \(model.desktopAccessibilityDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+        Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
+          .foregroundStyle(.secondary)
+
+        Divider()
+        Button("Refresh Diagnostics") {
+          model.runDiagnostics()
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button("Open Accessibility Settings") {
+        model.openAccessibilitySettings()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button("Open Screen Recording Settings") {
+        model.openScreenRecordingSettings()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Menu("Settings") {
+        Menu("Output Directory") {
+          Button(checkmarkMenuOptionLabel(
+            valueLabel: "Default Output Directory",
+            isSelected: model.usingDefaultOutputDirectory
+          )) {
+            model.useDefaultOutputDirectory()
+          }
+          Button(checkmarkMenuOptionLabel(
+            valueLabel: "Custom Output Directory",
+            isSelected: !model.usingDefaultOutputDirectory
+          )) {
+            model.chooseCustomOutputDirectory()
+          }
+        }
+
+        Menu("Clipboard Copy Mode") {
+          ForEach(ClipboardCopyMode.allCases, id: \.self) { mode in
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: clipboardCopyModeLabel(mode),
+              isSelected: model.clipboardCopyMode == mode
+            )) {
+              model.setClipboardCopyModePreference(mode)
+            }
+          }
+        }
+
+        Menu("Output Format") {
+          ForEach(OutputFormatPreset.allCases, id: \.self) { preset in
+            Button(checkmarkMenuOptionLabel(
+              valueLabel: outputFormatPresetLabel(preset),
+              isSelected: model.outputFormatPreset == preset
+            )) {
+              model.setOutputFormatPresetPreference(preset)
+            }
+          }
+        }
+
+        Menu("Product Context Line") {
+          Button(checkmarkMenuOptionLabel(
+            valueLabel: "On",
+            isSelected: model.includeProductContextLine
+          )) {
+            model.setIncludeProductContextLinePreference(true)
+          }
+          Button(checkmarkMenuOptionLabel(
+            valueLabel: "Off",
+            isSelected: !model.includeProductContextLine
+          )) {
+            model.setIncludeProductContextLinePreference(false)
+          }
+        }
+
+        Divider()
+        Button(model.capturesPausedPlaceholder ? "Resume Captures" : "Pause Captures") {
+          model.toggleCapturePausedPlaceholder()
+        }
+
+        Divider()
+        Button("Advanced Settings...") {
+          onOpenAdvancedSettings()
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Text(model.statusLine)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+        .padding(.vertical, 4)
+
+      Menu("About") {
+        Text("Context Grabber")
           .font(.headline)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.bottom, 2)
-
-        Text(model.lastCaptureLabel)
-          .font(.caption)
+        Text(model.appVersionLabel)
           .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.bottom, 4)
-
-        if let feedback = model.feedbackState {
-          captureFeedbackView(feedback)
-        }
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Button("Capture Now (⌃⌥⌘C)") {
-          model.captureNow()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Menu("Recent Captures") {
-          if model.recentCaptures.isEmpty {
-            Text("No captures yet")
-              .foregroundStyle(.secondary)
-          } else {
-            ForEach(model.recentCaptures) { entry in
-              Button(entry.menuLabel) {
-                model.openCaptureFile(entry.fileURL)
-              }
-            }
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Button("Copy Last Capture To Clipboard") {
-          model.copyLastCaptureToClipboard()
-        }
-        .disabled(model.recentCaptures.isEmpty)
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Button("Open Capture History Folder") {
-          model.openRecentCaptures()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Menu("System Readiness") {
-          Text("Safari Extension: \(model.safariDiagnosticsLabel)")
-            .foregroundStyle(.secondary)
-          Text("Chrome Extension: \(model.chromeDiagnosticsLabel)")
-            .foregroundStyle(.secondary)
-          Text("Desktop Accessibility: \(model.desktopAccessibilityDiagnosticsLabel)")
-            .foregroundStyle(.secondary)
-          Text("Screen Recording: \(model.desktopScreenDiagnosticsLabel)")
-            .foregroundStyle(.secondary)
-
-          Divider()
-          Button("Refresh Diagnostics") {
-            model.runDiagnostics()
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Button("Open Accessibility Settings") {
-          model.openAccessibilitySettings()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Button("Open Screen Recording Settings") {
-          model.openScreenRecordingSettings()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Menu("Settings") {
-          Menu("Output Directory") {
-            Button(checkmarkMenuOptionLabel(
-              valueLabel: "Default Output Directory",
-              isSelected: model.usingDefaultOutputDirectory
-            )) {
-              model.useDefaultOutputDirectory()
-            }
-            Button(checkmarkMenuOptionLabel(
-              valueLabel: "Custom Output Directory",
-              isSelected: !model.usingDefaultOutputDirectory
-            )) {
-              model.chooseCustomOutputDirectory()
-            }
-          }
-
-          Menu("Clipboard Copy Mode") {
-            ForEach(ClipboardCopyMode.allCases, id: \.self) { mode in
-              Button(checkmarkMenuOptionLabel(
-                valueLabel: clipboardCopyModeLabel(mode),
-                isSelected: model.clipboardCopyMode == mode
-              )) {
-                model.setClipboardCopyModePreference(mode)
-              }
-            }
-          }
-
-          Menu("Output Format") {
-            ForEach(OutputFormatPreset.allCases, id: \.self) { preset in
-              Button(checkmarkMenuOptionLabel(
-                valueLabel: outputFormatPresetLabel(preset),
-                isSelected: model.outputFormatPreset == preset
-              )) {
-                model.setOutputFormatPresetPreference(preset)
-              }
-            }
-          }
-
-          Menu("Product Context Line") {
-            Button(checkmarkMenuOptionLabel(
-              valueLabel: "On",
-              isSelected: model.includeProductContextLine
-            )) {
-              model.setIncludeProductContextLinePreference(true)
-            }
-            Button(checkmarkMenuOptionLabel(
-              valueLabel: "Off",
-              isSelected: !model.includeProductContextLine
-            )) {
-              model.setIncludeProductContextLinePreference(false)
-            }
-          }
-
-          Divider()
-          Button(model.capturesPausedPlaceholder ? "Resume Captures" : "Pause Captures") {
-            model.toggleCapturePausedPlaceholder()
-          }
-
-          Divider()
-          Button("Advanced Settings...") {
-            openWindow(id: advancedSettingsWindowID)
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Text(model.statusLine)
-          .font(.caption)
+        Text("Protocol \(protocolVersion)")
           .foregroundStyle(.secondary)
-          .lineLimit(3)
-          .frame(maxWidth: .infinity, alignment: .leading)
 
         Divider()
-          .padding(.vertical, 4)
-
-        Menu("About") {
-          Text("Context Grabber")
-            .font(.headline)
-          Text(model.appVersionLabel)
-            .foregroundStyle(.secondary)
-          Text("Protocol \(protocolVersion)")
-            .foregroundStyle(.secondary)
-
-          Divider()
-          Button("Open Project on GitHub") {
-            NSWorkspace.shared.open(URL(string: "https://github.com/anthonylu23/context_grabber")!)
-          }
+        Button("Open Project on GitHub") {
+          NSWorkspace.shared.open(URL(string: "https://github.com/anthonylu23/context_grabber")!)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        Divider()
-          .padding(.vertical, 4)
-
-        Button("Quit") {
-          NSApplication.shared.terminate(nil)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .padding(.top, 12)
-      .padding(.bottom, 12)
-      .padding(.horizontal, 8)
-    } label: {
-      if model.menuBarIcon.isSystemSymbol {
-        Label("Context Grabber", systemImage: model.menuBarIcon.name)
-      } else {
-        Text(model.menuBarIcon.name)
-      }
-    }
-    .menuBarExtraStyle(.window)
+      .frame(maxWidth: .infinity, alignment: .leading)
 
-    WindowGroup("Advanced Settings", id: advancedSettingsWindowID) {
-      AdvancedSettingsView(model: model)
+      Divider()
+        .padding(.vertical, 4)
+
+      Button("Quit") {
+        NSApplication.shared.terminate(nil)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .defaultSize(width: 560, height: 620)
+    .padding(.top, 12)
+    .padding(.bottom, 12)
+    .padding(.horizontal, 8)
+    .frame(minWidth: 420)
   }
 
   @ViewBuilder
@@ -1422,15 +1409,158 @@ struct ContextGrabberHostApp: App {
         .fill(accent.opacity(0.12))
     )
   }
+}
 
-  private static func menuBarNSImage(named name: String) -> NSImage {
-    guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
-          let image = NSImage(contentsOf: url)
-    else {
-      return NSImage()
+@MainActor
+private final class StatusItemController: NSObject {
+  private let model: ContextGrabberModel
+  private let onOpenAdvancedSettings: () -> Void
+  private let statusItem: NSStatusItem
+  private let popover: NSPopover
+  private let contextMenu: NSMenu
+  private var cancellables = Set<AnyCancellable>()
+
+  init(model: ContextGrabberModel, onOpenAdvancedSettings: @escaping () -> Void) {
+    self.model = model
+    self.onOpenAdvancedSettings = onOpenAdvancedSettings
+    statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    popover = NSPopover()
+    contextMenu = NSMenu()
+    super.init()
+    configureStatusItem()
+    configurePopover()
+    configureContextMenu()
+    bindModel()
+  }
+
+  @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
+    let eventType = NSApp.currentEvent?.type
+    if eventType == .rightMouseUp {
+      showContextMenu()
+      return
     }
-    image.size = NSSize(width: 18, height: 18)
-    image.isTemplate = true
-    return image
+
+    if popover.isShown {
+      popover.performClose(sender)
+    } else {
+      popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+    }
+  }
+
+  @objc private func quitApplication() {
+    NSApplication.shared.terminate(nil)
+  }
+
+  private func configureStatusItem() {
+    guard let button = statusItem.button else {
+      return
+    }
+    button.target = self
+    button.action = #selector(handleStatusItemClick(_:))
+    button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    button.toolTip = "Context Grabber"
+    button.setAccessibilityLabel("Context Grabber")
+    applyMenuBarIcon(model.menuBarIcon)
+  }
+
+  private func configurePopover() {
+    let view = MenuBarPopoverView(model: model, onOpenAdvancedSettings: onOpenAdvancedSettings)
+    popover.contentViewController = NSHostingController(rootView: view)
+    popover.behavior = .transient
+    popover.animates = true
+  }
+
+  private func configureContextMenu() {
+    let quit = NSMenuItem(title: "Quit", action: #selector(quitApplication), keyEquivalent: "q")
+    quit.target = self
+    contextMenu.addItem(quit)
+  }
+
+  private func bindModel() {
+    model.$menuBarIcon
+      .receive(on: RunLoop.main)
+      .sink { [weak self] icon in
+        self?.applyMenuBarIcon(icon)
+      }
+      .store(in: &cancellables)
+  }
+
+  private func applyMenuBarIcon(_ icon: MenuBarIcon) {
+    guard let button = statusItem.button else {
+      return
+    }
+
+    if icon.isSystemSymbol, let image = NSImage(
+      systemSymbolName: icon.name,
+      accessibilityDescription: "Context Grabber"
+    ) {
+      image.isTemplate = true
+      button.image = image
+      button.title = ""
+      button.imagePosition = .imageOnly
+      return
+    }
+
+    button.image = nil
+    button.title = icon.name
+    button.imagePosition = .noImage
+  }
+
+  private func showContextMenu() {
+    guard let button = statusItem.button else {
+      return
+    }
+    if popover.isShown {
+      popover.performClose(button)
+    }
+    statusItem.menu = contextMenu
+    button.performClick(nil)
+    statusItem.menu = nil
+  }
+}
+
+@MainActor
+private final class ContextGrabberAppDelegate: NSObject, NSApplicationDelegate {
+  private let model = ContextGrabberModel()
+  private var statusItemController: StatusItemController?
+  private var advancedSettingsWindowController: NSWindowController?
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    statusItemController = StatusItemController(
+      model: model,
+      onOpenAdvancedSettings: { [weak self] in
+        self?.openAdvancedSettingsWindow()
+      }
+    )
+  }
+
+  private func openAdvancedSettingsWindow() {
+    if advancedSettingsWindowController == nil {
+      let root = AdvancedSettingsView(model: model)
+      let hosting = NSHostingController(rootView: root)
+      let window = NSWindow(contentViewController: hosting)
+      window.title = "Advanced Settings"
+      window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+      window.setContentSize(NSSize(width: 560, height: 620))
+      window.minSize = NSSize(width: 520, height: 560)
+      window.isReleasedWhenClosed = false
+      advancedSettingsWindowController = NSWindowController(window: window)
+    }
+
+    guard let window = advancedSettingsWindowController?.window else {
+      return
+    }
+    NSApp.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(nil)
+  }
+}
+
+struct ContextGrabberHostApp: App {
+  @NSApplicationDelegateAdaptor(ContextGrabberAppDelegate.self) private var appDelegate
+
+  var body: some Scene {
+    Settings {
+      EmptyView()
+    }
   }
 }
